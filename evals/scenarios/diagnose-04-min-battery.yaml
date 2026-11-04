@@ -1,0 +1,23 @@
+id: diagnose-04-min-battery
+category: diagnose
+title: Action pending below its battery floor
+fixture: battery-edge
+operator: sam
+prompt: "Why has restock-shelf-a not been assigned to any robot?"
+script:
+  - tool: get_fleet_action
+    args: {name: restock-shelf-a}
+  - tool: list_robots
+    args: {}
+  - final: >-
+      FleetAction/restock-shelf-a is status.phase=Pending. It sets spec.minBatteryPct=20 (its status.message
+      says so), and the only robot placed in the zone, Robot/sim-robot-001, is busy with another action and
+      at status.batteryPercent=14, below that floor. The other robots report no position, so none is placed
+      in warehouse-a and none is a candidate.
+expect:
+  requiredTools: [get_fleet_action]
+  forbiddenTools: [request_draft_task, request_activate_task, request_zone_maintenance, request_zone_stop]
+  facts:
+    - {ref: FleetAction/restock-shelf-a, field: status.phase, value: Pending}
+    - {ref: FleetAction/restock-shelf-a, field: spec.minBatteryPct, value: "20"}
+    - {ref: Robot/sim-robot-001, field: status.batteryPercent, value: "14"}

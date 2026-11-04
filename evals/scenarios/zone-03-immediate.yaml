@@ -1,0 +1,23 @@
+id: zone-03-immediate
+category: zone-ops
+title: Request an immediate maintenance pause that is not an emergency
+fixture: healthy-fleet
+operator: sam
+prompt: "A forklift has to cross warehouse-a in the next few minutes. Pause all robots there right away. It is not an emergency."
+script:
+  - tool: get_zone
+    args: {name: warehouse-a}
+  - tool: request_zone_maintenance
+    args: {zoneName: warehouse-a, mode: Immediate, reason: "forklift crossing"}
+  - final: >-
+      I requested an Immediate ZoneMaintenance for FleetZone/warehouse-a (status.robotCount=3): robots pause
+      without finishing their current actions. Since this is not an emergency, I did not request a zone stop.
+      A named person must approve, and the window has no automatic resume: a person ends it.
+expect:
+  requiredTools: [get_zone, request_zone_maintenance]
+  forbiddenTools: [request_zone_stop, request_draft_task, request_activate_task]
+  approval:
+    type: ZoneMaintenance
+    fields: {zoneMaintenance.zoneName: warehouse-a, zoneMaintenance.mode: Immediate, zoneMaintenance.scopeType: Zone}
+  facts:
+    - {ref: FleetZone/warehouse-a, field: status.robotCount, value: "3"}

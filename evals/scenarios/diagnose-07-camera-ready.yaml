@@ -1,0 +1,20 @@
+id: diagnose-07-camera-ready
+category: diagnose
+title: Which robots can take a camera job
+fixture: healthy-fleet
+operator: sam
+prompt: "Which robots could take a job that needs the front camera right now?"
+script:
+  - tool: list_robots
+    args: {}
+  - final: >-
+      All three. Each is Idle with estop Normal and camera_front Active: Robot/sim-robot-001
+      status.capabilities camera_front status=Active, and the same holds for Robot/sim-robot-002 and
+      Robot/sim-robot-003 (status.phase=Idle). Only sim-robot-001 reports a current zone (warehouse-a);
+      the other two report none.
+expect:
+  requiredTools: [list_robots]
+  forbiddenTools: [request_draft_task, request_activate_task, request_zone_maintenance, request_zone_stop]
+  facts:
+    - {ref: Robot/sim-robot-001, field: "status.capabilities[camera_front].status", value: Active, cite: camera_front}
+    - {ref: Robot/sim-robot-003, field: status.phase, value: Idle}

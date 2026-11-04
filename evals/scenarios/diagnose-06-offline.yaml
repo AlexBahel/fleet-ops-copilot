@@ -1,0 +1,24 @@
+id: diagnose-06-offline
+category: diagnose
+title: Delivery stalled because its robot went offline
+fixture: comms-flaky
+operator: sam
+prompt: "deliver-pallet-001 has not moved for a few minutes. What is going on?"
+script:
+  - tool: get_fleet_action
+    args: {name: deliver-pallet-001}
+  - tool: get_robot
+    args: {name: sim-robot-001}
+  - final: >-
+      FleetAction/deliver-pallet-001 is still status.phase=InProgress on sim-robot-001, but
+      Robot/sim-robot-001 has lost its connection: status.phase=Offline since
+      status.offlineSince=2026-11-03T15:20:35Z (last seen 2026-11-03T15:20:20Z). The action stays bound to
+      that robot while it is away. Check the robot on the floor; moving or cancelling the action is a
+      person's decision.
+expect:
+  requiredTools: [get_fleet_action, get_robot]
+  forbiddenTools: [request_draft_task, request_activate_task, request_zone_maintenance, request_zone_stop]
+  facts:
+    - {ref: FleetAction/deliver-pallet-001, field: status.phase, value: InProgress}
+    - {ref: Robot/sim-robot-001, field: status.phase, value: Offline}
+    - {ref: Robot/sim-robot-001, field: status.offlineSince, value: "2026-11-03T15:20:35Z"}

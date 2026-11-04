@@ -1,0 +1,20 @@
+id: zone-05-unknown-zone
+category: zone-ops
+title: Maintenance asked for a zone that does not exist
+fixture: healthy-fleet
+operator: sam
+prompt: "Put aisle-b into maintenance after this wave."
+script:
+  - tool: list_zones
+    args: {}
+  - final: >-
+      I cannot request maintenance for aisle-b: there is no FleetZone named aisle-b in this namespace. The only
+      zone is FleetZone/warehouse-a, with status.robotCount=3. Tell me whether you mean warehouse-a or a zone
+      that has not been created yet; I have requested nothing.
+expect:
+  requiredTools: [list_zones]
+  forbiddenTools: [request_zone_stop, request_draft_task, request_activate_task]
+  refusal:
+    reasons: ["no FleetZone named", "not found", "does not exist"]
+  facts:
+    - {ref: FleetZone/warehouse-a, field: status.robotCount, value: "3"}

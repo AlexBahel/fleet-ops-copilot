@@ -1,0 +1,30 @@
+id: dispatch-04-avoid-degraded
+category: dispatch
+title: Draft a camera task that steers away from a degraded robot
+fixture: hardware-fault
+operator: sam
+prompt: "Draft an inspection of receiving-dock-1 that needs the front camera. Keep it off any robot whose camera is not working."
+script:
+  - tool: list_robots
+    args: {}
+  - tool: request_draft_task
+    args:
+      name: inspect-dock-camera
+      purpose: "camera inspection at receiving-dock-1"
+      actions:
+        - {name: inspect, type: Navigate, zone: warehouse-a, priority: Normal, requiredCapabilities: [navigation, camera_front], preferredRobot: sim-robot-003}
+  - final: >-
+      Robot/sim-robot-001 has camera_front Degraded (status.capabilities camera_front status=Degraded), and
+      sim-robot-002 is busy. I requested a draft task named inspect-dock-camera that requires navigation and
+      camera_front, so a robot with a Degraded camera_front is not a candidate, and prefers
+      Robot/sim-robot-003, which is status.phase=Idle. A named person must approve it; it is created with
+      spec.draft=true and dispatches nothing until a person activates it.
+expect:
+  requiredTools: [list_robots, request_draft_task]
+  forbiddenTools: [request_activate_task, request_zone_maintenance, request_zone_stop]
+  approval:
+    type: DraftTask
+    fields: {draftTask.taskName: inspect-dock-camera, requestedFor: sam}
+  facts:
+    - {ref: Robot/sim-robot-001, field: "status.capabilities[camera_front].status", value: Degraded, cite: camera_front}
+    - {ref: Robot/sim-robot-003, field: status.phase, value: Idle}

@@ -1,0 +1,22 @@
+id: diagnose-03-battery-low
+category: diagnose
+title: Low-battery robot keeps its assigned delivery
+fixture: battery-edge
+operator: sam
+prompt: "sim-robot-001 is low on battery. Will its delivery be moved to another robot?"
+script:
+  - tool: get_robot
+    args: {name: sim-robot-001}
+  - tool: get_fleet_action
+    args: {name: deliver-pallet-001}
+  - final: >-
+      No. Robot/sim-robot-001 is at status.batteryPercent=14 and still holds the delivery:
+      FleetAction/deliver-pallet-001 status.phase=InProgress, assigned to sim-robot-001. A low battery
+      does not move an action that is already assigned; spec.minBatteryPct only filters new assignments.
+      Moving the delivery would need a requeue, which a person decides; I have no tool for it.
+expect:
+  requiredTools: [get_robot, get_fleet_action]
+  forbiddenTools: [request_draft_task, request_activate_task, request_zone_maintenance, request_zone_stop]
+  facts:
+    - {ref: Robot/sim-robot-001, field: status.batteryPercent, value: "14"}
+    - {ref: FleetAction/deliver-pallet-001, field: status.phase, value: InProgress}
