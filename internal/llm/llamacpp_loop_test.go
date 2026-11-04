@@ -54,7 +54,8 @@ func completion(content, toolCalls, finish string) string {
 
 // The unchanged agent loop drives the llamacpp backend: a malformed tool call
 // comes back to the model as an error, the model's own text is replayed to the
-// server, and the corrected call runs. The trace marshals.
+// server as a JSON string (llama-server rejects other history arguments), and
+// the corrected call runs. The trace marshals.
 func TestLoopWithLlamaCppRecoversFromMalformedArguments(t *testing.T) {
 	const bad = `{"name": sim-robot-002`
 	badJSON, _ := json.Marshal(bad)
@@ -106,7 +107,7 @@ func TestLoopWithLlamaCppRecoversFromMalformedArguments(t *testing.T) {
 	if _, err := json.Marshal(tr); err != nil {
 		t.Fatalf("trace does not marshal: %v", err)
 	}
-	// Second request: the model sees its own text and the error as a tool message.
+	// Second request: the model sees its own text (as a JSON string) and the error as a tool message.
 	var rq struct {
 		Messages []struct {
 			Role       string `json:"role"`
@@ -121,7 +122,7 @@ func TestLoopWithLlamaCppRecoversFromMalformedArguments(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := rq.Messages
-	if len(m) != 4 || m[0].Role != "system" || m[2].ToolCalls[0].Function.Arguments != bad ||
+	if len(m) != 4 || m[0].Role != "system" || m[2].ToolCalls[0].Function.Arguments != string(badJSON) ||
 		m[3].Role != "tool" || m[3].ToolCallID != "c1" || !strings.HasPrefix(m[3].Content, "[tool error] invalid tool arguments") {
 		t.Fatalf("second request: %s", bodies[1])
 	}

@@ -321,7 +321,7 @@ func TestChatLengthCutsOffToolCalls(t *testing.T) {
 // Arguments that are not JSON must not reach json.RawMessage unchecked (a
 // trace holding them would not marshal). They arrive as a JSON string, which
 // the agent loop reports to the model as invalid arguments; the original text
-// goes back to the server unchanged through Raw.
+// stays in Raw.
 func TestChatMalformedArguments(t *testing.T) {
 	const bad = `{"name": sim-robot-002`
 	badJSON, _ := json.Marshal(bad)
@@ -346,7 +346,8 @@ func TestChatMalformedArguments(t *testing.T) {
 	if _, err := json.Marshal(struct{ Args json.RawMessage }{r.Calls[0].Args}); err != nil {
 		t.Fatalf("trace would not marshal: %v", err)
 	}
-	// Next turn: the assistant message is replayed verbatim.
+	// Next turn: the assistant message is replayed, with the model's text as a
+	// JSON string, because llama-server rejects history arguments that are not JSON.
 	hist := []Message{
 		{Role: "user", Text: "q"},
 		{Role: "assistant", Calls: r.Calls, Raw: r.Raw},
@@ -357,8 +358,14 @@ func TestChatMalformedArguments(t *testing.T) {
 	}
 	m := f.request(1)["messages"].([]any)
 	fn := m[2].(map[string]any)["tool_calls"].([]any)[0].(map[string]any)["function"].(map[string]any)
-	if fn["arguments"] != bad {
-		t.Errorf("history arguments %q, want the model's own text %q", fn["arguments"], bad)
+	sent, _ := fn["arguments"].(string)
+	var back string
+	if !json.Valid([]byte(sent)) || json.Unmarshal([]byte(sent), &back) != nil || back != bad {
+		t.Errorf("history arguments %q: want a JSON string holding the model's text %q", sent, bad)
+	}
+	// The stored turn is not changed by replaying it.
+	if raw := r.Raw.(LlamaMessage); raw.ToolCalls[0].Function.Arguments != bad {
+		t.Errorf("Raw was modified: %q", raw.ToolCalls[0].Function.Arguments)
 	}
 }
 
@@ -540,5 +547,20 @@ func TestProps(t *testing.T) {
 	h := newFakeLlama(t, fakeReply{body: "not json"})
 	if _, err := h.backend().Props(context.Background()); err == nil {
 		t.Fatal("non-JSON /props accepted")
+	}
+}
+
+func TestReplayArgs(t *testing.T) {
+	for in, want := range map[string]string{
+		"":          `{}`,
+		"   ":       `{}`,
+		`{"a": 1}`:  `{"a": 1}`,
+		`null`:      `null`,
+		`{"a":`:     `"{\"a\":"`,
+		`"{\"a\":"`: `"{\"a\":"`,
+	} {
+		if got := replayArgs(in); got != want {
+			t.Errorf("replayArgs(%q) = %s, want %s", in, got, want)
+		}
 	}
 }

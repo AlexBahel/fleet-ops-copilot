@@ -378,8 +378,8 @@ func (l *LlamaCpp) parse(body []byte, offered []ToolSpec) (Reply, error) {
 
 // normalizeArgs returns arguments the loop can use: empty text becomes {};
 // valid JSON is kept compact; invalid JSON is wrapped as a JSON string, which
-// the agent loop reports to the model as invalid tool arguments (the original
-// text is still sent back through Reply.Raw).
+// the agent loop reports to the model as invalid tool arguments. The model's
+// own text stays in Reply.Raw and goes back through replayArgs.
 func normalizeArgs(s string) json.RawMessage {
 	t := strings.TrimSpace(s)
 	if t == "" || t == "null" {
@@ -395,6 +395,23 @@ func normalizeArgs(s string) json.RawMessage {
 	return b
 }
 
+// replayArgs makes the arguments of an earlier tool call safe to send back.
+// llama-server parses the arguments of assistant tool calls in the request
+// history as JSON for chat templates that render them with tojson, as Qwen's
+// does (common/chat.cpp, func_args_not_string), and rejects the whole request
+// when they are not JSON. Text that is not JSON is therefore sent as a JSON
+// string holding that text, which the model still reads.
+func replayArgs(s string) string {
+	if strings.TrimSpace(s) == "" {
+		return "{}"
+	}
+	if json.Valid([]byte(s)) {
+		return s
+	}
+	b, _ := json.Marshal(s)
+	return string(b)
+}
+
 func llamaMessages(system string, history []Message) ([]LlamaMessage, error) {
 	str := func(s string) *string { return &s }
 	var out []LlamaMessage
@@ -407,6 +424,11 @@ func llamaMessages(system string, history []Message) ([]LlamaMessage, error) {
 			out = append(out, LlamaMessage{Role: "user", Content: str(m.Text)})
 		case "assistant":
 			if raw, ok := m.Raw.(LlamaMessage); ok {
+				// Copy: the stored turn stays as the model produced it.
+				raw.ToolCalls = append([]LlamaToolCall(nil), raw.ToolCalls...)
+				for i := range raw.ToolCalls {
+					raw.ToolCalls[i].Function.Arguments = replayArgs(raw.ToolCalls[i].Function.Arguments)
+				}
 				out = append(out, raw)
 				continue
 			}
@@ -414,10 +436,7 @@ func llamaMessages(system string, history []Message) ([]LlamaMessage, error) {
 			for _, c := range m.Calls {
 				tc := LlamaToolCall{ID: c.ID, Type: "function"}
 				tc.Function.Name = c.Name
-				tc.Function.Arguments = "{}"
-				if len(c.Args) > 0 {
-					tc.Function.Arguments = string(c.Args)
-				}
+				tc.Function.Arguments = replayArgs(string(c.Args))
 				am.ToolCalls = append(am.ToolCalls, tc)
 			}
 			out = append(out, am)
@@ -455,8 +474,10 @@ func llamaTools(tools []ToolSpec) ([]llamaTool, error) {
 	return out, nil
 }
 
-// isParseFailure recognises the 500 llama-server sends when it cannot parse
-// the model's tool call ("Failed to parse input at pos N: ...").
+// isParseFailure recognises an error status from llama-server about parsing
+// the model's tool call. Builds with a lenient output parser (the pinned one)
+// return the text instead, which Chat reports as a tool call left in the
+// reply; this covers builds that raise an error.
 func isParseFailure(body []byte) bool {
 	m := strings.ToLower(errorMessage(body))
 	return strings.Contains(m, "failed to parse") || strings.Contains(m, "parse tool call") || strings.Contains(m, "parsing tool call")
