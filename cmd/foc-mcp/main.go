@@ -39,6 +39,7 @@ import (
 	"github.com/AlexBahel/fleet-ops-copilot/internal/policy"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/redact"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/tools"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/tracing"
 )
 
 func main() {
@@ -62,6 +63,7 @@ func run() error {
 	listen := flag.String("listen", ":8080", "HTTP listen address for streamable MCP")
 	stdio := flag.Bool("stdio", false, "serve MCP on stdin/stdout instead of HTTP")
 	identity := flag.String("identity", defaultIdentity(), "principal foc-mcp runs as (spec.requestedBy); defaults from POD_NAMESPACE and SERVICE_ACCOUNT")
+	otlp := flag.String("otlp-endpoint", tracing.EndpointFromEnv(), "OTLP/gRPC collector for tool and policy-decision spans (host:port, http:// or https://); empty disables tracing")
 	flag.Parse()
 	if *identity == "" {
 		return errors.New("--identity is required (or set POD_NAMESPACE and SERVICE_ACCOUNT)")
@@ -72,6 +74,17 @@ func run() error {
 		return err
 	}
 	red := redact.FromEnv()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	tp, shutdownTracing, err := tracing.Setup(ctx, tracing.Config{Endpoint: *otlp, ServiceName: "foc-mcp", Redactor: red})
+	if err != nil {
+		return err
+	}
+	defer func() {
+		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = shutdownTracing(sctx)
+	}()
 	aw, err := audit.Open(*auditPath, red)
 	if err != nil {
 		return err
@@ -89,10 +102,9 @@ func run() error {
 	svc := &tools.Service{
 		C: c, Engine: policy.New(p), Audit: aw, Identity: *identity, DefaultNamespace: *namespace,
 		Events: &audit.EventSink{C: c, Scheme: scheme, Component: "foc-mcp", Red: red},
+		Tracer: tracing.Tracer(tp),
 	}
 	srv := mcpserver.New(svc)
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	if *stdio {
 		return srv.Run(ctx, &mcp.StdioTransport{})
 	}
