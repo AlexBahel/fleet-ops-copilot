@@ -22,12 +22,9 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	swarmv1 "github.com/swarmada/swarmada/api/v1"
 
 	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/audit"
@@ -95,9 +92,10 @@ type DraftTaskInput struct {
 	Actions   []DraftActionInput `json:"actions" jsonschema:"the task's members"`
 }
 
-// RequestDraftTask creates a FleetTask held as a draft (spec.draft: true).
-// It dispatches nothing: Swarmada generates no child action for a draft, and
-// only a person holding the activate verb can clear the flag (DESIGN.md D3).
+// RequestDraftTask asks a named person to approve creating a FleetTask held
+// as a draft (spec.draft: true). foc-mcp writes nothing to Swarmada: on
+// approval, foc-approvals creates the draft (DESIGN.md D25), and a draft
+// dispatches nothing until a person activates it.
 func (s *Service) RequestDraftTask(ctx context.Context, sess Session, in DraftTaskInput) (RequestResult, error) {
 	ns := s.ns(in.Namespace)
 	s.record(audit.Entry{Kind: audit.KindToolCall, Actor: sess.Operator, SessionID: sess.ID, Tool: "request_draft_task", Namespace: ns, Object: "FleetTask/" + in.Name})
@@ -111,52 +109,33 @@ func (s *Service) RequestDraftTask(ctx context.Context, sess Session, in DraftTa
 		return refused(policy.Decision{Effect: policy.Deny, Code: policy.CodeMalformed, Message: fmt.Sprintf("task name %q: %v", in.Name, errs)}), nil
 	}
 	params := &policy.DraftTaskParams{Name: in.Name, Draft: true}
+	spec := &focv1.DraftTaskParams{TaskName: in.Name, Purpose: in.Purpose}
 	for _, a := range in.Actions {
 		params.Actions = append(params.Actions, policy.DraftAction{Name: a.Name, Type: a.Type, Priority: a.Priority, Zone: a.Zone})
-	}
-	gate, _, err := fleet.DraftGate(ctx, s.C)
-	if err != nil {
-		return RequestResult{}, err
-	}
-	drafts, err := fleet.CountSessionDrafts(ctx, s.C, ns, sess.ID)
-	if err != nil {
-		return RequestResult{}, err
-	}
-	d := s.decide(sess, "request_draft_task", policy.Request{Op: policy.OpDraftTask, Namespace: ns, SessionID: sess.ID, DraftTask: params}, policy.Snapshot{DraftGateServed: gate, DraftsThisSession: drafts})
-	if d.Effect != policy.Allow {
-		return refused(d), nil
-	}
-	task := &swarmv1.FleetTask{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: in.Name, Namespace: ns,
-			Labels:      map[string]string{fleet.CreatedByLabel: "foc-mcp", fleet.SessionLabel: sess.ID},
-			Annotations: map[string]string{"fleetops.alexbahel.github.io/requested-for": sess.Operator, "fleetops.alexbahel.github.io/purpose": in.Purpose},
-		},
-		Spec: swarmv1.FleetTaskSpec{Draft: true},
-	}
-	for _, a := range in.Actions {
-		task.Spec.Actions = append(task.Spec.Actions, swarmv1.FleetTaskAction{
-			Name:      a.Name,
-			DependsOn: a.DependsOn,
-			Action: swarmv1.FleetActionSpec{
-				Type: swarmv1.ActionType(a.Type), Zone: a.Zone, Priority: swarmv1.ActionPriority(a.Priority),
-				RequiredCapabilities: a.RequiredCapabilities, PreferredRobot: a.PreferredRobot,
-			},
+		spec.Actions = append(spec.Actions, focv1.DraftAction{
+			Name: a.Name, Type: a.Type, Zone: a.Zone, Priority: a.Priority,
+			RequiredCapabilities: a.RequiredCapabilities, PreferredRobot: a.PreferredRobot, DependsOn: a.DependsOn,
 		})
 	}
-	if err := s.C.Create(ctx, task); err != nil {
-		if apierrors.IsAlreadyExists(err) {
-			return refused(policy.Decision{Effect: policy.Deny, Code: policy.CodeMalformed, Message: fmt.Sprintf("a FleetTask named %q already exists; choose another name", in.Name)}), nil
-		}
-		s.record(audit.Entry{Kind: audit.KindExecutionFailed, Actor: sess.Operator, SessionID: sess.ID, Tool: "request_draft_task", Namespace: ns, Object: "FleetTask/" + in.Name, Message: err.Error()})
-		return RequestResult{}, fmt.Errorf("creating draft FleetTask: %w", err)
+	snap, err := fleet.TaskSnapshot(ctx, s.C, ns, in.Name)
+	if err != nil {
+		return RequestResult{}, err
 	}
-	s.record(audit.Entry{Kind: audit.KindDraftCreated, Actor: sess.Operator, SessionID: sess.ID, Tool: "request_draft_task", Namespace: ns, Object: "FleetTask/" + in.Name, Code: string(d.Code)})
-	s.event(ctx, task, "DraftCreated", fmt.Sprintf("draft created by the copilot for %s; nothing is dispatched until a person activates it", sess.Operator))
-	return RequestResult{
-		Effect: string(d.Effect), Code: string(d.Code), Reason: d.Message, Created: "FleetTask/" + in.Name, State: "Draft",
-		NextStep: "call request_activate_task to ask a person to activate it",
-	}, nil
+	if snap.TaskExists {
+		return refused(policy.Decision{Effect: policy.Deny, Code: policy.CodeMalformed, Message: fmt.Sprintf("a FleetTask named %q already exists; choose another name", in.Name)}), nil
+	}
+	if snap.DraftGateServed, _, err = fleet.DraftGate(ctx, s.C); err != nil {
+		return RequestResult{}, err
+	}
+	if snap.DraftsThisSession, err = fleet.CountSessionDraftRequests(ctx, s.C, ns, sess.ID); err != nil {
+		return RequestResult{}, err
+	}
+	d := s.decide(sess, "request_draft_task", policy.Request{Op: policy.OpDraftTask, Namespace: ns, SessionID: sess.ID, DraftTask: params}, snap)
+	if d.Effect != policy.RequireApproval {
+		return refused(d), nil
+	}
+	return s.createRequest(ctx, sess, ns, d, focv1.ApprovalRequestSpec{Type: focv1.RequestDraftTask, DraftTask: spec},
+		"a person with create on fleettasks runs: foc approve <request>; foc-approvals then creates the draft, which dispatches nothing until it is activated (request_activate_task)")
 }
 
 // ActivateTaskInput is the input of request_activate_task.

@@ -130,14 +130,20 @@ func TaskSnapshot(ctx context.Context, c client.Reader, ns, task string) (policy
 	return s, nil
 }
 
-// CountSessionDrafts counts FleetTasks the copilot created in a session.
-func CountSessionDrafts(ctx context.Context, c client.Reader, ns, session string) (int, error) {
+// CountSessionDraftRequests counts the DraftTask ApprovalRequests a session made.
+func CountSessionDraftRequests(ctx context.Context, c client.Reader, ns, session string) (int, error) {
 	if session == "" {
 		return 0, nil
 	}
-	var list swarmv1.FleetTaskList
+	var list focv1.ApprovalRequestList
 	if err := c.List(ctx, &list, client.InNamespace(ns), client.MatchingLabels{SessionLabel: session}); err != nil {
 		return 0, err
 	}
-	return len(list.Items), nil
+	n := 0
+	for _, r := range list.Items {
+		if r.Spec.Type == focv1.RequestDraftTask {
+			n++
+		}
+	}
+	return n, nil
 }
