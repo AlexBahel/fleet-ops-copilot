@@ -5,12 +5,14 @@ SETUP_ENVTEST_VERSION ?= release-0.17
 GO ?= go
 BIN := bin
 
-.PHONY: help build vet lint fmt test test-envtest eval-fixtures generate check-no-local all envtest-assets
+.PHONY: help build vet lint fmt test test-envtest eval-fixtures generate check-no-local all ci envtest-assets
 
 help: ## List targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
 
-all: vet lint test test-envtest eval-fixtures ## Everything CI runs
+all: ci
+
+ci: check-no-local build vet lint test test-envtest eval-fixtures ## Everything the CI Go job runs (run locally until the Swarmada pin)
 
 build: ## Build foc, foc-mcp, foc-approvals into bin/
 	$(GO) build -o $(BIN)/ ./cmd/...
