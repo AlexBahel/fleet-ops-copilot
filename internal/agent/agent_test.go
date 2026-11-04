@@ -18,8 +18,10 @@ package agent
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -89,5 +91,15 @@ func TestLoopTurnLimit(t *testing.T) {
 	_, err = (&Loop{Backend: &llm.Scripted{Steps: steps}, Session: cs, MaxTurns: 3}).Run(ctx, "sam", "s1", "loop")
 	if !errors.Is(err, ErrMaxTurns) {
 		t.Fatalf("want ErrMaxTurns, got %v", err)
+	}
+}
+
+// The system prompt is frozen until the model runs of record (docs/DESIGN.md
+// D46). Changing its text must come with a new SystemPromptVersion and a DESIGN
+// entry; this test pins the text of the current version.
+func TestSystemPromptPinned(t *testing.T) {
+	got := fmt.Sprintf("%x", sha256.Sum256([]byte(SystemPrompt)))
+	if SystemPromptVersion != "v2" || got != "bf6b2f4865a96173c316f26d717eddf17c182b13a7d785f8b032cfe547e5e49f" {
+		t.Fatalf("system prompt changed (version %s, sha256 %s): bump SystemPromptVersion, log it in DESIGN, update this test", SystemPromptVersion, got)
 	}
 }

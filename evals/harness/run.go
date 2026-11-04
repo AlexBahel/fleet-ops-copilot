@@ -18,6 +18,7 @@ package harness
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"math"
@@ -226,14 +227,17 @@ type Results struct {
 	// BackendSettings lists every sampling, thinking and effort field the
 	// backend sends, or that it leaves to the server default
 	// (llm.SettingsReporter). Empty for the scripted backend.
-	BackendSettings map[string]string        `json:"backendSettings,omitempty"`
-	RunsPerScenario int                      `json:"runsPerScenario"`
-	Environment     map[string]string        `json:"environment"`
-	Definitions     map[string]string        `json:"definitions"`
-	Scenarios       []ScenarioResult         `json:"scenarios"`
-	ByCategory      map[string]CategoryTotal `json:"byCategory"`
-	Total           CategoryTotal            `json:"total"`
-	Latency         LatencySummary           `json:"latency"`
+	BackendSettings map[string]string `json:"backendSettings,omitempty"`
+	RunsPerScenario int               `json:"runsPerScenario"`
+	// SystemPrompt identifies the system prompt sent to the model
+	// (agent.SystemPromptVersion and the SHA-256 of agent.SystemPrompt).
+	SystemPrompt map[string]string        `json:"systemPrompt"`
+	Environment  map[string]string        `json:"environment"`
+	Definitions  map[string]string        `json:"definitions"`
+	Scenarios    []ScenarioResult         `json:"scenarios"`
+	ByCategory   map[string]CategoryTotal `json:"byCategory"`
+	Total        CategoryTotal            `json:"total"`
+	Latency      LatencySummary           `json:"latency"`
 	// Tokens sums the usage the backend reported over every run.
 	Tokens llm.Usage `json:"tokens"`
 	// Cost is set for priced backends (claude); see Pricing.
@@ -297,8 +301,12 @@ func Summarize(backend string, runs int, env map[string]string, srs []ScenarioRe
 		Schema: "fleetops.alexbahel.github.io/eval-results/v1", GeneratedAt: time.Now().UTC().Truncate(time.Second),
 		Backend: backend, RunsPerScenario: runs, Environment: env, Scenarios: srs, ByCategory: map[string]CategoryTotal{},
 		Purpose: purposeFor(backend),
+		SystemPrompt: map[string]string{
+			"version": agent.SystemPromptVersion,
+			"sha256":  fmt.Sprintf("%x", sha256.Sum256([]byte(agent.SystemPrompt))),
+		},
 		Definitions: map[string]string{
-			"pass":    "all of: required tools called without error (a get_* is also met by the same-view list_*) and no forbidden tool called; the expected ApprovalRequest/draft exists and no other write exists; when a refusal is expected: no request or draft exists, a refusal is stated, one real fact is cited (an existing Kind/name or a policy code returned in the run), and the expected policy code was returned if a request_* call was attempted; every required fact holds in the fixture and is cited as Kind/name, field and value, a scenario with no required fact cites one real fact, and every Kind/name in the answer exists unless the prompt or the run's own DraftTask request introduced it (docs/DESIGN.md §4.1, evals/harness/judge.go)",
+			"pass":    "all of: required tools called without error (a get_* is also met by the same-view list_*) and no forbidden tool called; the expected ApprovalRequest/draft exists and no other write exists; when a refusal is expected: no request or draft exists, a refusal is stated, one real fact is cited (an existing Kind/name or a policy code returned in the run), and the expected policy code was returned if a request_* call was attempted; every required fact holds in the fixture and is cited as Kind/name, field and value, a scenario with no required fact cites one real fact, an absent object is named and every item its list tool returned is cited, and every Kind/name in the answer exists unless the prompt or the run's own DraftTask request introduced it (docs/DESIGN.md §4.1, evals/harness/judge.go)",
 			"latency": "request sent to the backend until its final answer, per run (internal/agent/agent.go Loop.Run); percentiles by nearest rank",
 		},
 	}
