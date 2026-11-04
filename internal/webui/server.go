@@ -22,11 +22,13 @@ limitations under the License.
 // with their own kubeconfig. foc-agent holds no permission to decide or to
 // write anything (its ServiceAccount can only get and list ApprovalRequests).
 //
-// There is no login. The operator name typed in the page is recorded as
-// requestedFor "unverified:<name>" (policy.UnverifiedPrefix), and the policy
-// refuses to approve any request with an unverified requester (R38): a
-// request filed from the page can be rejected, or left to expire, but never
-// approved.
+// There is no login. foc-mcp decides the requester from the caller's bearer
+// token (R39). The page sends none, so the name typed in it is recorded as
+// requestedFor "unverified:<name>", and the policy refuses to approve any
+// request with an unverified requester (R38): a request filed from the page
+// can be rejected, or left to expire, but never approved. A client that sends
+// "Authorization: Bearer <the person's token>" to /api/chat (foc chat) has it
+// forwarded to foc-mcp, which verifies it with a TokenReview.
 package webui
 
 import (
@@ -49,6 +51,7 @@ import (
 
 	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/agent"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/authn"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/policy"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/redact"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/requestview"
@@ -59,7 +62,9 @@ var staticFiles embed.FS
 
 // Runner answers one operator request.
 type Runner interface {
-	Run(ctx context.Context, operator, sessionID, prompt string) (agent.Trace, error)
+	// Run answers one request; token is the caller's bearer token, forwarded
+	// to foc-mcp ("" for the page).
+	Run(ctx context.Context, token, operator, sessionID, prompt string) (agent.Trace, error)
 	// Ready reports whether a request could be answered now (foc-mcp
 	// reachable).
 	Ready(ctx context.Context) error
@@ -185,7 +190,7 @@ type ToolCall struct {
 type chatResponse struct {
 	SessionID string `json:"sessionId"`
 	// Requester is what any request filed by this message records as
-	// requestedFor.
+	// requestedFor when no token was sent; with a token foc-mcp decides it.
 	Requester string     `json:"requester,omitempty"`
 	Answer    string     `json:"answer,omitempty"`
 	Error     string     `json:"error,omitempty"`
@@ -214,8 +219,9 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in.Operator, in.Message = strings.TrimSpace(in.Operator), strings.TrimSpace(in.Message)
+	token := authn.BearerToken(r.Header.Get("Authorization"))
 	switch {
-	case !operatorRE.MatchString(in.Operator):
+	case (token == "" || in.Operator != "") && !operatorRE.MatchString(in.Operator):
 		writeJSON(w, http.StatusBadRequest, chatResponse{Error: "operator: enter your Kubernetes username (letters, digits and . _ @ : + -, at most 128)"})
 		return
 	case in.Message == "" || len(in.Message) > maxMessage:
@@ -241,12 +247,15 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
-	// The name is typed, not authenticated: mark it, so no request it files
-	// can be approved (policy.CodeRequesterUnverified).
-	requester := policy.UnverifiedPrefix + in.Operator
-	tr, err := s.Runner.Run(ctx, requester, in.SessionID, in.Message)
+	// foc-mcp decides the requester from the token (R39). Without one, the
+	// typed name is only asserted and every request it files is unverified.
+	requester := ""
+	if token == "" {
+		requester = policy.UnverifiedPrefix + in.Operator
+	}
+	tr, err := s.Runner.Run(ctx, token, in.Operator, in.SessionID, in.Message)
 	out := chatResponse{SessionID: in.SessionID, Requester: requester, Answer: tr.Final, Turns: tr.Turns, LatencyMs: tr.LatencyMs, ToolCalls: toolCalls(tr)}
-	s.logf("chat operator=%s session=%s turns=%d tools=%d latency_ms=%.0f err=%v", in.Operator, in.SessionID, tr.Turns, len(tr.Calls), tr.LatencyMs, err)
+	s.logf("chat operator=%s bearer=%t session=%s turns=%d tools=%d latency_ms=%.0f err=%v", in.Operator, token != "", in.SessionID, tr.Turns, len(tr.Calls), tr.LatencyMs, err)
 	if err != nil {
 		out.Error = s.Redactor.String(err.Error())
 		writeJSON(w, http.StatusBadGateway, out)

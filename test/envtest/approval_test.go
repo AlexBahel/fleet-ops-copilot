@@ -38,6 +38,7 @@ import (
 	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/approval"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/audit"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/authn"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/policy"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/redact"
@@ -117,6 +118,7 @@ func newHarness(t *testing.T, mutate func(*policy.File)) *harness {
 	svc := &tools.Service{
 		C: mcpClient, Engine: eng, Audit: aw, Identity: mcpUser, DefaultNamespace: swarmNS,
 		Events: &audit.EventSink{C: mcpClient, Scheme: scheme, Component: "foc-mcp", Red: redact.New()},
+		Authn:  &authn.TokenReviewer{C: mcpClient},
 	}
 	return &harness{svc: svc, auditBuf: buf, engine: eng}
 }

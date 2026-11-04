@@ -131,6 +131,10 @@ func judgeApproval(s Scenario, ob Observed) Criterion {
 				fail("ApprovalRequest type %q, want %q", got["type"], want.Type)
 			}
 			for k, wv := range want.Fields {
+				if k == "requestedFor" && wv == s.Operator && s.OperatorIdentity != "" {
+					// The operator is authenticated by a token (R39).
+					wv = s.OperatorIdentity
+				}
 				if got[k] != wv {
 					fail("ApprovalRequest spec.%s = %q, want %q", k, got[k], wv)
 				}

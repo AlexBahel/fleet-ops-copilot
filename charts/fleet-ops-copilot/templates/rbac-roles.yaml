@@ -48,6 +48,11 @@ rules:
   - apiGroups: ["admissionregistration.k8s.io"]
     resources: [validatingwebhookconfigurations]
     verbs: [get, list]
+  # Authenticate the caller of each tool call: the person's bearer token is
+  # verified with a TokenReview and its username becomes the requester (R39).
+  - apiGroups: ["authentication.k8s.io"]
+    resources: [tokenreviews]
+    verbs: [create]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole

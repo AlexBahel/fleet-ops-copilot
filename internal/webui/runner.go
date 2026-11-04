@@ -34,8 +34,9 @@ import (
 // between requests.
 type AgentRunner struct {
 	// Transport returns a new MCP client transport (streamable HTTP to
-	// foc-mcp in the cluster).
-	Transport  func() mcp.Transport
+	// foc-mcp in the cluster) that sends token, if any, as the caller's
+	// bearer token; foc-mcp verifies it (R39).
+	Transport  func(token string) mcp.Transport
 	NewBackend func() (llm.Backend, error)
 	// BackendName is shown in the page header.
 	BackendName string
@@ -44,12 +45,12 @@ type AgentRunner struct {
 }
 
 // MCPURL returns a Transport for foc-mcp's streamable HTTP endpoint.
-func MCPURL(url string) func() mcp.Transport {
-	return func() mcp.Transport { return &mcp.StreamableClientTransport{Endpoint: url} }
+func MCPURL(url string) func(token string) mcp.Transport {
+	return func(token string) mcp.Transport { return mcpserver.ClientTransport(url, token) }
 }
 
-func (a *AgentRunner) connect(ctx context.Context) (*mcp.ClientSession, error) {
-	cs, err := mcp.NewClient(&mcp.Implementation{Name: "foc-agent", Version: mcpserver.Version}, nil).Connect(ctx, a.Transport(), nil)
+func (a *AgentRunner) connect(ctx context.Context, token string) (*mcp.ClientSession, error) {
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "foc-agent", Version: mcpserver.Version}, nil).Connect(ctx, a.Transport(token), nil)
 	if err != nil {
 		return nil, fmt.Errorf("connecting to foc-mcp: %w", err)
 	}
@@ -57,12 +58,12 @@ func (a *AgentRunner) connect(ctx context.Context) (*mcp.ClientSession, error) {
 }
 
 // Run implements Runner.
-func (a *AgentRunner) Run(ctx context.Context, operator, sessionID, prompt string) (agent.Trace, error) {
+func (a *AgentRunner) Run(ctx context.Context, token, operator, sessionID, prompt string) (agent.Trace, error) {
 	be, err := a.NewBackend()
 	if err != nil {
 		return agent.Trace{Prompt: prompt}, fmt.Errorf("model backend: %w", err)
 	}
-	cs, err := a.connect(ctx)
+	cs, err := a.connect(ctx, token)
 	if err != nil {
 		return agent.Trace{Prompt: prompt}, err
 	}
@@ -72,7 +73,7 @@ func (a *AgentRunner) Run(ctx context.Context, operator, sessionID, prompt strin
 
 // Ready implements Runner: foc-mcp accepts a session and answers a ping.
 func (a *AgentRunner) Ready(ctx context.Context) error {
-	cs, err := a.connect(ctx)
+	cs, err := a.connect(ctx, "")
 	if err != nil {
 		return err
 	}

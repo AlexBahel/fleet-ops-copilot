@@ -34,15 +34,21 @@ import (
 
 	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/audit"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/authn"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/policy"
 )
 
-// Session identifies who a tool call is for. It is set by the agent loop
-// (MCP request _meta), never by the model.
+// Session identifies who a tool call is for. It is set by the MCP server
+// from request metadata, never by the model.
 type Session struct {
-	ID       string
+	ID string
+	// Operator is the requester: the username of the caller's verified bearer
+	// token, or "unverified:<asserted name>" (internal/authn, R39).
 	Operator string
+	Verified bool
+	// Unverified is why the requester is not verified; empty when verified.
+	Unverified string
 }
 
 // Service runs the tools against a Kubernetes client.
@@ -57,6 +63,9 @@ type Service struct {
 	// Tracer records a span per policy decision and, in internal/mcpserver,
 	// per tool call (internal/tracing). nil records nothing.
 	Tracer trace.Tracer
+	// Authn verifies the caller's bearer token (TokenReview). nil: every
+	// requester is unverified.
+	Authn authn.Authenticator
 }
 
 func (s *Service) now() time.Time {

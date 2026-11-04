@@ -58,9 +58,9 @@ type stubRunner struct {
 	block    chan struct{}
 }
 
-func (s *stubRunner) Run(ctx context.Context, op, sess, prompt string) (agent.Trace, error) {
+func (s *stubRunner) Run(ctx context.Context, token, op, sess, prompt string) (agent.Trace, error) {
 	s.mu.Lock()
-	s.got = append(s.got, op+"|"+sess+"|"+prompt)
+	s.got = append(s.got, token+"|"+op+"|"+sess+"|"+prompt)
 	s.mu.Unlock()
 	if s.block != nil {
 		select {
@@ -139,8 +139,9 @@ func TestChatAnswersAndReportsPolicy(t *testing.T) {
 	if code != 200 || out.Answer != "Requested." || out.Turns != 2 || !strings.HasPrefix(out.SessionID, "web-") {
 		t.Fatalf("%d %+v", code, out)
 	}
-	// The typed name reaches the agent loop (and so requestedFor) marked unverified (R38).
-	if r.got[0] != "unverified:jane@example.com|"+out.SessionID+"|stop aisle-b" || out.Requester != "unverified:jane@example.com" {
+	// No token: the typed name is passed on only as asserted, and the page is
+	// told it will be recorded unverified (foc-mcp marks it, R39).
+	if r.got[0] != "|jane@example.com|"+out.SessionID+"|stop aisle-b" || out.Requester != "unverified:jane@example.com" {
 		t.Fatalf("runner got %q", r.got[0])
 	}
 	want := []ToolCall{{Name: "get_zone"}, {Name: "request_zone_stop", PolicyCode: "REQUIRE_APPROVAL", Created: "ApprovalRequest/areq-1"}, {Name: "request_zone_maintenance", Refused: true, PolicyCode: "DENY_RELEASE"}}
@@ -150,6 +151,23 @@ func TestChatAnswersAndReportsPolicy(t *testing.T) {
 	// The session id the page sends back is kept.
 	if _, out2 := postChat(t, ts, `{"operator":"jane@example.com","message":"again","sessionId":"`+out.SessionID+`"}`, nil); out2.SessionID != out.SessionID {
 		t.Fatalf("session %s, want %s", out2.SessionID, out.SessionID)
+	}
+}
+
+// A caller's bearer token is forwarded to the runner (and so to foc-mcp,
+// which verifies it); the operator name is then optional.
+func TestChatForwardsBearerToken(t *testing.T) {
+	r := &stubRunner{trace: agent.Trace{Final: "ok"}}
+	ts := newServer(t, r, nil)
+	code, out := postChat(t, ts, `{"message":"hi"}`, map[string]string{"Authorization": "Bearer person-token-1"})
+	if code != 200 || out.Requester != "" || !strings.HasPrefix(r.got[0], "person-token-1||") {
+		t.Fatalf("%d %+v %v", code, out, r.got)
+	}
+	if code, _ := postChat(t, ts, `{"message":"hi"}`, nil); code != 400 {
+		t.Fatalf("no token and no operator: %d", code)
+	}
+	if code, _ := postChat(t, ts, `{"operator":"a b","message":"hi"}`, map[string]string{"Authorization": "Bearer x"}); code != 400 {
+		t.Fatalf("bad operator with token: %d", code)
 	}
 }
 
@@ -265,9 +283,10 @@ func TestHealthAndReadiness(t *testing.T) {
 	}
 }
 
-// inMemoryMCP returns a Transport that connects each new session to srv.
-func inMemoryMCP(t *testing.T, srv *mcp.Server) func() mcp.Transport {
-	return func() mcp.Transport {
+// inMemoryMCP returns a Transport that connects each new session to srv. It
+// carries no headers, so no token reaches srv.
+func inMemoryMCP(t *testing.T, srv *mcp.Server) func(string) mcp.Transport {
+	return func(string) mcp.Transport {
 		ct, st := mcp.NewInMemoryTransports()
 		ss, err := srv.Connect(context.Background(), st, nil)
 		if err != nil {

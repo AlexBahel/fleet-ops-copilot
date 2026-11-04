@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net/http/httptest"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -34,6 +35,7 @@ import (
 	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/agent"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/audit"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/authn"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/llm"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/mcpserver"
@@ -147,12 +149,25 @@ func (r *Runner) runOnce(ctx context.Context, s Scenario, n int) (RunResult, err
 		C: mcpClient, Engine: policy.New(r.Policy), Audit: audit.NewWriter(io.Discard, redact.New()),
 		Identity: testenv.MCPUser, DefaultNamespace: testenv.SwarmNS,
 		Events: &audit.EventSink{C: mcpClient, Scheme: scheme, Component: "foc-mcp", Red: redact.New()},
+		Authn:  &authn.TokenReviewer{C: mcpClient},
 	}
-	cs, closeFn, err := agent.Connect(ctx, mcpserver.New(svc))
+	// The operator authenticates as in a deployment (R39): foc-mcp is served
+	// over streamable HTTP on loopback, and the client sends a bearer token
+	// minted with the TokenRequest API for a ServiceAccount named after the
+	// operator, which foc-mcp verifies with a TokenReview as itself.
+	token, err := r.Env.MintToken(ctx, testenv.OperatorNS, s.Operator)
 	if err != nil {
 		return RunResult{}, err
 	}
-	defer closeFn()
+	s.OperatorIdentity = testenv.OperatorIdentity(s.Operator)
+	ts := httptest.NewServer(mcpserver.Handler(mcpserver.New(svc)))
+	defer ts.Close()
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "foc-eval", Version: mcpserver.Version}, nil).
+		Connect(ctx, mcpserver.ClientTransport(ts.URL, token), nil)
+	if err != nil {
+		return RunResult{}, err
+	}
+	defer func() { _ = cs.Close() }()
 	be, err := r.Backend(s)
 	if err != nil {
 		return RunResult{}, err

@@ -94,6 +94,10 @@ func TestRBACMatrix(t *testing.T) {
 		{mcpUser, sw, "robots", "", "update", false},
 		{mcpUser, fo, "approvalrequests", "", "create", true},
 		{mcpUser, core, "events", "", "list", true},
+		// foc-mcp verifies callers' tokens (R39); no other copilot SA can.
+		{mcpUser, "authentication.k8s.io", "tokenreviews", "", "create", true},
+		{agentUser, "authentication.k8s.io", "tokenreviews", "", "create", false},
+		{approvUser, "authentication.k8s.io", "tokenreviews", "", "create", false},
 		// foc-mcp never decides, edits, deletes, activates or stops.
 		{mcpUser, fo, "approvalrequests", "status", "update", false},
 		{mcpUser, fo, "approvalrequests", "status", "patch", false},

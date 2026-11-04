@@ -31,7 +31,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -53,9 +52,11 @@ import (
 
 // uiFixture is foc-agent's HTTP side running as ServiceAccount foc-agent
 // (real RBAC), with its agent loop reaching the real tool server (as
-// foc-mcp) over MCP, and foc-approvals running as its own ServiceAccount.
+// foc-mcp, verifying bearer tokens with TokenReview) over streamable HTTP,
+// and foc-approvals running as its own ServiceAccount.
 type uiFixture struct {
 	h    *harness
+	mcp  *httptest.Server
 	ts   *httptest.Server
 	mu   sync.Mutex
 	next []llm.Step
@@ -70,19 +71,11 @@ func (f *uiFixture) script(steps ...llm.Step) {
 func newUIFixture(t *testing.T, namespaces []string) *uiFixture {
 	t.Helper()
 	h := newHarness(t, nil)
-	srv := mcpserver.New(h.svc)
-	f := &uiFixture{h: h}
+	f := &uiFixture{h: h, mcp: httptest.NewServer(mcpserver.Handler(mcpserver.New(h.svc)))}
+	t.Cleanup(f.mcp.Close)
 	runner := &webui.AgentRunner{
 		BackendName: "scripted",
-		Transport: func() mcp.Transport {
-			ct, st := mcp.NewInMemoryTransports()
-			ss, err := srv.Connect(context.Background(), st, nil)
-			if err != nil {
-				t.Error(err)
-			}
-			t.Cleanup(func() { _ = ss.Close() })
-			return ct
-		},
+		Transport:   webui.MCPURL(f.mcp.URL),
 		NewBackend: func() (llm.Backend, error) {
 			f.mu.Lock()
 			defer f.mu.Unlock()
@@ -116,13 +109,23 @@ type chatOut struct {
 	} `json:"toolCalls"`
 }
 
-// chat sends one message and returns the name of the ApprovalRequest it filed.
+// chat sends one message as the page does (no token) and returns the name
+// of the ApprovalRequest it filed.
 func (f *uiFixture) chat(t *testing.T, operator, message string, steps ...llm.Step) string {
+	t.Helper()
+	return f.chatAs(t, "", operator, message, steps...)
+}
+
+// chatAs sends one message with a bearer token, as foc chat does.
+func (f *uiFixture) chatAs(t *testing.T, token, operator, message string, steps ...llm.Step) string {
 	t.Helper()
 	f.script(steps...)
 	body, _ := json.Marshal(map[string]string{"operator": operator, "message": message})
 	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, f.ts.URL+"/api/chat", strings.NewReader(string(body)))
 	req.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)

@@ -15,6 +15,11 @@ limitations under the License.
 */
 
 // Command foc-mcp serves the copilot's tools over MCP (streamable HTTP or stdio).
+//
+// The requester of every call is the username of the caller's bearer token
+// (Authorization header), verified with a TokenReview; without a verified
+// token it is "unverified:<asserted name>", which is never approved (R39).
+// Over stdio there is no header, so every requester is unverified.
 package main
 
 import (
@@ -34,6 +39,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/AlexBahel/fleet-ops-copilot/internal/audit"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/authn"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/mcpserver"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/policy"
@@ -103,14 +109,14 @@ func run() error {
 		C: c, Engine: policy.New(p), Audit: aw, Identity: *identity, DefaultNamespace: *namespace,
 		Events: &audit.EventSink{C: c, Scheme: scheme, Component: "foc-mcp", Red: red},
 		Tracer: tracing.Tracer(tp),
+		Authn:  &authn.TokenReviewer{C: c},
 	}
 	srv := mcpserver.New(svc)
 	if *stdio {
 		return srv.Run(ctx, &mcp.StdioTransport{})
 	}
-	h := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return srv }, nil)
 	mux := http.NewServeMux()
-	mux.Handle("/mcp", h)
+	mux.Handle("/mcp", mcpserver.Handler(srv))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = fmt.Fprintln(w, "ok") })
 	hs := &http.Server{Addr: *listen, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	go func() {

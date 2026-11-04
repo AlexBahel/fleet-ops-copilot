@@ -37,7 +37,9 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/tls"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -50,6 +52,7 @@ import (
 	"time"
 
 	admissionv1 "k8s.io/api/admissionregistration/v1"
+	authnv1 "k8s.io/api/authentication/v1"
 	authzv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -81,9 +84,21 @@ const (
 	standinZonePath  = "/mutate-fleetzone-standin"
 	EstopActorAnn    = "swarmada.io/estop-actor"
 	EstopInForceFinz = "swarmada.io/estop-in-force"
+	// OperatorNS holds one ServiceAccount per eval operator; the harness mints
+	// its bearer token with the TokenRequest API (R39).
+	OperatorNS = "foc-eval-operators"
 )
 
-// Person is an authenticated user (client certificate) with RoleBindings in SwarmNS.
+// OperatorIdentity is the username the API server gives the token the
+// harness mints for a scenario operator.
+func OperatorIdentity(operator string) string {
+	return "system:serviceaccount:" + OperatorNS + ":" + operator
+}
+
+// Person is an authenticated user with RoleBindings in SwarmNS. Each one has
+// a client certificate and a static bearer token (--token-auth-file) for the
+// same username and groups, so a person can also be the verified requester
+// of a tool call (R39).
 type Person struct {
 	Name   string
 	Groups []string
@@ -106,6 +121,8 @@ type Env struct {
 	RepoRoot    string
 	SwarmadaDir string
 	people      map[string]*rest.Config
+	tokens      map[string]string
+	tokenDir    string
 	env         *envtest.Environment
 	cancel      context.CancelFunc
 }
@@ -181,11 +198,17 @@ func Start(repoRoot string, people []Person) (*Env, error) {
 			}},
 		},
 	}
+	tokens, tokenDir, err := writeTokenFile(people)
+	if err != nil {
+		return nil, err
+	}
+	te.ControlPlane.GetAPIServer().Configure().Set("token-auth-file", filepath.Join(tokenDir, "tokens.csv"))
 	cfg, err := te.Start()
 	if err != nil {
+		_ = os.RemoveAll(tokenDir)
 		return nil, fmt.Errorf("starting envtest (is KUBEBUILDER_ASSETS set? see `make test-envtest`): %w", err)
 	}
-	e := &Env{AdminCfg: cfg, RepoRoot: repoRoot, SwarmadaDir: sw, env: te, people: map[string]*rest.Config{}}
+	e := &Env{AdminCfg: cfg, RepoRoot: repoRoot, SwarmadaDir: sw, env: te, people: map[string]*rest.Config{}, tokens: tokens, tokenDir: tokenDir}
 	ok := false
 	defer func() {
 		if !ok {
@@ -248,6 +271,56 @@ func (e *Env) Stop() {
 		e.cancel()
 	}
 	_ = e.env.Stop()
+	if e.tokenDir != "" {
+		_ = os.RemoveAll(e.tokenDir)
+	}
+}
+
+// writeTokenFile writes a kube-apiserver static token file with a random
+// token per person (username and groups as in the person's certificate).
+func writeTokenFile(people []Person) (map[string]string, string, error) {
+	dir, err := os.MkdirTemp("", "foc-envtest-tokens-")
+	if err != nil {
+		return nil, "", err
+	}
+	tokens := map[string]string{}
+	var b strings.Builder
+	for _, p := range people {
+		raw := make([]byte, 24)
+		if _, err := rand.Read(raw); err != nil {
+			return nil, "", err
+		}
+		tok := hex.EncodeToString(raw)
+		tokens[p.Name] = tok
+		fmt.Fprintf(&b, "%s,%s,%s,\"%s\"\n", tok, p.Name, p.Name, strings.Join(p.Groups, ","))
+	}
+	if err := os.WriteFile(filepath.Join(dir, "tokens.csv"), []byte(b.String()), 0o600); err != nil {
+		return nil, "", err
+	}
+	return tokens, dir, nil
+}
+
+// PersonToken returns a person's bearer token (static token file).
+func (e *Env) PersonToken(name string) string { return e.tokens[name] }
+
+// MintToken returns a bearer token for ServiceAccount ns/name from the
+// TokenRequest API, creating the namespace and ServiceAccount if needed.
+func (e *Env) MintToken(ctx context.Context, ns, name string) (string, error) {
+	for _, obj := range []client.Object{
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}},
+		&corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns}},
+	} {
+		if err := e.Admin.Create(ctx, obj); err != nil && !apierrors.IsAlreadyExists(err) {
+			return "", err
+		}
+	}
+	exp := int64(3600)
+	tr := &authnv1.TokenRequest{Spec: authnv1.TokenRequestSpec{ExpirationSeconds: &exp}}
+	sa := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns}}
+	if err := e.Admin.SubResource("token").Create(ctx, sa, tr); err != nil {
+		return "", fmt.Errorf("TokenRequest for %s/%s: %w", ns, name, err)
+	}
+	return tr.Status.Token, nil
 }
 
 // SAGroups are the groups the API server gives a copilot ServiceAccount.

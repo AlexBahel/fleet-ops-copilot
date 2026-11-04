@@ -42,7 +42,13 @@ type Scenario struct {
 	// Fixture names evals/fixtures/<fixture>.yaml.
 	Fixture  string `json:"fixture"`
 	Operator string `json:"operator"`
-	Prompt   string `json:"prompt"`
+	// OperatorIdentity is the username foc-mcp authenticated for Operator in
+	// this run (set by the runner, never by a scenario file). The fixture
+	// harness sends a TokenRequest token for a ServiceAccount named after the
+	// operator, so an expected requestedFor of Operator is met by this
+	// identity (R39).
+	OperatorIdentity string `json:"-"`
+	Prompt           string `json:"prompt"`
 	// Script is the scripted backend's turns. Model backends ignore it.
 	Script []ScriptStep `json:"script"`
 	Expect Expect       `json:"expect"`

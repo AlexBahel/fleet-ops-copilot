@@ -20,17 +20,22 @@ package mcpserver
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/AlexBahel/fleet-ops-copilot/internal/authn"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/tools"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/tracing"
 )
 
 // Meta keys the agent loop sets on every tools/call. The model cannot set
-// them: they are request metadata, not tool arguments.
+// them: they are request metadata, not tool arguments. MetaOperator is only
+// the name the client asserts: the requester is decided from the caller's
+// bearer token (internal/authn, R39), and the asserted name appears only in
+// an unverified requester.
 const (
 	MetaSession  = "fleetops.alexbahel.github.io/session"
 	MetaOperator = "fleetops.alexbahel.github.io/operator"
@@ -49,25 +54,62 @@ var (
 	RequestTools = []string{"request_draft_task", "request_activate_task", "request_zone_maintenance", "request_zone_stop"}
 )
 
-func session(req *mcp.CallToolRequest) tools.Session {
+// session builds the tool session of one call: the session id from _meta,
+// and the requester from the HTTP Authorization header (TokenReview through
+// svc.Authn). The asserted operator name in _meta never becomes a verified
+// requester. Transports without HTTP headers (stdio, in-memory) carry no
+// token, so their requester is unverified.
+func session(ctx context.Context, svc *tools.Service, req *mcp.CallToolRequest) tools.Session {
 	var s tools.Session
-	if req == nil || req.Params == nil || req.Params.Meta == nil {
-		return s
+	var asserted, token string
+	if req != nil && req.Params != nil && req.Params.Meta != nil {
+		if v, ok := req.Params.Meta[MetaSession].(string); ok {
+			s.ID = v
+		}
+		if v, ok := req.Params.Meta[MetaOperator].(string); ok {
+			asserted = v
+		}
 	}
-	if v, ok := req.Params.Meta[MetaSession].(string); ok {
-		s.ID = v
+	if req != nil && req.Extra != nil && req.Extra.Header != nil {
+		token = authn.BearerToken(req.Extra.Header.Get("Authorization"))
 	}
-	if v, ok := req.Params.Meta[MetaOperator].(string); ok {
-		s.Operator = v
-	}
+	id := authn.Resolve(ctx, svc.Authn, token, asserted)
+	s.Operator, s.Verified, s.Unverified = id.Requester, id.Verified, id.Reason
 	return s
+}
+
+// Handler serves srv over streamable HTTP. Each request's headers reach the
+// tool handlers, which is how the caller's bearer token arrives.
+func Handler(srv *mcp.Server) http.Handler {
+	return mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return srv }, nil)
+}
+
+// ClientTransport connects to a streamable HTTP endpoint and, when token is
+// set, sends it as "Authorization: Bearer <token>" on every request.
+func ClientTransport(endpoint, token string) mcp.Transport {
+	t := &mcp.StreamableClientTransport{Endpoint: endpoint}
+	if token != "" {
+		t.HTTPClient = &http.Client{Transport: bearer{token: token, next: http.DefaultTransport}}
+	}
+	return t
+}
+
+type bearer struct {
+	token string
+	next  http.RoundTripper
+}
+
+func (b bearer) RoundTrip(r *http.Request) (*http.Response, error) {
+	r = r.Clone(r.Context())
+	r.Header.Set("Authorization", "Bearer "+b.token)
+	return b.next.RoundTrip(r)
 }
 
 func boolp(b bool) *bool { return &b }
 
 // add registers one tool. Each call runs in a server span that continues the
 // caller's trace when _meta carries a W3C traceparent (internal/tracing).
-func add[In, Out any](srv *mcp.Server, tr trace.Tracer, name, desc string, readOnly bool, fn func(context.Context, tools.Session, In) (Out, error)) {
+func add[In, Out any](srv *mcp.Server, svc *tools.Service, tr trace.Tracer, name, desc string, readOnly bool, fn func(context.Context, tools.Session, In) (Out, error)) {
 	t := &mcp.Tool{
 		Name:        name,
 		Description: desc,
@@ -79,7 +121,7 @@ func add[In, Out any](srv *mcp.Server, tr trace.Tracer, name, desc string, readO
 		}
 		ctx, span := tr.Start(ctx, tracing.SpanMCPTool, trace.WithSpanKind(trace.SpanKindServer), trace.WithAttributes(tracing.AttrToolName.String(name)))
 		defer span.End()
-		out, err := fn(ctx, session(req), in)
+		out, err := fn(ctx, session(ctx, svc, req), in)
 		if err != nil {
 			span.SetStatus(codes.Error, err.Error())
 		}
@@ -95,25 +137,25 @@ func New(svc *tools.Service) *mcp.Server {
 			"create an ApprovalRequest that a named person decides. There is no tool to clear a stop, release or resume a robot, delete, or approve.",
 	})
 	tr := tracing.OrNoop(svc.Tracer)
-	add(srv, tr, "list_robots", "List Robots with phase, estop state, health, battery, zone and capabilities.", true, svc.ListRobots)
-	add(srv, tr, "get_robot", "Get one Robot's spec and status.", true, svc.GetRobot)
-	add(srv, tr, "list_fleet_tasks", "List FleetTasks with draft flag, phase and members.", true, svc.ListFleetTasks)
-	add(srv, tr, "get_fleet_task", "Get one FleetTask, including each member's projected phase and assigned robot.", true, svc.GetFleetTask)
-	add(srv, tr, "list_fleet_actions", "List FleetActions with phase, assigned robot and failure reason.", true, svc.ListFleetActions)
-	add(srv, tr, "get_fleet_action", "Get one FleetAction.", true, svc.GetFleetAction)
-	add(srv, tr, "list_zones", "List FleetZones with estop status and robot count.", true, svc.ListZones)
-	add(srv, tr, "get_zone", "Get one FleetZone.", true, svc.GetZone)
-	add(srv, tr, "list_zone_maintenances", "List ZoneMaintenance windows with phase and paused robots.", true, svc.ListZoneMaintenances)
-	add(srv, tr, "list_discovered_robots", "List DiscoveredRobots awaiting admission.", true, svc.ListDiscoveredRobots)
-	add(srv, tr, "list_fleet_adapters", "List FleetAdapters with phase, conformance and heartbeat.", true, svc.ListFleetAdapters)
-	add(srv, tr, "list_task_triggers", "List TaskTriggers (RFC-0003) and the drafts they produced.", true, svc.ListTaskTriggers)
-	add(srv, tr, "get_events", "Get Kubernetes Events for one object.", true, svc.GetEvents)
-	add(srv, tr, "get_request", "Get one ApprovalRequest and its state.", true, svc.GetRequest)
+	add(srv, svc, tr, "list_robots", "List Robots with phase, estop state, health, battery, zone and capabilities.", true, svc.ListRobots)
+	add(srv, svc, tr, "get_robot", "Get one Robot's spec and status.", true, svc.GetRobot)
+	add(srv, svc, tr, "list_fleet_tasks", "List FleetTasks with draft flag, phase and members.", true, svc.ListFleetTasks)
+	add(srv, svc, tr, "get_fleet_task", "Get one FleetTask, including each member's projected phase and assigned robot.", true, svc.GetFleetTask)
+	add(srv, svc, tr, "list_fleet_actions", "List FleetActions with phase, assigned robot and failure reason.", true, svc.ListFleetActions)
+	add(srv, svc, tr, "get_fleet_action", "Get one FleetAction.", true, svc.GetFleetAction)
+	add(srv, svc, tr, "list_zones", "List FleetZones with estop status and robot count.", true, svc.ListZones)
+	add(srv, svc, tr, "get_zone", "Get one FleetZone.", true, svc.GetZone)
+	add(srv, svc, tr, "list_zone_maintenances", "List ZoneMaintenance windows with phase and paused robots.", true, svc.ListZoneMaintenances)
+	add(srv, svc, tr, "list_discovered_robots", "List DiscoveredRobots awaiting admission.", true, svc.ListDiscoveredRobots)
+	add(srv, svc, tr, "list_fleet_adapters", "List FleetAdapters with phase, conformance and heartbeat.", true, svc.ListFleetAdapters)
+	add(srv, svc, tr, "list_task_triggers", "List TaskTriggers (RFC-0003) and the drafts they produced.", true, svc.ListTaskTriggers)
+	add(srv, svc, tr, "get_events", "Get Kubernetes Events for one object.", true, svc.GetEvents)
+	add(srv, svc, tr, "get_request", "Get one ApprovalRequest and its state.", true, svc.GetRequest)
 
-	add(srv, tr, "request_draft_task", "Create a FleetTask held as a draft (spec.draft: true). Nothing is dispatched; a person must activate it.", false, svc.RequestDraftTask)
-	add(srv, tr, "request_activate_task", "Ask a named person to activate a draft FleetTask. Creates an ApprovalRequest only.", false, svc.RequestActivateTask)
-	add(srv, tr, "request_zone_maintenance", "Ask a named person to approve a ZoneMaintenance window (autoResumeAfterMinutes is always 0). Creates an ApprovalRequest only.", false, svc.RequestZoneMaintenance)
-	add(srv, tr, "request_zone_stop", "Ask a named person to approve a zone emergency stop. Creates an ApprovalRequest only. Not an emergency path.", false, svc.RequestZoneStop)
+	add(srv, svc, tr, "request_draft_task", "Create a FleetTask held as a draft (spec.draft: true). Nothing is dispatched; a person must activate it.", false, svc.RequestDraftTask)
+	add(srv, svc, tr, "request_activate_task", "Ask a named person to activate a draft FleetTask. Creates an ApprovalRequest only.", false, svc.RequestActivateTask)
+	add(srv, svc, tr, "request_zone_maintenance", "Ask a named person to approve a ZoneMaintenance window (autoResumeAfterMinutes is always 0). Creates an ApprovalRequest only.", false, svc.RequestZoneMaintenance)
+	add(srv, svc, tr, "request_zone_stop", "Ask a named person to approve a zone emergency stop. Creates an ApprovalRequest only. Not an emergency path.", false, svc.RequestZoneStop)
 	return srv
 }
 

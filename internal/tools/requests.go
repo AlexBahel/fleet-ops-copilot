@@ -272,7 +272,11 @@ func (s *Service) createRequest(ctx context.Context, sess Session, ns string, d 
 		s.record(audit.Entry{Kind: audit.KindExecutionFailed, Actor: sess.Operator, SessionID: sess.ID, Namespace: ns, Message: err.Error(), Detail: map[string]any{"type": string(spec.Type)}})
 		return RequestResult{}, fmt.Errorf("creating ApprovalRequest: %w", err)
 	}
-	s.record(audit.Entry{Kind: audit.KindRequestCreated, Actor: sess.Operator, SessionID: sess.ID, Namespace: ns, Object: "ApprovalRequest/" + req.Name, Code: string(d.Code), Detail: map[string]any{"type": string(spec.Type)}})
+	detail := map[string]any{"type": string(spec.Type), "requesterVerified": sess.Verified}
+	if !sess.Verified {
+		detail["unverifiedReason"] = sess.Unverified
+	}
+	s.record(audit.Entry{Kind: audit.KindRequestCreated, Actor: sess.Operator, SessionID: sess.ID, Namespace: ns, Object: "ApprovalRequest/" + req.Name, Code: string(d.Code), Detail: detail})
 	s.event(ctx, req, "RequestCreated", fmt.Sprintf("%s requested for %s; awaiting a person's decision", spec.Type, sess.Operator))
 	return RequestResult{
 		Effect: string(d.Effect), Code: string(d.Code), Reason: d.Message, Created: "ApprovalRequest/" + req.Name,

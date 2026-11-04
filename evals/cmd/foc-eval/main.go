@@ -78,7 +78,7 @@ func main() {
 	switch *backend {
 	case "scripted":
 		cfg.name, cfg.factory = "scripted", harness.ScriptedFactory
-		cfg.latencyScope = "scripted backend: tool execution over in-process MCP against envtest; no model is called, so this is not a model latency"
+		cfg.latencyScope = "scripted backend: tool execution over MCP (streamable HTTP on loopback, bearer token verified by TokenReview) against envtest; no model is called, so this is not a model latency"
 		cfg.gate = true
 	case "claude":
 		if *model == "" {
@@ -91,7 +91,7 @@ func main() {
 		cfg.settings = c.Settings()
 		cfg.name = "claude:" + *model + " effort=" + *effort
 		cfg.factory = func(harness.Scenario) (llm.Backend, error) { return llm.NewClaude(*model, *effort) }
-		cfg.latencyScope = "Claude API (" + *model + ", effort " + *effort + ") from this machine, plus tool execution over in-process MCP against envtest; request sent until final answer"
+		cfg.latencyScope = "Claude API (" + *model + ", effort " + *effort + ") from this machine, plus tool execution over MCP (streamable HTTP on loopback) against envtest; request sent until final answer"
 		if pr.Source != "" {
 			pr.Model = *model
 			cfg.pricing = &pr
@@ -114,7 +114,7 @@ func main() {
 			cfg.name += fmt.Sprintf(" repeat_penalty=%g", *l.RepeatPenalty)
 		}
 		cfg.factory = func(harness.Scenario) (llm.Backend, error) { return llm.NewLlamaCpp(*llamaURL, *model) }
-		cfg.latencyScope = "llama-server at " + l.BaseURL + " from this machine, plus tool execution over in-process MCP against envtest; request sent until final answer"
+		cfg.latencyScope = "llama-server at " + l.BaseURL + " from this machine, plus tool execution over MCP (streamable HTTP on loopback) against envtest; request sent until final answer"
 	default:
 		log.Fatalf("backend %q is not implemented; use scripted, claude or llamacpp", *backend)
 	}
