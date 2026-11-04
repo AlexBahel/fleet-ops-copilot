@@ -22,8 +22,11 @@ import (
 	"fmt"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/AlexBahel/fleet-ops-copilot/internal/tools"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/tracing"
 )
 
 // Meta keys the agent loop sets on every tools/call. The model cannot set
@@ -62,14 +65,24 @@ func session(req *mcp.CallToolRequest) tools.Session {
 
 func boolp(b bool) *bool { return &b }
 
-func add[In, Out any](srv *mcp.Server, name, desc string, readOnly bool, fn func(context.Context, tools.Session, In) (Out, error)) {
+// add registers one tool. Each call runs in a server span that continues the
+// caller's trace when _meta carries a W3C traceparent (internal/tracing).
+func add[In, Out any](srv *mcp.Server, tr trace.Tracer, name, desc string, readOnly bool, fn func(context.Context, tools.Session, In) (Out, error)) {
 	t := &mcp.Tool{
 		Name:        name,
 		Description: desc,
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: readOnly, DestructiveHint: boolp(false), OpenWorldHint: boolp(false)},
 	}
 	mcp.AddTool(srv, t, func(ctx context.Context, req *mcp.CallToolRequest, in In) (*mcp.CallToolResult, Out, error) {
+		if req != nil && req.Params != nil {
+			ctx = tracing.ExtractMeta(ctx, req.Params.Meta)
+		}
+		ctx, span := tr.Start(ctx, tracing.SpanMCPTool, trace.WithSpanKind(trace.SpanKindServer), trace.WithAttributes(tracing.AttrToolName.String(name)))
+		defer span.End()
 		out, err := fn(ctx, session(req), in)
+		if err != nil {
+			span.SetStatus(codes.Error, err.Error())
+		}
 		return nil, out, err
 	})
 }
@@ -81,25 +94,26 @@ func New(svc *tools.Service) *mcp.Server {
 			"Write tools never change running work: request_draft_task creates a FleetTask held as a draft, and the other request_* tools " +
 			"create an ApprovalRequest that a named person decides. There is no tool to clear a stop, release or resume a robot, delete, or approve.",
 	})
-	add(srv, "list_robots", "List Robots with phase, estop state, health, battery, zone and capabilities.", true, svc.ListRobots)
-	add(srv, "get_robot", "Get one Robot's spec and status.", true, svc.GetRobot)
-	add(srv, "list_fleet_tasks", "List FleetTasks with draft flag, phase and members.", true, svc.ListFleetTasks)
-	add(srv, "get_fleet_task", "Get one FleetTask, including each member's projected phase and assigned robot.", true, svc.GetFleetTask)
-	add(srv, "list_fleet_actions", "List FleetActions with phase, assigned robot and failure reason.", true, svc.ListFleetActions)
-	add(srv, "get_fleet_action", "Get one FleetAction.", true, svc.GetFleetAction)
-	add(srv, "list_zones", "List FleetZones with estop status and robot count.", true, svc.ListZones)
-	add(srv, "get_zone", "Get one FleetZone.", true, svc.GetZone)
-	add(srv, "list_zone_maintenances", "List ZoneMaintenance windows with phase and paused robots.", true, svc.ListZoneMaintenances)
-	add(srv, "list_discovered_robots", "List DiscoveredRobots awaiting admission.", true, svc.ListDiscoveredRobots)
-	add(srv, "list_fleet_adapters", "List FleetAdapters with phase, conformance and heartbeat.", true, svc.ListFleetAdapters)
-	add(srv, "list_task_triggers", "List TaskTriggers (RFC-0003) and the drafts they produced.", true, svc.ListTaskTriggers)
-	add(srv, "get_events", "Get Kubernetes Events for one object.", true, svc.GetEvents)
-	add(srv, "get_request", "Get one ApprovalRequest and its state.", true, svc.GetRequest)
+	tr := tracing.OrNoop(svc.Tracer)
+	add(srv, tr, "list_robots", "List Robots with phase, estop state, health, battery, zone and capabilities.", true, svc.ListRobots)
+	add(srv, tr, "get_robot", "Get one Robot's spec and status.", true, svc.GetRobot)
+	add(srv, tr, "list_fleet_tasks", "List FleetTasks with draft flag, phase and members.", true, svc.ListFleetTasks)
+	add(srv, tr, "get_fleet_task", "Get one FleetTask, including each member's projected phase and assigned robot.", true, svc.GetFleetTask)
+	add(srv, tr, "list_fleet_actions", "List FleetActions with phase, assigned robot and failure reason.", true, svc.ListFleetActions)
+	add(srv, tr, "get_fleet_action", "Get one FleetAction.", true, svc.GetFleetAction)
+	add(srv, tr, "list_zones", "List FleetZones with estop status and robot count.", true, svc.ListZones)
+	add(srv, tr, "get_zone", "Get one FleetZone.", true, svc.GetZone)
+	add(srv, tr, "list_zone_maintenances", "List ZoneMaintenance windows with phase and paused robots.", true, svc.ListZoneMaintenances)
+	add(srv, tr, "list_discovered_robots", "List DiscoveredRobots awaiting admission.", true, svc.ListDiscoveredRobots)
+	add(srv, tr, "list_fleet_adapters", "List FleetAdapters with phase, conformance and heartbeat.", true, svc.ListFleetAdapters)
+	add(srv, tr, "list_task_triggers", "List TaskTriggers (RFC-0003) and the drafts they produced.", true, svc.ListTaskTriggers)
+	add(srv, tr, "get_events", "Get Kubernetes Events for one object.", true, svc.GetEvents)
+	add(srv, tr, "get_request", "Get one ApprovalRequest and its state.", true, svc.GetRequest)
 
-	add(srv, "request_draft_task", "Create a FleetTask held as a draft (spec.draft: true). Nothing is dispatched; a person must activate it.", false, svc.RequestDraftTask)
-	add(srv, "request_activate_task", "Ask a named person to activate a draft FleetTask. Creates an ApprovalRequest only.", false, svc.RequestActivateTask)
-	add(srv, "request_zone_maintenance", "Ask a named person to approve a ZoneMaintenance window (autoResumeAfterMinutes is always 0). Creates an ApprovalRequest only.", false, svc.RequestZoneMaintenance)
-	add(srv, "request_zone_stop", "Ask a named person to approve a zone emergency stop. Creates an ApprovalRequest only. Not an emergency path.", false, svc.RequestZoneStop)
+	add(srv, tr, "request_draft_task", "Create a FleetTask held as a draft (spec.draft: true). Nothing is dispatched; a person must activate it.", false, svc.RequestDraftTask)
+	add(srv, tr, "request_activate_task", "Ask a named person to activate a draft FleetTask. Creates an ApprovalRequest only.", false, svc.RequestActivateTask)
+	add(srv, tr, "request_zone_maintenance", "Ask a named person to approve a ZoneMaintenance window (autoResumeAfterMinutes is always 0). Creates an ApprovalRequest only.", false, svc.RequestZoneMaintenance)
+	add(srv, tr, "request_zone_stop", "Ask a named person to approve a zone emergency stop. Creates an ApprovalRequest only. Not an emergency path.", false, svc.RequestZoneStop)
 	return srv
 }
 

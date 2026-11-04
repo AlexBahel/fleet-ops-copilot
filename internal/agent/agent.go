@@ -29,9 +29,13 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/AlexBahel/fleet-ops-copilot/internal/llm"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/mcpserver"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/tracing"
 )
 
 // SystemPromptVersion names the SystemPrompt text. Evaluation results record
@@ -77,6 +81,9 @@ type Loop struct {
 	Backend  llm.Backend
 	Session  *mcp.ClientSession
 	MaxTurns int
+	// Tracer records one span per request, model call and tool call
+	// (internal/tracing). nil records nothing.
+	Tracer trace.Tracer
 }
 
 // ErrMaxTurns means the model did not finish within the turn limit.
@@ -86,9 +93,20 @@ var ErrMaxTurns = errors.New("turn limit reached without a final answer")
 // being sent to the backend until the final answer.
 func (l *Loop) Run(ctx context.Context, operator, sessionID, prompt string) (tr Trace, err error) {
 	tr = Trace{Prompt: prompt, Started: time.Now()}
+	ctx, span := tracing.OrNoop(l.Tracer).Start(ctx, tracing.SpanRequest, trace.WithAttributes(
+		tracing.AttrOperator.String(operator), tracing.AttrSession.String(sessionID),
+		tracing.AttrBackend.String(l.Backend.Name()), tracing.AttrPromptChars.Int(len(prompt)),
+	))
 	defer func() {
 		tr.Ended = time.Now()
 		tr.LatencyMs = float64(tr.Ended.Sub(tr.Started).Microseconds()) / 1000
+		span.SetAttributes(
+			tracing.AttrTurns.Int(tr.Turns), tracing.AttrToolCalls.Int(len(tr.Calls)),
+			tracing.AttrInputTokens.Int64(tr.Usage.InputTokens), tracing.AttrOutputTokens.Int64(tr.Usage.OutputTokens),
+			tracing.AttrCacheCreation.Int64(tr.Usage.CacheCreationInputTokens), tracing.AttrCacheRead.Int64(tr.Usage.CacheReadInputTokens),
+			tracing.AttrLatencyMs.Float64(tr.LatencyMs), tracing.AttrAnswerChars.Int(len(tr.Final)),
+		)
+		endSpan(span, err)
 	}()
 	tl, err := l.Session.ListTools(ctx, nil)
 	if err != nil {
@@ -106,7 +124,7 @@ func (l *Loop) Run(ctx context.Context, operator, sessionID, prompt string) (tr 
 	history := []llm.Message{{Role: "user", Text: prompt}}
 	for tr.Turns < max {
 		tr.Turns++
-		reply, err := l.Backend.Chat(ctx, SystemPrompt, history, specs)
+		reply, err := l.chat(ctx, tr.Turns, history, specs)
 		if err != nil {
 			return tr, err
 		}
@@ -130,8 +148,49 @@ func (l *Loop) Run(ctx context.Context, operator, sessionID, prompt string) (tr 
 	return tr, ErrMaxTurns
 }
 
-func (l *Loop) call(ctx context.Context, operator, sessionID string, c llm.ToolCall) (ToolEvent, llm.ToolResult) {
-	ev := ToolEvent{Name: c.Name, Args: c.Args}
+// chat is one model call, traced with its token counts and latency. No
+// prompt or answer text goes into the span.
+func (l *Loop) chat(ctx context.Context, turn int, history []llm.Message, specs []llm.ToolSpec) (reply llm.Reply, err error) {
+	ctx, span := tracing.OrNoop(l.Tracer).Start(ctx, tracing.SpanChat, trace.WithSpanKind(trace.SpanKindClient), trace.WithAttributes(
+		tracing.AttrOperation.String("chat"), tracing.AttrBackend.String(l.Backend.Name()), tracing.AttrTurn.Int(turn),
+	))
+	start := time.Now()
+	defer func() {
+		span.SetAttributes(
+			tracing.AttrLatencyMs.Float64(float64(time.Since(start).Microseconds())/1000),
+			tracing.AttrInputTokens.Int64(reply.Usage.InputTokens), tracing.AttrOutputTokens.Int64(reply.Usage.OutputTokens),
+			tracing.AttrCacheCreation.Int64(reply.Usage.CacheCreationInputTokens), tracing.AttrCacheRead.Int64(reply.Usage.CacheReadInputTokens),
+			tracing.AttrToolCalls.Int(len(reply.Calls)),
+		)
+		if reply.StopReason != "" {
+			span.SetAttributes(tracing.AttrFinishReasons.StringSlice([]string{reply.StopReason}))
+		}
+		endSpan(span, err)
+	}()
+	return l.Backend.Chat(ctx, SystemPrompt, history, specs)
+}
+
+// endSpan records err (masked again by the redacting exporter) and ends span.
+func endSpan(span trace.Span, err error) {
+	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
+	}
+	span.End()
+}
+
+func (l *Loop) call(ctx context.Context, operator, sessionID string, c llm.ToolCall) (ev ToolEvent, tr llm.ToolResult) {
+	ev = ToolEvent{Name: c.Name, Args: c.Args}
+	ctx, span := tracing.OrNoop(l.Tracer).Start(ctx, tracing.SpanTool, trace.WithSpanKind(trace.SpanKindClient), trace.WithAttributes(
+		tracing.AttrOperation.String("execute_tool"), tracing.AttrToolName.String(c.Name), tracing.AttrToolCallID.String(c.ID),
+	))
+	defer func() {
+		span.SetAttributes(tracing.AttrToolIsError.Bool(ev.IsError), tracing.AttrLatencyMs.Float64(ev.DurationMs))
+		span.SetAttributes(policyAttrs(ev.Result)...)
+		if ev.IsError {
+			span.SetStatus(codes.Error, "tool call failed")
+		}
+		span.End()
+	}()
 	var args map[string]any
 	if len(c.Args) > 0 {
 		if err := json.Unmarshal(c.Args, &args); err != nil {
@@ -139,9 +198,11 @@ func (l *Loop) call(ctx context.Context, operator, sessionID string, c llm.ToolC
 			return ev, llm.ToolResult{CallID: c.ID, Content: ev.ErrorText, IsError: true}
 		}
 	}
+	meta := mcp.Meta{mcpserver.MetaSession: sessionID, mcpserver.MetaOperator: operator}
+	tracing.InjectMeta(ctx, meta)
 	start := time.Now()
 	res, err := l.Session.CallTool(ctx, &mcp.CallToolParams{
-		Meta:      mcp.Meta{mcpserver.MetaSession: sessionID, mcpserver.MetaOperator: operator},
+		Meta:      meta,
 		Name:      c.Name,
 		Arguments: args,
 	})
@@ -167,6 +228,25 @@ func (l *Loop) call(ctx context.Context, operator, sessionID string, c llm.ToolC
 		ev.IsError, ev.ErrorText = true, content
 	}
 	return ev, llm.ToolResult{CallID: c.ID, Content: content, IsError: res.IsError}
+}
+
+// policyAttrs reads the policy fields a request tool returns
+// (tools.RequestResult) into span attributes. Read tools return none.
+func policyAttrs(result json.RawMessage) []attribute.KeyValue {
+	var r struct {
+		Refused *bool  `json:"refused"`
+		Effect  string `json:"policy.effect"`
+		Code    string `json:"policy.code"`
+		Created string `json:"created"`
+	}
+	if len(result) == 0 || json.Unmarshal(result, &r) != nil || r.Refused == nil {
+		return nil
+	}
+	out := []attribute.KeyValue{tracing.AttrPolicyRefused.Bool(*r.Refused), tracing.AttrPolicyEffect.String(r.Effect), tracing.AttrPolicyCode.String(r.Code)}
+	if r.Created != "" {
+		out = append(out, tracing.AttrRequestCreated.String(r.Created))
+	}
+	return out
 }
 
 // Connect wires an in-process MCP server and client together.

@@ -25,6 +25,7 @@ import (
 	"sort"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -53,6 +54,9 @@ type Service struct {
 	Identity         string           // the principal foc-mcp runs as (spec.requestedBy)
 	DefaultNamespace string
 	Now              func() time.Time
+	// Tracer records a span per policy decision and, in internal/mcpserver,
+	// per tool call (internal/tracing). nil records nothing.
+	Tracer trace.Tracer
 }
 
 func (s *Service) now() time.Time {

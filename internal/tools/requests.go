@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
@@ -30,6 +31,7 @@ import (
 	"github.com/AlexBahel/fleet-ops-copilot/internal/audit"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/policy"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/tracing"
 )
 
 // RequestResult is returned by every request tool. A refusal is a normal
@@ -49,19 +51,24 @@ func refused(d policy.Decision) RequestResult {
 	return RequestResult{Refused: true, Effect: string(d.Effect), Code: string(d.Code), Reason: d.Message}
 }
 
-func (s *Service) decide(sess Session, tool string, r policy.Request, snap policy.Snapshot) policy.Decision {
+func (s *Service) decide(ctx context.Context, sess Session, tool string, r policy.Request, snap policy.Snapshot) policy.Decision {
+	_, span := tracing.OrNoop(s.Tracer).Start(ctx, tracing.SpanPolicy, trace.WithAttributes(
+		tracing.AttrToolName.String(tool), tracing.AttrPolicyOp.String(string(r.Op)), tracing.AttrNamespace.String(r.Namespace),
+	))
 	d := s.Engine.Decide(r, snap)
+	span.SetAttributes(tracing.AttrPolicyEffect.String(string(d.Effect)), tracing.AttrPolicyCode.String(string(d.Code)))
+	span.End()
 	s.record(audit.Entry{Kind: audit.KindPolicyDecision, Actor: sess.Operator, SessionID: sess.ID, Tool: tool, Namespace: r.Namespace, Code: string(d.Code), Message: d.Message, Detail: map[string]any{"effect": string(d.Effect)}})
 	return d
 }
 
 // outOfScope refuses a request for a namespace the policy does not cover,
 // before any cluster state is read for it.
-func (s *Service) outOfScope(sess Session, tool string, r policy.Request) *policy.Decision {
+func (s *Service) outOfScope(ctx context.Context, sess Session, tool string, r policy.Request) *policy.Decision {
 	if s.Engine.NamespaceAllowed(r.Namespace) {
 		return nil
 	}
-	d := s.decide(sess, tool, r, policy.Snapshot{})
+	d := s.decide(ctx, sess, tool, r, policy.Snapshot{})
 	return &d
 }
 
@@ -102,7 +109,7 @@ func (s *Service) RequestDraftTask(ctx context.Context, sess Session, in DraftTa
 	if d := needSession(sess); d != nil {
 		return refused(*d), nil
 	}
-	if d := s.outOfScope(sess, "request_draft_task", policy.Request{Op: policy.OpDraftTask, Namespace: ns, DraftTask: &policy.DraftTaskParams{Name: in.Name, Draft: true}}); d != nil {
+	if d := s.outOfScope(ctx, sess, "request_draft_task", policy.Request{Op: policy.OpDraftTask, Namespace: ns, DraftTask: &policy.DraftTaskParams{Name: in.Name, Draft: true}}); d != nil {
 		return refused(*d), nil
 	}
 	if errs := validation.IsDNS1123Subdomain(in.Name); len(errs) > 0 {
@@ -130,7 +137,7 @@ func (s *Service) RequestDraftTask(ctx context.Context, sess Session, in DraftTa
 	if snap.DraftsThisSession, err = fleet.CountSessionDraftRequests(ctx, s.C, ns, sess.ID); err != nil {
 		return RequestResult{}, err
 	}
-	d := s.decide(sess, "request_draft_task", policy.Request{Op: policy.OpDraftTask, Namespace: ns, SessionID: sess.ID, DraftTask: params}, snap)
+	d := s.decide(ctx, sess, "request_draft_task", policy.Request{Op: policy.OpDraftTask, Namespace: ns, SessionID: sess.ID, DraftTask: params}, snap)
 	if d.Effect != policy.RequireApproval {
 		return refused(d), nil
 	}
@@ -151,7 +158,7 @@ func (s *Service) RequestActivateTask(ctx context.Context, sess Session, in Acti
 	if d := needSession(sess); d != nil {
 		return refused(*d), nil
 	}
-	if d := s.outOfScope(sess, "request_activate_task", policy.Request{Op: policy.OpActivateTask, Namespace: ns, ActivateTask: &policy.ActivateTaskParams{TaskName: in.TaskName}}); d != nil {
+	if d := s.outOfScope(ctx, sess, "request_activate_task", policy.Request{Op: policy.OpActivateTask, Namespace: ns, ActivateTask: &policy.ActivateTaskParams{TaskName: in.TaskName}}); d != nil {
 		return refused(*d), nil
 	}
 	snap, err := fleet.TaskSnapshot(ctx, s.C, ns, in.TaskName)
@@ -161,7 +168,7 @@ func (s *Service) RequestActivateTask(ctx context.Context, sess Session, in Acti
 	if snap.DraftGateServed, _, err = fleet.DraftGate(ctx, s.C); err != nil {
 		return RequestResult{}, err
 	}
-	d := s.decide(sess, "request_activate_task", policy.Request{Op: policy.OpActivateTask, Namespace: ns, ActivateTask: &policy.ActivateTaskParams{TaskName: in.TaskName}}, snap)
+	d := s.decide(ctx, sess, "request_activate_task", policy.Request{Op: policy.OpActivateTask, Namespace: ns, ActivateTask: &policy.ActivateTaskParams{TaskName: in.TaskName}}, snap)
 	if d.Effect != policy.RequireApproval {
 		return refused(d), nil
 	}
@@ -188,7 +195,7 @@ func (s *Service) RequestZoneMaintenance(ctx context.Context, sess Session, in Z
 	if d := needSession(sess); d != nil {
 		return refused(*d), nil
 	}
-	if d := s.outOfScope(sess, "request_zone_maintenance", policy.Request{Op: policy.OpZoneMaintenance, Namespace: ns, ZoneMaintenance: &policy.ZoneMaintenanceParams{ScopeType: in.ScopeType, ZoneName: in.ZoneName, Mode: in.Mode, Reason: in.Reason}}); d != nil {
+	if d := s.outOfScope(ctx, sess, "request_zone_maintenance", policy.Request{Op: policy.OpZoneMaintenance, Namespace: ns, ZoneMaintenance: &policy.ZoneMaintenanceParams{ScopeType: in.ScopeType, ZoneName: in.ZoneName, Mode: in.Mode, Reason: in.Reason}}); d != nil {
 		return refused(*d), nil
 	}
 	if in.ScopeType == "" {
@@ -210,7 +217,7 @@ func (s *Service) RequestZoneMaintenance(ctx context.Context, sess Session, in Z
 	if err != nil {
 		return RequestResult{}, err
 	}
-	d := s.decide(sess, "request_zone_maintenance", policy.Request{Op: policy.OpZoneMaintenance, Namespace: ns, ZoneMaintenance: &policy.ZoneMaintenanceParams{
+	d := s.decide(ctx, sess, "request_zone_maintenance", policy.Request{Op: policy.OpZoneMaintenance, Namespace: ns, ZoneMaintenance: &policy.ZoneMaintenanceParams{
 		ScopeType: in.ScopeType, ZoneName: in.ZoneName, Mode: in.Mode, Reason: in.Reason,
 		AutoResumeAfterMinutes: in.AutoResumeAfterMinutes, RequireEstopClearBeforeResume: in.RequireEstopClearBeforeResume,
 	}}, snap)
@@ -236,14 +243,14 @@ func (s *Service) RequestZoneStop(ctx context.Context, sess Session, in ZoneStop
 	if d := needSession(sess); d != nil {
 		return refused(*d), nil
 	}
-	if d := s.outOfScope(sess, "request_zone_stop", policy.Request{Op: policy.OpZoneStop, Namespace: ns, ZoneStop: &policy.ZoneStopParams{ZoneName: in.ZoneName, Reason: in.Reason}}); d != nil {
+	if d := s.outOfScope(ctx, sess, "request_zone_stop", policy.Request{Op: policy.OpZoneStop, Namespace: ns, ZoneStop: &policy.ZoneStopParams{ZoneName: in.ZoneName, Reason: in.Reason}}); d != nil {
 		return refused(*d), nil
 	}
 	snap, err := fleet.ZoneSnapshot(ctx, s.C, ns, in.ZoneName)
 	if err != nil {
 		return RequestResult{}, err
 	}
-	d := s.decide(sess, "request_zone_stop", policy.Request{Op: policy.OpZoneStop, Namespace: ns, ZoneStop: &policy.ZoneStopParams{ZoneName: in.ZoneName, Reason: in.Reason}}, snap)
+	d := s.decide(ctx, sess, "request_zone_stop", policy.Request{Op: policy.OpZoneStop, Namespace: ns, ZoneStop: &policy.ZoneStopParams{ZoneName: in.ZoneName, Reason: in.Reason}}, snap)
 	if d.Effect != policy.RequireApproval {
 		return refused(d), nil
 	}
