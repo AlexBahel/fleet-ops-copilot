@@ -187,6 +187,11 @@ type ApprovalRequestStatus struct {
 	ExecutedAt *metav1.Time `json:"executedAt,omitempty"`
 	// +optional
 	Target *TargetRef `json:"target,omitempty"`
+	// Instruction is the exact command the approver runs with their own
+	// credentials, for a write Swarmada refuses to every ServiceAccount
+	// (activation). The copilot then observes the result.
+	// +optional
+	Instruction string `json:"instruction,omitempty"`
 	// +optional
 	Message string `json:"message,omitempty"`
 	// RefusedDecisions lists ApprovalDecisions that were not accepted.

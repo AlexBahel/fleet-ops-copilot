@@ -244,6 +244,12 @@ spec:
               executedAt:
                 format: date-time
                 type: string
+              instruction:
+                description: |-
+                  Instruction is the exact command the approver runs with their own
+                  credentials, for a write Swarmada refuses to every ServiceAccount
+                  (activation). The copilot then observes the result.
+                type: string
               message:
                 type: string
               refusedDecisions:
