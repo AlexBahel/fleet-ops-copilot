@@ -1,0 +1,460 @@
+# Fixture: healthy-fleet.
+# Captured from a live cluster by evals/cmd/foc-capture at 2026-11-04T03:07:59Z.
+# Source: Swarmada v0.4 quickstart, make quickstart SCENARIO=healthy-fleet, after it reached its end state and exited (the quickstart stops its sim adapter process on exit, so robot phase and connectivity drift afterwards); release candidate d7fecd6, pre-release.
+# Spec and status as read from the API server; server-set metadata, owner
+# references and finalizers removed. Status written by hand by the quickstart
+# runner (its "Honest notes") is captured as it was. Fictional site.
+---
+apiVersion: swarmada.io/v1
+kind: FleetZone
+metadata:
+  name: warehouse-a
+spec:
+  displayName: Receiving and staging area — east wing
+  maxConcurrentRobots: 0
+  physicalBounds:
+    floor: 0
+    polygon:
+    - x: -5
+      "y": -5
+    - x: 25
+      "y": -5
+    - x: 25
+      "y": 20
+    - x: -5
+      "y": 20
+  waypoints:
+  - name: receiving-dock-1
+    x: 5.1
+    "y": 2.1
+    yaw: 3.14
+  - name: staging-shelf-a
+    x: 12.1
+    "y": 8.1
+    yaw: 1
+  - name: charging-bay
+    x: 1.1
+    "y": 1.1
+    yaw: 1.57
+status:
+  conditions:
+  - lastTransitionTime: "2026-11-04T03:07:17Z"
+    message: zone topology resolved and serviceable
+    reason: Reconciled
+    status: "True"
+    type: ZoneReady
+  - lastTransitionTime: "2026-11-04T03:07:17Z"
+    message: site-aligned polygon; containment, boundary-breach detection and overlap
+      arbitration active
+    reason: SiteAlignedPolygon
+    status: "True"
+    type: GeometryAvailable
+  - lastTransitionTime: "2026-11-04T03:07:17Z"
+    message: zone can admit another robot
+    reason: Available
+    status: "True"
+    type: CapacityAvailable
+  - lastTransitionTime: "2026-11-04T03:07:17Z"
+    message: effective restriction set resolved from this zone and its ancestor chain
+    reason: Resolved
+    status: "True"
+    type: RestrictionsResolved
+  - lastTransitionTime: "2026-11-04T03:07:17Z"
+    message: no subject is both Denied and Required in this zone chain
+    reason: Consistent
+    status: "True"
+    type: RestrictionsConsistent
+  geometry:
+    state: Containment
+  isLeaf: true
+  restrictions: {}
+  robotCount: 1
+---
+apiVersion: swarmada.io/v1
+kind: Robot
+metadata:
+  annotations:
+    swarmada.io/robot-id: sim-robot-001
+  name: sim-robot-001
+spec:
+  adapter:
+    name: sim-fleet-adapter
+    version: 0.1.0
+  capabilities:
+  - name: navigation
+    pauseable: false
+    type: hardware-native
+  - name: camera_front
+    pauseable: false
+    type: hardware-native
+  manufacturer: Simulated
+  model: SimBot-v1
+  robotClass: simbot-v1
+  zone: warehouse-a
+status:
+  batteryPercent: 99
+  capabilities:
+  - name: camera_front
+    paused: false
+    status: Active
+  - name: navigation
+    paused: false
+    status: Active
+  conditions:
+  - lastTransitionTime: "2026-11-04T03:07:45Z"
+    message: robot reachable via its Fleet Adapter
+    observedGeneration: 1
+    reason: AdapterLive
+    status: "True"
+    type: Ready
+  - lastTransitionTime: "2026-11-04T03:07:17Z"
+    message: a position frame has been observed for this robot
+    reason: PositionReported
+    status: "False"
+    type: ZonePositionOverdue
+  connectivity:
+    lastSeenAt: "2026-11-04T03:07:45Z"
+  containingZones:
+  - warehouse-a
+  currentZone: warehouse-a
+  hardware:
+  - name: camera_front
+    status: Healthy
+  - name: lidar_top
+    status: Healthy
+  health:
+    status: Healthy
+  phase: Idle
+  sensorStreams:
+  - activationCost: OnDemand
+    clipPreSecondsMax: 10
+    mediaType: image/jpeg
+    nativeRateHz: 15
+    requiredCapabilities:
+    - navigation.2d
+    streamId: front-rgb
+    supportsClip: true
+  - activationCost: OnDemand
+    mediaType: audio/l16
+    nativeRateHz: 16000
+    streamId: mic-array
+  - activationCost: AlwaysOn
+    mediaType: application/vnd.swarmada.pose+json
+    nativeRateHz: 20
+    streamId: odom-pose
+  specZoneMatchesCurrent: true
+---
+apiVersion: swarmada.io/v1
+kind: Robot
+metadata:
+  name: sim-robot-002
+spec:
+  adapter:
+    name: sim-fleet-adapter
+    version: 0.1.0
+  capabilities:
+  - name: navigation
+    pauseable: false
+    type: hardware-native
+  - name: camera_front
+    pauseable: false
+    type: hardware-native
+  manufacturer: Simulated
+  model: SimBot-v1
+  robotClass: simbot-v1
+  zone: warehouse-a
+status:
+  batteryPercent: 85
+  capabilities:
+  - name: camera_front
+    paused: false
+    status: Active
+  - name: navigation
+    paused: false
+    status: Active
+  conditions:
+  - lastTransitionTime: "2026-11-04T03:07:45Z"
+    message: robot reachable via its Fleet Adapter
+    observedGeneration: 1
+    reason: AdapterLive
+    status: "True"
+    type: Ready
+  - lastTransitionTime: "2026-11-04T03:07:17Z"
+    message: no position frame observed yet; spec.zone "warehouse-a" has a site-aligned
+      polygon, so only a position frame can place this robot
+    reason: AwaitingFirstPosition
+    status: "False"
+    type: ZonePositionOverdue
+  connectivity:
+    lastSeenAt: "2026-11-04T03:07:45Z"
+  health:
+    status: Healthy
+  phase: Idle
+---
+apiVersion: swarmada.io/v1
+kind: Robot
+metadata:
+  name: sim-robot-003
+spec:
+  adapter:
+    name: sim-fleet-adapter
+    version: 0.1.0
+  capabilities:
+  - name: navigation
+    pauseable: false
+    type: hardware-native
+  - name: camera_front
+    pauseable: false
+    type: hardware-native
+  manufacturer: Simulated
+  model: SimBot-v1
+  robotClass: simbot-v1
+  zone: warehouse-a
+status:
+  batteryPercent: 85
+  capabilities:
+  - name: camera_front
+    paused: false
+    status: Active
+  - name: navigation
+    paused: false
+    status: Active
+  conditions:
+  - lastTransitionTime: "2026-11-04T03:07:45Z"
+    message: robot reachable via its Fleet Adapter
+    observedGeneration: 1
+    reason: AdapterLive
+    status: "True"
+    type: Ready
+  - lastTransitionTime: "2026-11-04T03:07:17Z"
+    message: no position frame observed yet; spec.zone "warehouse-a" has a site-aligned
+      polygon, so only a position frame can place this robot
+    reason: AwaitingFirstPosition
+    status: "False"
+    type: ZonePositionOverdue
+  connectivity:
+    lastSeenAt: "2026-11-04T03:07:45Z"
+  health:
+    status: Healthy
+  phase: Idle
+---
+apiVersion: swarmada.io/v1
+kind: FleetAdapter
+metadata:
+  name: sim-fleet-adapter
+spec:
+  conformanceReport:
+    configMapRef: sim-adapter-conformance
+    digest: sha256:bda726ac6b649168f745c639611cdcf98af1f4d174d5e5d39e0757cbe8450024
+    suiteVersion: C1-C15
+  endpoint: 127.0.0.1:19443
+  heartbeatIntervalSeconds: 600
+  protocolVersion: fleet_adapter.v1
+  servesRobotClasses:
+  - simbot-v1
+  simulated: false
+  vendor: simulation
+status:
+  conditions:
+  - lastTransitionTime: "2026-11-04T03:07:42Z"
+    message: no spec field this release ignores is set
+    observedGeneration: 1
+    reason: NoIgnoredFields
+    status: "False"
+    type: SpecFieldsIgnored
+  conformance: Passed
+  conformanceContractVersion: 1.4.0
+  connectedRobots: 3
+  lastHeartbeat: "2026-11-04T03:07:45Z"
+  message: conformance verified (C1-C15; contract 1.4.0)
+  negotiatedContractVersion: 1.3.0
+  negotiatedProtocolVersion: fleet_adapter.v1
+  phase: Disconnected
+  supportedActions:
+  - actionType: Navigate
+    description: 'sim: Navigate; optional target x/y in metres, default (10.0, 0.0)'
+    params:
+    - kind: number
+      name: x
+      unit: m
+    - kind: number
+      name: "y"
+      unit: m
+    requiredCapabilities:
+    - navigation.2d
+  - actionType: PickUp
+    description: 'sim: PickUp; optional target x/y in metres, default (10.0, 0.0)'
+    params:
+    - kind: number
+      name: x
+      unit: m
+    - kind: number
+      name: "y"
+      unit: m
+    requiredCapabilities:
+    - navigation.2d
+    - transport.payload
+  - actionType: DropOff
+    description: 'sim: DropOff; optional target x/y in metres, default (10.0, 0.0)'
+    params:
+    - kind: number
+      name: x
+      unit: m
+    - kind: number
+      name: "y"
+      unit: m
+    requiredCapabilities:
+    - navigation.2d
+    - transport.payload
+  - actionType: Patrol
+    description: 'sim: Patrol; optional target x/y in metres, default (10.0, 0.0)'
+    params:
+    - kind: number
+      name: x
+      unit: m
+    - kind: number
+      name: "y"
+      unit: m
+    requiredCapabilities:
+    - navigation.2d
+  - actionType: Charge
+    description: 'sim: Charge; ends when the battery reads full. The simulation has
+      no cable, so cable-out is not observed'
+  - actionType: Custom
+    customType: explore-floor
+    description: 'sim: Custom explore-floor explores one segment and saves the map
+      at <namespace>/<name> in the artifact directory; the final message carries map-ref
+      and map-sha256'
+    params:
+    - allowed:
+      - explore-floor
+      kind: enum
+      name: operation
+    - kind: string
+      name: bound_ref
+    - kind: string
+      name: keepouts_ref
+    - kind: number
+      name: max_speed_mps
+      unit: m/s
+    - kind: number
+      name: battery_return_mv
+      unit: mV
+    - kind: number
+      name: exhausted_after_recoveries
+    - kind: number
+      name: time_box_s
+      unit: s
+    - kind: bool
+      name: resume
+  - actionType: Custom
+    description: 'sim: Custom that names no verb; runs until cancelled'
+---
+apiVersion: swarmada.io/v1
+kind: FleetTask
+metadata:
+  name: receiving-round-001
+spec:
+  actions:
+  - action:
+      desiredState: Running
+      onFailure: Requeue
+      priority: Normal
+      requiredCapabilities:
+      - navigation
+      type: Navigate
+      zone: warehouse-a
+    name: inspect-dock
+    startCondition: Succeeded
+    trigger: Auto
+  completionPolicy: All
+  desiredState: Running
+  draft: false
+  failurePolicy: FailFast
+status:
+  actionSummary: 0/1 Succeeded
+  actions:
+  - actionRef: receiving-round-001-inspect-dock
+    dependenciesMet: true
+    name: inspect-dock
+    phase: Pending
+  conditions:
+  - lastTransitionTime: "2026-11-04T03:07:17Z"
+    message: dependency graph is acyclic and complete
+    observedGeneration: 1
+    reason: Valid
+    status: "True"
+    type: DependencyGraphValid
+  - lastTransitionTime: "2026-11-04T03:07:17Z"
+    message: completionPolicy is complete
+    observedGeneration: 1
+    reason: Valid
+    status: "True"
+    type: CompletionPolicyValid
+  observedGeneration: 1
+  phase: Running
+---
+apiVersion: swarmada.io/v1
+kind: FleetAction
+metadata:
+  name: deliver-pallet-001
+spec:
+  desiredState: Running
+  onFailure: Requeue
+  priority: High
+  requiredCapabilities:
+  - navigation
+  type: Navigate
+  zone: warehouse-a
+status:
+  assignedRobot: sim-robot-001
+  assignmentGeneration: 1793761665413871
+  completedAt: "2026-11-04T03:07:55Z"
+  completionTime: "2026-11-04T03:07:55Z"
+  message: arrived at target
+  phase: Succeeded
+  progressPct: 100
+  scheduledAt: "2026-11-04T03:07:45Z"
+  startedAt: "2026-11-04T03:07:45Z"
+---
+apiVersion: swarmada.io/v1
+kind: FleetAction
+metadata:
+  name: inspect-receiving-dock
+spec:
+  desiredState: Running
+  onFailure: Requeue
+  priority: Normal
+  requiredCapabilities:
+  - navigation
+  - camera_front
+  type: Navigate
+  zone: warehouse-a
+status:
+  assignmentGeneration: 1793761665413870
+  message: 'no eligible robot; of 3 candidate robots: 2 not in the action''s zone
+    (filter 2), 1 served by an adapter unfit for dispatch (filter 9)'
+  pendingSince: "2026-11-04T03:07:45Z"
+  phase: Pending
+  scheduledAt: "2026-11-04T03:07:45Z"
+  startedAt: "2026-11-04T03:07:45Z"
+---
+apiVersion: swarmada.io/v1
+kind: FleetAction
+metadata:
+  labels:
+    swarmada.io/fleettask: receiving-round-001
+  name: receiving-round-001-inspect-dock
+spec:
+  desiredState: Running
+  onFailure: Requeue
+  priority: Normal
+  requiredCapabilities:
+  - navigation
+  type: Navigate
+  zone: warehouse-a
+status:
+  message: 'no eligible robot; of 3 candidate robots: 2 not in the action''s zone
+    (filter 2), 1 served by an adapter unfit for dispatch (filter 9)'
+  pendingSince: "2026-11-04T03:07:17Z"
+  phase: Pending
