@@ -104,6 +104,15 @@ func main() {
 		*model = l.Model
 		cfg.settings = l.Settings()
 		cfg.name = fmt.Sprintf("llamacpp:%s temperature=%g", l.Model, l.Temperature)
+		if l.TopP != nil {
+			cfg.name += fmt.Sprintf(" top_p=%g", *l.TopP)
+		}
+		if l.TopK != nil {
+			cfg.name += fmt.Sprintf(" top_k=%d", *l.TopK)
+		}
+		if l.RepeatPenalty != nil {
+			cfg.name += fmt.Sprintf(" repeat_penalty=%g", *l.RepeatPenalty)
+		}
 		cfg.factory = func(harness.Scenario) (llm.Backend, error) { return llm.NewLlamaCpp(*llamaURL, *model) }
 		cfg.latencyScope = "llama-server at " + l.BaseURL + " from this machine, plus tool execution over in-process MCP against envtest; request sent until final answer"
 	default:

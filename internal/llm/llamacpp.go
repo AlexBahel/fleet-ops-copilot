@@ -40,6 +40,12 @@ const (
 	EnvLlamaCppURL = "FOC_LLAMACPP_URL"
 	// EnvLlamaCppTemperature overrides DefaultLlamaCppTemperature.
 	EnvLlamaCppTemperature = "FOC_LLAMACPP_TEMPERATURE"
+	// EnvLlamaCppTopP, EnvLlamaCppTopK and EnvLlamaCppRepeatPenalty set
+	// top_p, top_k and repeat_penalty. Unset, the field is not sent and
+	// llama-server uses its own default.
+	EnvLlamaCppTopP          = "FOC_LLAMACPP_TOP_P"
+	EnvLlamaCppTopK          = "FOC_LLAMACPP_TOP_K"
+	EnvLlamaCppRepeatPenalty = "FOC_LLAMACPP_REPEAT_PENALTY"
 
 	// DefaultLlamaCppModel only labels results: llama-server serves the one model
 	// it was started with and ignores the request's model field.
@@ -97,8 +103,12 @@ type LlamaCpp struct {
 	BaseURL     string
 	Model       string
 	Temperature float64
-	MaxTokens   int
-	Timeout     time.Duration
+	// TopP, TopK and RepeatPenalty are sent when not nil.
+	TopP          *float64
+	TopK          *int
+	RepeatPenalty *float64
+	MaxTokens     int
+	Timeout       time.Duration
 	// HTTPClient is used as given; nil means a client with Timeout.
 	HTTPClient *http.Client
 	// RetryWait is the pause before a 503 retry (default 2s; tests shorten it).
@@ -142,7 +152,9 @@ func (t *LlamaTimings) add(t2 LlamaTimings) {
 
 // NewLlamaCpp builds the backend. An empty baseURL is read from
 // FOC_LLAMACPP_URL; an empty model becomes DefaultLlamaCppModel. The
-// temperature comes from FOC_LLAMACPP_TEMPERATURE when set.
+// temperature comes from FOC_LLAMACPP_TEMPERATURE when set, and top_p, top_k
+// and repeat_penalty from FOC_LLAMACPP_TOP_P, FOC_LLAMACPP_TOP_K and
+// FOC_LLAMACPP_REPEAT_PENALTY.
 func NewLlamaCpp(baseURL, model string) (*LlamaCpp, error) {
 	if baseURL == "" {
 		baseURL = os.Getenv(EnvLlamaCppURL)
@@ -165,10 +177,32 @@ func NewLlamaCpp(baseURL, model string) (*LlamaCpp, error) {
 		}
 		temp = t
 	}
-	return &LlamaCpp{
+	l := &LlamaCpp{
 		BaseURL: strings.TrimRight(baseURL, "/"), Model: model, Temperature: temp,
 		MaxTokens: 4096, Timeout: DefaultLlamaCppTimeout, RetryWait: 2 * time.Second,
-	}, nil
+	}
+	if s := os.Getenv(EnvLlamaCppTopP); s != "" {
+		v, err := strconv.ParseFloat(s, 64)
+		if err != nil || v <= 0 || v > 1 {
+			return nil, fmt.Errorf("%s=%q is not a number in (0, 1]", EnvLlamaCppTopP, s)
+		}
+		l.TopP = &v
+	}
+	if s := os.Getenv(EnvLlamaCppTopK); s != "" {
+		v, err := strconv.Atoi(s)
+		if err != nil || v < 0 {
+			return nil, fmt.Errorf("%s=%q is not a whole number >= 0", EnvLlamaCppTopK, s)
+		}
+		l.TopK = &v
+	}
+	if s := os.Getenv(EnvLlamaCppRepeatPenalty); s != "" {
+		v, err := strconv.ParseFloat(s, 64)
+		if err != nil || v <= 0 {
+			return nil, fmt.Errorf("%s=%q is not a number > 0", EnvLlamaCppRepeatPenalty, s)
+		}
+		l.RepeatPenalty = &v
+	}
+	return l, nil
 }
 
 // Name implements Backend.
@@ -194,13 +228,16 @@ func (l *LlamaCpp) Props(ctx context.Context) (json.RawMessage, error) {
 // OpenAI-compatible wire types (only the fields used).
 type (
 	llamaRequest struct {
-		Model       string         `json:"model"`
-		Messages    []LlamaMessage `json:"messages"`
-		Tools       []llamaTool    `json:"tools,omitempty"`
-		ToolChoice  string         `json:"tool_choice,omitempty"`
-		Temperature float64        `json:"temperature"`
-		MaxTokens   int            `json:"max_tokens,omitempty"`
-		Stream      bool           `json:"stream"`
+		Model         string         `json:"model"`
+		Messages      []LlamaMessage `json:"messages"`
+		Tools         []llamaTool    `json:"tools,omitempty"`
+		ToolChoice    string         `json:"tool_choice,omitempty"`
+		Temperature   float64        `json:"temperature"`
+		TopP          *float64       `json:"top_p,omitempty"`
+		TopK          *int           `json:"top_k,omitempty"`
+		RepeatPenalty *float64       `json:"repeat_penalty,omitempty"`
+		MaxTokens     int            `json:"max_tokens,omitempty"`
+		Stream        bool           `json:"stream"`
 	}
 	// LlamaMessage is one chat message in the OpenAI wire format. It is the
 	// value a LlamaCpp reply stores in Reply.Raw.
@@ -279,12 +316,12 @@ func (l *LlamaCpp) Chat(ctx context.Context, system string, history []Message, t
 // baseRequest holds every request field except the conversation and tools.
 // Chat and Settings both start from it.
 func (l *LlamaCpp) baseRequest() llamaRequest {
-	return llamaRequest{Model: l.Model, Temperature: l.Temperature, MaxTokens: l.MaxTokens}
+	return llamaRequest{Model: l.Model, Temperature: l.Temperature, TopP: l.TopP, TopK: l.TopK, RepeatPenalty: l.RepeatPenalty, MaxTokens: l.MaxTokens}
 }
 
 // llamaSettingKeys are the request fields that control sampling and output
 // length in llama-server's chat-completions API.
-var llamaSettingKeys = []string{"model", "temperature", "max_tokens", "stream", "top_p", "top_k", "min_p", "repeat_penalty", "seed"}
+var llamaSettingKeys = []string{"model", "temperature", "max_tokens", "stream", "top_p", "top_k", "min_p", "repeat_penalty", "repeat_last_n", "seed"}
 
 // Settings implements SettingsReporter from the fields Chat sends.
 func (l *LlamaCpp) Settings() map[string]string {

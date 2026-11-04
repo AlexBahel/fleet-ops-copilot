@@ -22,6 +22,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -135,6 +136,9 @@ func chatReply(content, calls, finish string) string {
 func TestNewLlamaCppFromEnv(t *testing.T) {
 	t.Setenv(EnvLlamaCppURL, "")
 	t.Setenv(EnvLlamaCppTemperature, "")
+	t.Setenv(EnvLlamaCppTopP, "")
+	t.Setenv(EnvLlamaCppTopK, "")
+	t.Setenv(EnvLlamaCppRepeatPenalty, "")
 	if _, err := NewLlamaCpp("", ""); err == nil || !strings.Contains(err.Error(), EnvLlamaCppURL) {
 		t.Fatalf("empty URL accepted: %v", err)
 	}
@@ -167,6 +171,31 @@ func TestNewLlamaCppFromEnv(t *testing.T) {
 			t.Errorf("temperature %q accepted", bad)
 		}
 	}
+	t.Setenv(EnvLlamaCppTemperature, "")
+	if l.TopP != nil || l.TopK != nil || l.RepeatPenalty != nil {
+		t.Fatalf("sampling fields set without the environment: %+v", l)
+	}
+	t.Setenv(EnvLlamaCppTopP, "0.8")
+	t.Setenv(EnvLlamaCppTopK, "20")
+	t.Setenv(EnvLlamaCppRepeatPenalty, "1.05")
+	if l, err = NewLlamaCpp("", ""); err != nil || l.TopP == nil || *l.TopP != 0.8 || l.TopK == nil || *l.TopK != 20 ||
+		l.RepeatPenalty == nil || *l.RepeatPenalty != 1.05 {
+		t.Fatalf("%+v %v", l, err)
+	}
+	for env, bads := range map[string][]string{
+		EnvLlamaCppTopP:          {"x", "0", "-0.1", "1.5"},
+		EnvLlamaCppTopK:          {"x", "-1", "2.5"},
+		EnvLlamaCppRepeatPenalty: {"x", "0", "-1"},
+	} {
+		good := os.Getenv(env)
+		for _, bad := range bads {
+			t.Setenv(env, bad)
+			if _, err := NewLlamaCpp("", ""); err == nil || !strings.Contains(err.Error(), env) {
+				t.Errorf("%s=%q accepted: %v", env, bad, err)
+			}
+		}
+		t.Setenv(env, good)
+	}
 }
 
 func TestChatRequestShape(t *testing.T) {
@@ -186,6 +215,11 @@ func TestChatRequestShape(t *testing.T) {
 	rq := f.request(0)
 	if rq["model"] != DefaultLlamaCppModel || rq["stream"] != false || rq["tool_choice"] != "auto" || rq["temperature"] != float64(0) {
 		t.Errorf("fields %v", rq)
+	}
+	for _, k := range []string{"top_p", "top_k", "repeat_penalty", "min_p", "seed"} {
+		if v, ok := rq[k]; ok {
+			t.Errorf("%s sent without being set: %v", k, v)
+		}
 	}
 	msgs := rq["messages"].([]any)
 	roles := ""
@@ -596,10 +630,32 @@ func TestLlamaCppSettingsRecordWhatIsSent(t *testing.T) {
 	s := l.Settings()
 	want := map[string]string{
 		"model": DefaultLlamaCppModel, "temperature": "0.7", "max_tokens": "4096", "stream": "false",
-		"top_p": NotSent, "top_k": NotSent, "min_p": NotSent, "repeat_penalty": NotSent, "seed": NotSent,
+		"top_p": NotSent, "top_k": NotSent, "min_p": NotSent, "repeat_penalty": NotSent, "repeat_last_n": NotSent, "seed": NotSent,
 		"tool_choice": "auto when tools are offered",
 	}
 	for k, v := range want {
+		if s[k] != v {
+			t.Errorf("%s = %q, want %q", k, s[k], v)
+		}
+	}
+}
+
+// The sampling fields, when set, are sent on the request and reported by
+// Settings with the same values.
+func TestLlamaCppSamplingSentAndRecorded(t *testing.T) {
+	f := newFakeLlama(t, fakeReply{body: chatReply("done", "", "stop")})
+	l := f.backend()
+	topP, topK, rp := 0.8, 20, 1.05
+	l.Temperature, l.TopP, l.TopK, l.RepeatPenalty = 0.7, &topP, &topK, &rp
+	if _, err := l.Chat(context.Background(), "s", []Message{{Role: "user", Text: "hi"}}, oneTool); err != nil {
+		t.Fatal(err)
+	}
+	rq := f.request(0)
+	if rq["temperature"] != 0.7 || rq["top_p"] != 0.8 || rq["top_k"] != float64(20) || rq["repeat_penalty"] != 1.05 {
+		t.Errorf("request %v", rq)
+	}
+	s := l.Settings()
+	for k, v := range map[string]string{"temperature": "0.7", "top_p": "0.8", "top_k": "20", "repeat_penalty": "1.05", "min_p": NotSent, "repeat_last_n": NotSent, "seed": NotSent} {
 		if s[k] != v {
 			t.Errorf("%s = %q, want %q", k, s[k], v)
 		}
