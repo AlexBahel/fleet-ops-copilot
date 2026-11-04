@@ -5,8 +5,10 @@
 # approval-requests panel on its Service. Its ServiceAccount may only get and
 # list ApprovalRequests: the page shows the `foc approve` / `foc reject`
 # command a person runs with their own kubeconfig; it cannot decide.
-# There is no login: reach the Service with `kubectl port-forward` (see
-# docs/RUNBOOK.md) or put an authenticating proxy in front of it.
+# There is no login, so the typed operator name is recorded as an unverified
+# requester and requests filed from the page can never be approved (R38). The
+# Service stays ClusterIP and the chart renders no Ingress; reach it with
+# `kubectl port-forward` (docs/RUNBOOK.md).
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -59,6 +61,7 @@ metadata:
   labels:
     {{- include "foc.workloadLabels" (dict "name" "foc-agent" "root" .) | nindent 4 }}
 spec:
+  type: ClusterIP
   selector: {app.kubernetes.io/name: foc-agent}
   ports: [{name: http, port: {{ .Values.agent.port }}, targetPort: http}]
 {{- end }}

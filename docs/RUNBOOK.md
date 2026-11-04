@@ -70,10 +70,13 @@ or remove the objects `config/rbac`, `config/admission` and `config/deploy` crea
 
 ### Open the web UI
 
-foc-agent serves a chat and a list of ApprovalRequests. It has no login and cannot approve: each
-pending request shows the exact object or patch it leads to and the `foc approve` / `foc reject`
-command to run with your own kubeconfig. The name typed in the page is recorded as the requester
-and is not verified, so expose the page only to people who may file requests.
+foc-agent serves a chat and a list of ApprovalRequests. It cannot approve: each pending request
+shows the exact object or patch it leads to and the `foc approve` / `foc reject` command to run
+with your own kubeconfig. The page has no login, so the name typed in it is recorded as the
+requester `unverified:<name>`, and foc-approvals refuses to approve any such request
+(`DENY_REQUESTER_UNVERIFIED`, R38): a request filed from the page can be rejected or left to
+expire, never approved. The Service is ClusterIP only and the chart renders no Ingress
+(`make chart-parity` refuses one); reach the page with a port-forward:
 
 ```bash
 kubectl --context $CTX -n foc-system port-forward svc/foc-agent 8090:8090

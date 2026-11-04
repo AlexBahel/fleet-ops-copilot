@@ -106,11 +106,6 @@ networkPolicy:
   # Additional peers allowed to reach foc-mcp's MCP port besides foc-agent,
   # as NetworkPolicy `from` entries.
   mcpExtraIngressFrom: []
-  # Peers allowed to reach the web UI (foc-agent's port), as NetworkPolicy
-  # `from` entries, e.g. an ingress controller's namespace. Empty: no rule,
-  # so only paths NetworkPolicy does not cover (normally kubectl
-  # port-forward, depending on the CNI) reach it.
-  agentIngressFrom: []
   # Egress from foc-agent and foc-mcp to the OTLP collector, as NetworkPolicy
   # `to` entries. Empty: no rule (spans are dropped when tracing is on).
   otlpEgress:

@@ -29,6 +29,9 @@ limitations under the License.
 // helm install --create-namespace). The ConfigMap fleetops-policy, which
 // make deploy-kind creates from policies/default.yaml, is compared with that
 // file byte for byte, as are the chart's copies of the CRDs and the policy.
+//
+// It also refuses any rendered Ingress, Route or Gateway API object and any
+// Service that is not ClusterIP (R38: foc-agent's web UI has no login).
 package main
 
 import (
@@ -168,8 +171,33 @@ func check(repo, rendered string) ([]string, error) {
 			problems = append(problems, "only in chart: "+k)
 		}
 	}
+	problems = append(problems, exposure(got)...)
 	fmt.Printf("chart-parity: %d objects from config/ compared, %d byte-compared files\n", len(want), len(pairs))
 	return problems, nil
+}
+
+// exposureKinds would publish a Service outside the cluster.
+var exposureKinds = map[string]bool{"Ingress": true, "Route": true, "Gateway": true, "HTTPRoute": true, "GRPCRoute": true, "TLSRoute": true, "TCPRoute": true}
+
+// exposure enforces R38 on the rendered chart: foc-agent's web UI has no
+// login, so nothing may expose a Service outside the cluster. Every Service
+// is ClusterIP and no Ingress, Route or Gateway API object is rendered.
+func exposure(got map[string]obj) []string {
+	var problems []string
+	for _, k := range sortedKeys(got) {
+		o := got[k]
+		kind, _ := o["kind"].(string)
+		if exposureKinds[kind] {
+			problems = append(problems, "R38: chart renders "+k+"; foc-agent's web UI has no login and must not be exposed")
+		}
+		if kind == "Service" {
+			spec, _ := o["spec"].(obj)
+			if t, _ := spec["type"].(string); t != "" && t != "ClusterIP" {
+				problems = append(problems, fmt.Sprintf("R38: %s has type %s; only ClusterIP is allowed", k, t))
+			}
+		}
+	}
+	return problems
 }
 
 // load reads every YAML document in path into m, keyed by

@@ -131,7 +131,6 @@
           }
         },
         "mcpExtraIngressFrom": {"type": "array", "items": {"type": "object"}},
-        "agentIngressFrom": {"type": "array", "items": {"type": "object"}},
         "otlpEgress": {
           "type": "object",
           "additionalProperties": false,

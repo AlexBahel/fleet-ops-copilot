@@ -3,9 +3,10 @@
 # Cloud-profile NetworkPolicy (docs/DESIGN.md §3.7): default-deny ingress and
 # egress in the release namespace, then DNS for every pod, the API server for
 # foc-mcp, foc-approvals and foc-agent (which reads ApprovalRequests),
-# foc-agent -> foc-mcp, foc-agent -> the Claude API when CIDRs are given,
-# ingress to the web UI from agentIngressFrom, and egress to the OTLP
-# collector from otlpEgress.to. Policies are additive: a pod may do what
+# foc-agent -> foc-mcp, foc-agent -> the Claude API when CIDRs are given, and
+# egress to the OTLP collector from otlpEgress.to. No ingress to foc-agent's
+# web UI is allowed (R38: no Ingress; kubectl port-forward is normally not
+# subject to NetworkPolicy, depending on the CNI). Policies are additive: a pod may do what
 # any policy selecting it allows.
 #
 # Not applied to a cluster yet. Enforcement needs a CNI that implements
@@ -127,25 +128,6 @@ spec:
         {{- range $.Values.networkPolicy.claudeApiEgress.ports }}
         - {protocol: TCP, port: {{ . }}}
         {{- end }}
-{{- end }}
-{{- with .Values.networkPolicy.agentIngressFrom }}
----
-# Web UI ingress to foc-agent from the given peers only.
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: foc-agent-ingress-ui
-  namespace: {{ $.Release.Namespace }}
-  labels:
-    {{- include "foc.chartLabels" $ | nindent 4 }}
-spec:
-  podSelector: {matchLabels: {app.kubernetes.io/name: foc-agent}}
-  policyTypes: [Ingress]
-  ingress:
-    - from:
-        {{- toYaml . | nindent 8 }}
-      ports:
-        - {protocol: TCP, port: {{ $.Values.agent.port }}}
 {{- end }}
 {{- with .Values.networkPolicy.otlpEgress.to }}
 ---

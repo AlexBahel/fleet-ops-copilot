@@ -89,8 +89,9 @@ spec:
           emptyDir: {}
 ---
 # foc-agent: Claude backend, MCP client of foc-mcp, web UI on :8090. Its
-# ServiceAccount may only get and list ApprovalRequests. No login: reach it
-# with kubectl port-forward svc/foc-agent 8090:8090.
+# ServiceAccount may only get and list ApprovalRequests. No login: requests
+# filed from the page record an unverified requester and cannot be approved
+# (R38). ClusterIP only, no Ingress: kubectl port-forward svc/foc-agent 8090:8090.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -131,5 +132,6 @@ metadata:
   namespace: foc-system
   labels: {app.kubernetes.io/name: foc-agent, app.kubernetes.io/part-of: fleet-ops-copilot}
 spec:
+  type: ClusterIP
   selector: {app.kubernetes.io/name: foc-agent}
   ports: [{name: http, port: 8090, targetPort: http}]
