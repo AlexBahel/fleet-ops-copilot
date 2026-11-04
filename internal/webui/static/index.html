@@ -1,0 +1,44 @@
+<!doctype html>
+<!-- Copyright 2026 Alex Bahel. Licensed under the Apache License, Version 2.0. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fleet Ops Copilot</title>
+<link rel="stylesheet" href="style.css">
+<script src="app.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <h1>Fleet Ops Copilot</h1>
+  <span class="meta" id="info"></span>
+</header>
+<main>
+  <section class="chat" aria-label="Chat">
+    <div class="who">
+      <label for="operator">Your Kubernetes username</label>
+      <input id="operator" autocomplete="username" spellcheck="false" placeholder="e.g. jane@example.com">
+      <span class="hint">Recorded as the requester of any approval request. Not verified: there is no login.</span>
+    </div>
+    <ol class="log" id="log" aria-live="polite"></ol>
+    <form id="ask" class="ask">
+      <textarea id="message" rows="3" placeholder="Ask about robots, tasks or zones, or ask for a draft task, maintenance window or zone stop. Enter sends, Shift+Enter is a new line."></textarea>
+      <div class="row">
+        <span class="hint" id="session"></span>
+        <button type="button" id="new-session" class="secondary">New session</button>
+        <button type="submit" id="send">Send</button>
+      </div>
+    </form>
+  </section>
+  <section class="requests" aria-label="Approval requests">
+    <div class="requests-head">
+      <h2>Approval requests</h2>
+      <label class="toggle"><input type="checkbox" id="show-decided"> show decided</label>
+    </div>
+    <p class="notice">This page cannot approve or reject. A person decides by running the command shown, with their own kubeconfig (add <code>--context NAME</code> to choose the cluster).</p>
+    <p class="hint" id="requests-status"></p>
+    <div id="requests"></div>
+  </section>
+</main>
+</body>
+</html>

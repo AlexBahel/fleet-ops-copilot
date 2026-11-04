@@ -1,0 +1,195 @@
+// Copyright 2026 Alex Bahel. Licensed under the Apache License, Version 2.0.
+//
+// Chat with foc-agent and list ApprovalRequests. Every value from the server
+// is inserted as text, never as HTML. The page has no approve or reject
+// action: it shows the command a person runs with their own kubeconfig.
+"use strict";
+
+const $ = (id) => document.getElementById(id);
+
+function el(tag, props, ...children) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (k === "class") e.className = v;
+    else if (k === "text") e.textContent = v;
+    else e.setAttribute(k, v);
+  }
+  for (const c of children) {
+    if (c === null || c === undefined || c === false) continue;
+    e.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  }
+  return e;
+}
+
+function store(kind) {
+  try { return window[kind]; } catch (_) { return null; }
+}
+function load(kind, key) { try { return store(kind)?.getItem(key) || ""; } catch (_) { return ""; } }
+function save(kind, key, v) { try { store(kind)?.setItem(key, v); } catch (_) { /* storage blocked */ } }
+function drop(kind, key) { try { store(kind)?.removeItem(key); } catch (_) { /* storage blocked */ } }
+
+let sessionId = load("sessionStorage", "foc.session");
+
+function showSession() {
+  $("session").textContent = sessionId ? "session " + sessionId : "new session";
+}
+
+function fmtTime(s) {
+  const d = new Date(s);
+  return isNaN(d) ? s : d.toLocaleString();
+}
+
+// ---- chat -----------------------------------------------------------------
+
+function addMessage(cls, text) {
+  const li = el("li", { class: "msg " + cls, text });
+  $("log").append(li);
+  li.scrollIntoView({ block: "end" });
+  return li;
+}
+
+function chips(calls) {
+  const foot = el("div", { class: "foot" });
+  for (const c of calls || []) {
+    let cls = "chip";
+    let label = c.name;
+    if (c.isError) cls += " err";
+    if (c.policyCode) {
+      label += " · " + c.policyCode;
+      cls += c.refused ? " refused" : " approval";
+    }
+    if (c.created) label += " → " + c.created;
+    foot.append(el("span", { class: cls, text: label }));
+  }
+  return foot;
+}
+
+async function send(ev) {
+  ev.preventDefault();
+  const operator = $("operator").value.trim();
+  const message = $("message").value.trim();
+  if (!operator) { $("operator").focus(); addMessage("error", "Enter your Kubernetes username first."); return; }
+  if (!message) return;
+  save("localStorage", "foc.operator", operator);
+  addMessage("user", message);
+  $("message").value = "";
+  $("send").disabled = true;
+  const wait = addMessage("pending", "Working…");
+  try {
+    const res = await fetch("api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ operator, sessionId, message }),
+    });
+    const out = await res.json();
+    wait.remove();
+    if (out.sessionId) { sessionId = out.sessionId; save("sessionStorage", "foc.session", sessionId); showSession(); }
+    if (out.error) {
+      const li = addMessage("error", out.error);
+      if (out.toolCalls?.length) li.append(chips(out.toolCalls));
+    } else {
+      const li = addMessage("agent", out.answer || "(no answer)");
+      const foot = chips(out.toolCalls);
+      foot.append(el("span", { class: "hint", text: `${out.turns} model turn(s), ${Math.round(out.latencyMs)} ms` }));
+      li.append(foot);
+    }
+    refresh();
+  } catch (e) {
+    wait.remove();
+    addMessage("error", "Request failed: " + e);
+  } finally {
+    $("send").disabled = false;
+  }
+}
+
+// ---- requests ---------------------------------------------------------------
+
+function command(label, text) {
+  const btn = el("button", { type: "button", class: "secondary", text: "Copy" });
+  btn.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(text); btn.textContent = "Copied"; }
+    catch (_) { btn.textContent = "Select and copy"; }
+    setTimeout(() => { btn.textContent = "Copy"; }, 1500);
+  });
+  return el("div", {}, el("div", { class: "label", text: label }), el("div", { class: "cmd" }, el("code", { text }), btn));
+}
+
+function card(r) {
+  const c = r.change || {};
+  const meta = el("dl", {},
+    el("dt", { text: "requested for" }), el("dd", { text: r.requestedFor }),
+    el("dt", { text: "created" }), el("dd", { text: fmtTime(r.created) }),
+    el("dt", { text: "expires" }), el("dd", { text: fmtTime(r.expiresAt) }),
+    el("dt", { text: "policy" }), el("dd", { text: [r.policy?.code, r.policy?.message].filter(Boolean).join(": ") }),
+    r.decidedBy ? el("dt", { text: "decided by" }) : null, r.decidedBy ? el("dd", { text: r.decidedBy }) : null,
+    r.message ? el("dt", { text: "status" }) : null, r.message ? el("dd", { text: r.message }) : null,
+  );
+  const diff = el("pre", { class: "diff" });
+  for (const l of c.diff || []) {
+    const cls = l.op === "+" ? "add" : l.op === "-" ? "del" : "";
+    diff.append(el("span", { class: cls, text: l.op + " " + l.text }));
+  }
+  const parts = [
+    el("h3", {}, r.name, el("span", { class: "badge", text: r.type }), el("span", { class: "badge " + r.state, text: r.state })),
+    meta,
+    el("div", {},
+      el("div", { class: "label", text: "Change if approved" }),
+      el("div", { class: "hint", text: `${c.operation || ""} ${c.target || ""} — by ${c.writer || ""}` })),
+    c.diff?.length ? diff : null,
+    c.body ? el("details", {}, el("summary", { text: "request body" }), el("pre", { text: c.body })) : null,
+  ];
+  if (c.notes?.length) {
+    const ul = el("ul", { class: "notes" });
+    for (const n of c.notes) ul.append(el("li", { text: n }));
+    parts.push(ul);
+  }
+  if (r.approve) parts.push(command("Approve (run it yourself)", r.approve));
+  if (r.reject) parts.push(command("Reject (run it yourself)", r.reject));
+  if (r.instruction) parts.push(command("After approval, the approver runs", r.instruction));
+  else if (c.command && r.state === "Pending") parts.push(command("After approval, the approver runs", c.command));
+  return el("article", { class: "card" }, ...parts);
+}
+
+let refreshing = false;
+async function refresh() {
+  if (refreshing) return;
+  refreshing = true;
+  try {
+    const res = await fetch("api/requests");
+    const out = await res.json();
+    if (out.error) { $("requests-status").textContent = "Cannot read ApprovalRequests: " + out.error; return; }
+    const showAll = $("show-decided").checked;
+    const items = (out.items || []).filter((r) => showAll || r.state === "Pending");
+    const box = $("requests");
+    box.replaceChildren(...items.map(card));
+    const pending = (out.items || []).filter((r) => r.state === "Pending").length;
+    $("requests-status").textContent = `${pending} pending in ${(out.namespaces || []).join(", ")} · updated ${new Date().toLocaleTimeString()}`;
+    if (!items.length) box.append(el("p", { class: "hint", text: showAll ? "No requests." : "No pending requests." }));
+  } catch (e) {
+    $("requests-status").textContent = "Cannot reach foc-agent: " + e;
+  } finally {
+    refreshing = false;
+  }
+}
+
+// ---- start ------------------------------------------------------------------
+
+document.addEventListener("DOMContentLoaded", async () => {
+  $("operator").value = load("localStorage", "foc.operator");
+  showSession();
+  $("ask").addEventListener("submit", send);
+  $("message").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("ask").requestSubmit(); }
+  });
+  $("new-session").addEventListener("click", () => {
+    sessionId = ""; drop("sessionStorage", "foc.session"); showSession();
+    $("log").replaceChildren();
+  });
+  $("show-decided").addEventListener("change", refresh);
+  try {
+    const info = await (await fetch("api/info")).json();
+    $("info").textContent = `backend ${info.backend} · namespaces ${(info.namespaces || []).join(", ")}`;
+  } catch (_) { /* header stays empty */ }
+  refresh();
+  setInterval(refresh, 5000);
+});
