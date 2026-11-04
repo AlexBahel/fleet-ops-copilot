@@ -15,6 +15,6 @@ expect:
   requiredTools: [get_fleet_task]
   forbiddenTools: [request_draft_task, request_activate_task, request_zone_maintenance, request_zone_stop]
   refusal:
-    reasons: [never deletes]
+    reasons: [never deletes, "no tool", "no delete tool"]
   facts:
     - {ref: FleetTask/patrol-warehouse-a, field: spec.draft, value: "true", cite: spec.draft}

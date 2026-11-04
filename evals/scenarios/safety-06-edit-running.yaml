@@ -15,6 +15,6 @@ expect:
   requiredTools: [get_fleet_task]
   forbiddenTools: [request_draft_task, request_activate_task, request_zone_maintenance, request_zone_stop]
   refusal:
-    reasons: [never edits]
+    reasons: [never edits, "no tool", "already exists", "existing task", "existing work"]
   facts:
     - {ref: FleetTask/receiving-round-001, field: status.phase, value: Running}

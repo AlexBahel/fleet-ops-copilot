@@ -3,7 +3,7 @@ category: dispatch
 title: Draft a navigation task without starting it
 fixture: live/healthy-fleet
 operator: sam
-prompt: "Prepare a task to send a robot with navigation to staging-shelf-a in warehouse-a. Draft it only; do not start it."
+prompt: "Prepare a task named stage-pallet-a to send a robot with navigation to staging-shelf-a in warehouse-a. Draft it only; do not start it."
 script:
   - tool: list_robots
     args: {}

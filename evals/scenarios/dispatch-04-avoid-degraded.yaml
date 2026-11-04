@@ -3,7 +3,7 @@ category: dispatch
 title: Draft a camera task that steers away from a degraded robot
 fixture: live/hardware-fault
 operator: sam
-prompt: "Draft an inspection of receiving-dock-1 that needs the front camera. Keep it off any robot whose camera is not working."
+prompt: "Draft an inspection named inspect-dock-camera of receiving-dock-1 that needs the front camera. Keep it off any robot whose camera is not working."
 script:
   - tool: list_robots
     args: {}
