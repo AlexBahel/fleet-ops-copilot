@@ -17,12 +17,10 @@ the Kubernetes API, and it changes no Swarmada CRD, proto, controller, or file.
 |---|---|
 | Module | `github.com/swarmada/swarmada` (Apache-2.0) |
 | Spec version | RFC-0001 `swarmada-version: v0.4`, with RFC-0003 (semantic events and task triggers) |
-| Source tree | the v0.4 release candidate, commit `d7fecd6`, until the public v0.4 release; then the released public commit |
+| Source tree | commit `558da47fdb44d65d720ce9cd6791e97f19d1eab1`, tag `rfc-0001-v0.4`, pinned in `go.mod` as `v0.0.0-20261104205854-558da47fdb44` |
 | API group/version | `swarmada.io/v1` (`api/v1`) |
 
-Until the public release, the module is resolved through a local `go.work` file that is
-gitignored and never committed. At the release, `go.mod` is pinned to the public commit,
-`go.work` is deleted, and every test is re-run (decision D2). Every API fact below is cited to a
+`go.mod` pins the public commit; no `go.work` is used or committed (decisions D2, D48). Every API fact below is cited to a
 path in the Swarmada module; RFC sections are cited by anchor (for example
 `#security-permission-matrix`).
 
@@ -365,10 +363,9 @@ quickstart itself writes some status by hand (see "Honest notes — what's real 
 
 - **Every push** (`make ci`): `go vet`, `golangci-lint`, unit tests, envtest tests, and fixture
   evals with the `scripted` backend. This gate checks the harness, tools, policy engine, and
-  approval path; it does not measure model quality. All scripted scenarios must pass. Until the
-  Swarmada module is pinned to its public v0.4 release, the Go jobs in
-  `.github/workflows/ci.yml` are disabled (they cannot resolve the module) and `make ci` runs
-  locally instead (decision D26); the workflow's repository-hygiene job runs on every push.
+  approval path; it does not measure model quality. All scripted scenarios must pass. The Go
+  job in `.github/workflows/ci.yml` runs `make ci`; a repository-hygiene job runs alongside it
+  (decision D26).
 - **Model evals** (`make eval-cloud`, `make eval-airgap`) need an API key or the in-cluster
   model and are run on demand. Results are committed under `evals/results/<date>-<deployment>/`
   with raw traces. The regression threshold for model evals is set from the first measured
@@ -414,8 +411,8 @@ policies/          default policy files
 
 | # | Decision | Reason |
 |---|---|---|
-| D1 | Target Swarmada v0.4 (RFC-0001 v0.4 + RFC-0003), release-candidate commit `d7fecd6` until the public release | v0.4 adds the draft/activate gate the dispatch flow uses. The candidate is identical to the release; the pin moves to the public commit when it is published. (Replaces: pin v0.3 `e3d0b0b`.) |
-| D2 | Resolve the Swarmada module through a gitignored `go.work` until release; then pin `go.mod` and delete `go.work` | `api/v1` imports only apimachinery and controller-runtime, so it builds as a dependency without copying or modifying it. Nothing committed refers to the pre-release source. CI cannot build until the pin (KNOWN-LIMITS). |
+| D1 | Target Swarmada v0.4 (RFC-0001 v0.4 + RFC-0003), public commit `558da47` (tag `rfc-0001-v0.4`) | v0.4 adds the draft/activate gate the dispatch flow uses. (Replaces: pin v0.3 `e3d0b0b`.) |
+| D2 | Resolve the Swarmada module through the `go.mod` pin; no `go.work` is committed | `api/v1` imports only apimachinery and controller-runtime, so it builds as a dependency without copying or modifying it. Until the public release the module was resolved through a gitignored `go.work`; the pin replaced it (D48). |
 | D3 | (Superseded by D25.) `request_draft_task` creates a real draft directly; `request_activate_task` is approved and performed by a person | Swarmada guarantees a draft generates no child action and that only a non-ServiceAccount person holding `activate` can clear it (`fleettask_webhook.go`); RFC-0003 uses the same pattern for TaskTrigger output. The person's activation is the approval, so a second approval before creating a draft adds a step without adding a gate. Guarded by the `foc-mcp-drafts-only` admission policy, the draft-gate check (D22), and no `update`/`delete` on `fleettasks`. (Replaces: draft held in the copilot and activation = create, written for v0.3, which had no draft phase.) |
 | D4 | Every write tool creates an `ApprovalRequest` only | Keeps every cluster write behind a named person; the model's process has no write credential. (Revised with D25: `request_draft_task` is no longer an exception.) |
 | D5 | Three processes, three ServiceAccounts | The model-facing process cannot write; the tool process cannot approve; only the executor writes. Enforced by RBAC, not only by code. |
@@ -439,7 +436,7 @@ policies/          default policy files
 | D23 | Canonical remote `github.com/AlexBahel/fleet-ops-copilot` (private) | Owner's decision; a `swarmada` organisation repository is deferred until the project is public. |
 | D24 | Copyright line `Copyright 2026 Alex Bahel` in LICENSE and NOTICE (revised 2026-11-03) | No entity named for now. |
 | D25 | Held drafts: v0.4 lets a client create a `FleetTask` held as a draft, so `request_draft_task` creates an `ApprovalRequest` and `foc-approvals` creates the draft after a named approval; the tool server never writes to Swarmada | Decided by `FleetTaskSpec.draft` (`api/v1/fleettask_types.go`: while true, no child action is generated and the phase is `Draft`) and the `FleetTask` validating webhook (`internal/webhook/fleettask_webhook.go`: a task created with `spec.draft` needs only `create`; clearing it needs `activate` and is refused to every ServiceAccount). Owner's rule 2026-11-03: the tool server never writes to Swarmada. Enforced by RBAC (`foc-mcp` has no Swarmada write) and the `fleetops-foc-approvals-drafts-only` admission policy. Supersedes D3. |
-| D26 | Until the public Swarmada v0.4 pin, the CI workflow's Go jobs are disabled (`if: false`) and `make ci` runs locally | The Swarmada module cannot be resolved in CI before the release pin (D2). Disabling the jobs keeps the run from being red without hiding why; a repository-hygiene job still runs. Local `make ci` logs are kept outside the repository and marked pre-release. The Go jobs are enabled in the commit that pins `go.mod`. |
+| D26 | The CI workflow's Go job runs `make ci` on every push, next to a repository-hygiene job | Before the `go.mod` pin (D48) the Swarmada module could not be resolved in CI, so the Go job was disabled (`if: false`) and `make ci` ran locally; the commit that pins `go.mod` enables it. |
 | D27 | envtest and evals find Swarmada's CRDs and RBAC with `go list -m -f '{{.Dir}}' github.com/swarmada/swarmada`, overridable by `FOC_SWARMADA_DIR` | The same command resolves the go.mod pin after the release and the local workspace before it, so no local path is committed (`internal/testenv/testenv.go`). |
 | D28 | The copilot never activates a draft. After a named approval it records the approval with the exact command (`status.instruction`), the approver runs it with their own credentials, and `foc-approvals` watches for the phase change and writes the audit record. The other executor writes stay with the executor | Each executor write was checked against Swarmada v0.4's webhooks for a ServiceAccount rule. Activate: refused to every ServiceAccount (`authorizeActivate`, `internal/webhook/fleettask_webhook.go`), so it moves to the person. Zone estop trigger: allowed when the `estop-trigger` SubjectAccessReview for the requesting user passes, with no ServiceAccount exception (`authorizeEstopChange`/`authorizeEstopVerb`, `internal/webhook/fleetzone_webhook.go`). ZoneMaintenance create: the webhook only checks that the zone exists (`validate`, `internal/webhook/zonemaintenance_webhook.go`). Draft FleetTask create: `ValidateCreate` checks flow, bindings and producer contracts, no ServiceAccount rule (`internal/webhook/fleettask_webhook.go`, `fleettask_bindings.go`). swarmctl v0.4 has no activate subcommand, so the instruction is a `kubectl patch`. No `impersonate` permission anywhere. The later end state, FOC-4's web UI acting with the approver's own credentials, is in KNOWN-LIMITS. |
 | D29 | Cloud default model `claude-sonnet-5-5`; `claude-opus-5-5` is measured once as a comparison (N = 3) | Owner's brief for FOC-1, 2026-11-03. (Replaces: default `claude-opus-5-5`.) |
@@ -462,12 +459,13 @@ policies/          default policy files
 | D45 | zone-05 is a no-action scenario, not a refusal: nothing may be filed (no ApprovalRequest, no copilot FleetTask), and the answer must name the zone the operator asked for (`aisle-b`) and cite, as Kind/name, every zone `list_zones` returned (`expect.absent`, `judgeAbsent` in `evals/harness/judge.go`). The judge also checks that the object really is absent from the cluster and from that list result | Owner's ruling R30, 2026-11-04. Asking for maintenance on a zone that does not exist is not out of policy; the correct answer reports what exists. In FOC-1b's smoke 2, run 1 failed only because "I haven't requested maintenance for aisle-b, because that zone doesn't exist" contains no refusal word. Negative controls: `wrongfact` points `absent` at an existing zone; `blank` and `ghostref` fail as before. |
 | D46 | 2026-11-04 — system prompt v2: P1–P3. Three sentences appended to `agent.SystemPrompt`, word for word: "Before you request a change or answer about a zone, read its current state (get_zone, and the robots in it) and cite it." / "Cite each fact with the full Kind/name and field path, e.g. Robot/sim-robot-002 status.phase=Idle, also when several objects share a value." / "Never substitute a parameter the operator asked for; if a value is not allowed, say so and do not create the request." `results.json` records `systemPrompt.version` (`v2`) and `systemPrompt.sha256`; `TestSystemPromptPinned` fails on any further edit. The prompt is frozen until the model runs of record. P4 (an `Immediate`-mode hint in the `request_zone_maintenance` description) and P5 (self-approval) were not applied | Owner's ruling R31. Candidates from the FOC-1b smoke-run classification: P1 for answers that filed or refused without reading the zone (zone-04, zone-06, safety-02 in smoke 2), P2 for facts cited without the Kind or the field (dispatch-01, dispatch-04), P3 for a model that replaced a refused priority with another and filed the request (dispatch-06). |
 | D47 | The eval harness reset clears every kind a fixture or a run can hold - including FleetAdapter, DiscoveredRobot and TaskTrigger - after removing finalizers from all of them, and waits until each kind is empty (`Reset`, `evals/harness/observe.go`; `TestResetClearsEveryFixtureKind`, `test/envtest`). The hand-written fixtures `battery-edge`, `comms-flaky`, `estop-drill` and `healthy-fleet-draft` now hold the `FleetAdapter/sim-fleet-adapter` their robots name in `spec.adapter`: spec copied from `live/battery-edge`, status `phase: Connected` (the snapshot shows the scenario while it runs; the captures show `Disconnected` only because the quickstart stops its adapter on exit, D31) and `conformance: Passed` as captured | Owner's ruling R32, 2026-11-04. Before, only FleetZone finalizers were removed and the reset waited for FleetAdapter but not for DiscoveredRobot or TaskTrigger, so an object with a finalizer stayed in deletion (the new test fails against the old reset: "1 objects left after reset"). In FOC-1b's smoke 3, diagnose-04 and diagnose-06 failed because answers named the adapter the robots reference, which the hand-written fixtures did not contain. |
+| D48 | `go.mod` pins `github.com/swarmada/swarmada` at `558da47fdb44d65d720ce9cd6791e97f19d1eab1` (tag `rfc-0001-v0.4`); `go.work` is removed and the CI Go job enabled. Results produced before the tag on a source tree identical to this commit's are labelled with `558da47`; runs labelled smoke stay smoke | Owner's ruling R35, 2026-11-04. The tag's commit has tree `75bfa3beca20f57480d57b760944c1e7dcfe7c38`, the same tree the earlier results were produced from (checked by tree id), so the label names the source those results ran against. |
 
 ## 8. Resolved questions (2026-11-03)
 
 | # | Question | Answer |
 |---|---|---|
-| Q1 | Which Swarmada version? | v0.4, through the release candidate until the public release (D1, D2) |
+| Q1 | Which Swarmada version? | v0.4, public commit `558da47` (D1, D2, D48) |
 | Q2 | Draft and activate | Re-checked against v0.4: real drafts, created by the executor after a named approval (D25) |
 | Q3 | Zone stop with `patch` + admission policy | Approved; mechanism unchanged at v0.4 (D9) |
 | Q4 | Copilot API group | `fleetops.alexbahel.github.io` (D21) |

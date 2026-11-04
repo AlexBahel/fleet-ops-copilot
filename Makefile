@@ -12,7 +12,7 @@ help: ## List targets
 
 all: ci
 
-ci: check-no-local build vet lint test test-envtest eval-fixtures ## Everything the CI Go job runs (run locally until the Swarmada pin)
+ci: check-no-local build vet lint test test-envtest eval-fixtures ## Everything the CI Go job runs
 
 build: ## Build foc, foc-mcp, foc-approvals into bin/
 	$(GO) build -o $(BIN)/ ./cmd/...

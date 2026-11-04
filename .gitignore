@@ -1,4 +1,4 @@
-# Local Go workspace (pre-release dependency resolution); never committed.
+# Local Go workspace (overrides the go.mod pin for local work); never committed.
 go.work
 go.work.sum
 

@@ -116,7 +116,7 @@ const SwarmadaDirEnv = "FOC_SWARMADA_DIR"
 
 // SwarmadaDir returns the Swarmada module directory: $FOC_SWARMADA_DIR if
 // set, else `go list -m -f '{{.Dir}}' github.com/swarmada/swarmada` (the
-// go.mod pin, or a local workspace before the public release). No path is
+// go.mod pin, or a local go.work that overrides it). No path is
 // stored in the repository.
 func SwarmadaDir(repoRoot string) (string, error) {
 	if d := os.Getenv(SwarmadaDirEnv); d != "" {

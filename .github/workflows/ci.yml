@@ -32,14 +32,9 @@ jobs:
           done
           if [ -n "$bad" ]; then echo "commits without Signed-off-by:$bad"; exit 1; fi
 
-  # Build, vet, lint, unit tests, envtest and fixture evals.
-  #
-  # Disabled until go.mod pins the public Swarmada v0.4 release: before that the
-  # github.com/swarmada/swarmada module cannot be resolved here, so every Go step
-  # would fail (docs/DESIGN.md D2, D26). Until the pin, `make ci` runs locally.
-  # The commit that pins go.mod removes the `if: false`.
+  # Build, vet, lint, unit tests, envtest and fixture evals, against the
+  # Swarmada v0.4 commit go.mod pins (docs/DESIGN.md D1, D2, D26).
   go:
-    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

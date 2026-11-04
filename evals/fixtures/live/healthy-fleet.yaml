@@ -1,6 +1,6 @@
 # Fixture: healthy-fleet.
 # Captured from a live cluster by evals/cmd/foc-capture at 2026-11-04T03:07:59Z.
-# Source: Swarmada v0.4 quickstart, make quickstart SCENARIO=healthy-fleet, after it reached its end state and exited (the quickstart stops its sim adapter process on exit, so robot phase and connectivity drift afterwards); release candidate d7fecd6, pre-release.
+# Source: Swarmada v0.4 quickstart, make quickstart SCENARIO=healthy-fleet, after it reached its end state and exited (the quickstart stops its sim adapter process on exit, so robot phase and connectivity drift afterwards); Swarmada v0.4 558da47 (docs/DESIGN.md D48).
 # Spec and status as read from the API server; server-set metadata, owner
 # references and finalizers removed. Status written by hand by the quickstart
 # runner (its "Honest notes") is captured as it was. Fictional site.

@@ -137,22 +137,40 @@ func swarmadaVersion(dir string) (string, string) {
 		_ = f.Close()
 	}
 	rev := "unknown"
-	if b, err := runIn(dir, exec.Command("git", "rev-parse", "--short=7", "HEAD")); err == nil {
+	if swarmadaResolution() == resolutionPin {
+		if b, err := exec.Command("go", "list", "-m", "-f", "{{.Version}}", "github.com/swarmada/swarmada").Output(); err == nil {
+			rev = pinnedRevision(strings.TrimSpace(string(b)))
+		}
+	} else if b, err := runIn(dir, exec.Command("git", "rev-parse", "--short=7", "HEAD")); err == nil {
 		rev = b
-	} else if b, err := exec.Command("go", "list", "-m", "-f", "{{.Version}}", "github.com/swarmada/swarmada").Output(); err == nil {
-		rev = strings.TrimSpace(string(b))
 	}
 	return spec, rev
 }
 
-// swarmadaResolution says how the Swarmada module was resolved: through a
-// local go.work (before the public release pin, so results are pre-release)
-// or through the go.mod pin.
+// pinnedRevision returns the commit a go.mod version names: the revision
+// field of a pseudo-version (v0.0.0-20261104205854-558da47fdb44 gives
+// 558da47fdb44), or the version itself when it is a tag.
+func pinnedRevision(version string) string {
+	i := strings.LastIndexByte(version, '-')
+	if i < 0 {
+		return version
+	}
+	rev := strings.TrimSuffix(version[i+1:], "+incompatible")
+	if len(rev) != 12 || strings.Trim(rev, "0123456789abcdef") != "" {
+		return version
+	}
+	return rev
+}
+
+const resolutionPin = "go.mod pin"
+
+// swarmadaResolution says how the Swarmada module was resolved: through the
+// go.mod pin, or through a local go.work that overrides it.
 func swarmadaResolution() string {
 	if b, err := exec.Command("go", "env", "GOWORK").Output(); err == nil && strings.TrimSpace(string(b)) != "" {
-		return "local go.work (pre-release)"
+		return "local go.work (overrides the go.mod pin)"
 	}
-	return "go.mod pin"
+	return resolutionPin
 }
 
 // runIn runs a command with fixed arguments in a directory.

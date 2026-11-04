@@ -3,16 +3,6 @@
 What is not built, not measured, or not enforced. Each item stays here until code and a test
 remove it.
 
-## Swarmada version
-
-- Swarmada v0.4 is resolved through a local, uncommitted `go.work` until its public release
-  (docs/DESIGN.md D1, D2). `go.mod` has no `require` for `github.com/swarmada/swarmada` yet, so a
-  plain checkout does not build. The pin, the removal of `go.work`, and a full re-run of every
-  test happen at the public release.
-- Because of that, the Go jobs in `.github/workflows/ci.yml` are disabled (D26). Only the
-  repository-hygiene job runs in CI; build, vet, lint, unit tests, envtest and fixture evals run
-  with `make ci` on a developer machine.
-
 ## Not built yet
 
 - The five agent roles (Router, Diagnose, Dispatch, Zone ops, Reporter) and their tool
@@ -89,8 +79,9 @@ remove it.
   out Swarmada's controllers, so the estop-actor annotation, which Swarmada's controller removes
   after sealing it (D33), stays on the zone in envtest.
 - **Live approval-path test** (`test/live`, D32) runs against Swarmada v0.4 with its webhooks
-  served (`config/controlstream-tls` applied over the quickstart). It has been run on the release
-  candidate only; a run after the public release pin has not happened yet. To read Swarmada's
+  served (`config/controlstream-tls` applied over the quickstart). It has been run against a source
+  tree identical to Swarmada `558da47` before the tag (labelled `558da47`, D48); no run has
+  been made with the module resolved through the `go.mod` pin. To read Swarmada's
   safety audit log it starts an ephemeral busybox container in the manager pod that mounts the
   manager's `audit-log` volume read-only as user 65532; both names come from Swarmada's
   manifests and are not checked. The quickstart's own overlay serves no admission webhooks, and
@@ -98,7 +89,7 @@ remove it.
   a plain quickstart install.
 - Fixtures directly under `evals/fixtures/` are hand-written snapshots modelled on the Swarmada
   quickstart scenarios. Those under `evals/fixtures/live/` were captured from live quickstart runs
-  of the release candidate after the quickstart script exited (its simulated adapter stops then,
+  of Swarmada `558da47` (D48) after the quickstart script exited (its simulated adapter stops then,
   so robot phase and connectivity drift); they differ from the hand-written ones in places (D31). The quickstart itself writes some status by hand (see
   its "Honest notes" section), and so do the fixtures.
 
