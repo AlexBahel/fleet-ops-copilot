@@ -74,19 +74,19 @@ This gives two deployments of the same agent:
               │  Dispatch        │                │  policy engine   │   │  policy re-check     │
               │  Zone ops        │                │  audit writer    │   │  audit writer        │
               │  Reporter        │                └───────┬──────────┘   └──────────┬───────────┘
-              │  LLM backend ────┼──► Claude API (cloud)  │ get/list/watch           │ create ZoneMaintenance,
-              │                  │──► llama-server (airgap)│ create ApprovalRequest,  │ annotate FleetZone
-              └──────────────────┘                        │ create draft FleetTask   │
+              │  LLM backend ────┼──► Claude API (cloud)  │ get/list/watch           │ create draft FleetTask,
+              │                  │──► llama-server (airgap)│ create ApprovalRequest   │ create ZoneMaintenance,
+              └──────────────────┘                        │ (no Swarmada write)      │ annotate FleetZone
                                                           ▼                          ▼
                      Kubernetes API (Swarmada swarmada.io/v1 + copilot fleetops.alexbahel.github.io)
 ```
 
 Three processes with three ServiceAccounts. The process that talks to the model
 (`foc-agent`) holds no Kubernetes write permission. The process that exposes tools to the model
-(`foc-mcp`) can read Swarmada, create `ApprovalRequest` objects, and create `FleetTask`s held as
-drafts (§3.1); it cannot record a decision or write any other Swarmada object. `foc-approvals`
-writes to Swarmada only for a request a named person approved. Activating a draft is done with
-the approver's own credentials, because Swarmada refuses it to every ServiceAccount (§3.3).
+(`foc-mcp`) can read Swarmada and create `ApprovalRequest` objects; it never writes to Swarmada
+and cannot record a decision. `foc-approvals` writes to Swarmada only for a request a named person
+approved: it creates drafts, zone maintenance windows and zone stops. Activating a draft is done
+with the approver's own credentials, because Swarmada refuses it to every ServiceAccount (§3.3).
 
 ### 3.1 MCP server (`foc-mcp`, Go)
 
@@ -109,12 +109,12 @@ outputs are typed Go structs; reads use the Swarmada `api/v1` Go types, imported
 | `get_events` | core/v1 `Event` for one object | reason, message, count, last timestamp |
 | `get_request` | copilot `ApprovalRequest` | request type, parameters, policy decision, approval state |
 
-**Policy-gated write tools.** `request_draft_task` creates a `FleetTask` held as a draft, which
-dispatches nothing. The other three create an `ApprovalRequest` and nothing else.
+**Policy-gated write tools.** Each one creates an `ApprovalRequest` and nothing else; none writes
+to a Swarmada object (decision D25).
 
 | Tool | Effect | Swarmada API fact |
 |---|---|---|
-| `request_draft_task` | No approval step. After the policy check, `foc-mcp` creates the `FleetTask` with `spec.draft: true` (decision D3). It sits at phase `Draft`; no child action is generated and nothing is dispatched. | `spec.draft` and phase `Draft` (`fleettask_types.go`). Creating a draft needs only `create`; the TaskTrigger controller creates drafts the same way (RFC-0003 `#design-details-the-tasktrigger-resource`). |
+| `request_draft_task` | Creates an `ApprovalRequest` of type `DraftTask`. On approval `foc-approvals` creates the `FleetTask` with `spec.draft: true` (decision D25). It sits at phase `Draft`; no child action is generated and nothing is dispatched. | `spec.draft` and phase `Draft` (`fleettask_types.go`). Creating a held draft needs only `create` (`internal/webhook/fleettask_webhook.go`); the TaskTrigger controller creates drafts the same way (RFC-0003 `#design-details-the-tasktrigger-resource`). |
 | `request_activate_task` | Creates an `ApprovalRequest` naming the draft. The approver activates it (sets `spec.draft: false`) with their own credentials through `foc approve`; the copilot's ServiceAccounts cannot. | Clearing `spec.draft` needs the `activate` verb and is refused to every ServiceAccount (`internal/webhook/fleettask_webhook.go`, `authorizeActivate`; RFC-0001 `#security-permission-matrix`). |
 | `request_zone_maintenance` | Creates an `ApprovalRequest`; on approval `foc-approvals` creates a `ZoneMaintenance` with `scope`, `mode`, `reason`, optional `scheduledStart`, `autoResumeAfterMinutes: 0`. | `spec.mode` is `Graceful` or `Immediate`; creation pauses robots in scope; `spec.desiredState: Completed` or deletion resumes them (`zonemaintenance_types.go`; RFC-0001 `#zonemaintenance`). |
 | `request_zone_stop` | Creates an `ApprovalRequest`; on approval `foc-approvals` sets annotation `swarmada.io/estop-triggered=<reason>` on one `FleetZone` with a merge patch that touches only that key. | Zone estop is triggered by that annotation, delivered by `patch` and gated by the `estop-trigger` verb; removing it is the clear (RFC-0001 `#safety-estop-scopes`; `cmd/swarmctl/estop.go`; `internal/webhook/fleetzone_webhook.go`). |
@@ -134,15 +134,15 @@ invariants (§3.2), and the RBAC in §3.6 does not grant them:
 ### 3.2 Policy engine (Go, YAML policy files)
 
 A pure function `Decide(request, principal, clusterSnapshot) → Decision`, where `Decision` is
-one of `allow` (reads and draft creation), `require_approval`, or `deny` with a stable reason
+one of `allow` (reads), `require_approval`, or `deny` with a stable reason
 code (for example `DENY_FORBIDDEN_OPERATION`, `DENY_NAMESPACE`, `DENY_FIELD`,
 `DENY_ZONE_NOT_FOUND`, `DENY_DRAFT_GATE_ABSENT`).
 
 Two layers:
 
 1. **Hard invariants compiled into the binary** and not overridable by YAML: the forbidden list
-   in §3.1; `request_draft_task` can only create a task with `spec.draft: true`; the other write
-   tools can only produce `require_approval` or `deny`; the requester can never be the approver.
+   in §3.1; a drafted task always has `spec.draft: true`; write tools can only produce
+   `require_approval` or `deny`; the requester can never be the approver.
 2. **YAML policy files** (`policies/*.yaml`, mounted from a ConfigMap) for site rules. Examples:
    allowed namespaces; allowed `FleetAction.spec.priority` values in a drafted task; allowed
    `ZoneMaintenance.spec.mode`; `autoResumeAfterMinutes` must be `0` (a non-zero value would
@@ -154,12 +154,12 @@ The engine runs twice for approval requests: in `foc-mcp` when the request is cr
 `foc-approvals` immediately before execution, against fresh cluster state. A request that would
 be denied at execution time is not executed.
 
-**Draft-gate check.** A draft is safe to create without approval only where Swarmada's
-`FleetTask` admission webhook is served, because only then is `activate` enforced. RFC-0003
-(`#resources-tasktrigger`) states that on an install serving no admission webhooks the draft flag
-is not an authorization boundary. Before creating a draft, `foc-mcp` reads the cluster's
-`ValidatingWebhookConfiguration`s; if none covers `UPDATE` of `fleettasks.swarmada.io`, the
-policy engine returns `DENY_DRAFT_GATE_ABSENT` and no draft is created.
+**Draft-gate check.** A draft holds work back only where Swarmada's `FleetTask` admission webhook
+is served, because only then is `activate` enforced. RFC-0003 (`#resources-tasktrigger`) states
+that on an install serving no admission webhooks the draft flag is not an authorization boundary.
+Before a `DraftTask` or `ActivateTask` request is made, and again before `foc-approvals` executes
+one, the cluster's `ValidatingWebhookConfiguration`s are read; if none with `failurePolicy: Fail`
+covers `UPDATE` of `fleettasks.swarmada.io`, the policy engine returns `DENY_DRAFT_GATE_ABSENT`.
 
 ### 3.3 Approval flow
 
@@ -178,13 +178,15 @@ the copilot's Helm chart.
    `approvaldecisions` only to the approver Role bound to people.
 3. `foc-approvals` validates the decision: the decider is not the requesting user (unless the
    policy file allows it on a dev cluster); a `SubjectAccessReview` shows the decider could
-   perform the underlying Swarmada operation themselves (`create` on `zonemaintenances`;
+   perform the underlying Swarmada operation themselves (`create` on `fleettasks`; `create` on
+   `zonemaintenances`;
    `patch` and `estop-trigger` on that `fleetzone`; `activate` on that `fleettask`); the request
    has not expired; the policy engine, re-run on fresh state, still returns `require_approval`.
    It then sets `status.state: Approved` and records `approvedBy` before any effect.
 4. Execution:
-   - zone maintenance and zone stop: `foc-approvals` performs the single write as its own
-     ServiceAccount and records `executedAt` and the object reference;
+   - draft, zone maintenance and zone stop: `foc-approvals` performs the single write as its own
+     ServiceAccount (a deterministic name, so a retry cannot write twice) and records
+     `executedAt` and the object reference;
    - activation: `foc approve` waits for `Approved`, then sets `spec.draft: false` with the
      approver's own credentials. Swarmada's webhook authorizes that write against the
      approver's `activate` verb. `foc-approvals` observes the task leave `Draft` and records it.
@@ -196,14 +198,13 @@ without OIDC, approval is by `foc approve` only.
 
 ### 3.4 Audit
 
-Every tool call, policy decision, draft creation, approval, rejection, execution, and failure is
+Every tool call, policy decision, request, approval, rejection, execution, and failure is
 written twice:
 
 - **JSONL** append-only file (one JSON object per line, with the SHA-256 of the previous line so
   `foc audit verify` can detect edits or gaps), on a PVC.
 - **Kubernetes Events** on the `ApprovalRequest` (reasons `RequestCreated`, `PolicyDenied`,
-  `Approved`, `Rejected`, `Executed`, `ExecutionFailed`) and on each draft `FleetTask` the
-  copilot creates (`DraftCreated`).
+  `Approved`, `Rejected`, `Executed`, `ExecutionFailed`, `DecisionRefused`, `Expired`).
 
 Audit lines and Events pass through the same redaction as traces (§3.8).
 
@@ -216,7 +217,7 @@ allow-list of MCP tools; the policy engine applies regardless of role.
 |---|---|---|
 | Router | Classifies the operator's request and hands it to one role | none |
 | Diagnose | Explains robot, task, zone state from API fields and Events | read tools |
-| Dispatch | Drafts a `FleetTask`, requests its activation | read tools, `request_draft_task`, `request_activate_task` |
+| Dispatch | Requests a draft `FleetTask` and its activation | read tools, `request_draft_task`, `request_activate_task` |
 | Zone ops | Maintenance windows and zone stops | read tools, `request_zone_maintenance`, `request_zone_stop` |
 | Reporter | Writes the final answer; every claim cites a resource and field | read tools, `get_request` |
 
@@ -235,8 +236,8 @@ allow-list of MCP tools; the policy engine applies regardless of role.
 | Subject | Rules |
 |---|---|
 | `foc-agent` (SA) | none on Swarmada; none on copilot resources |
-| `foc-mcp` (SA) | `get`,`list`,`watch` on `robots`, `fleettasks`, `fleetactions`, `fleetzones`, `zonemaintenances`, `discoveredrobots`, `fleetadapters`, `robotclasses`, `tasktriggers` (`swarmada.io`); `get`,`list` on `events`; `create` on `fleettasks`; `create`,`get`,`list`,`watch` on `approvalrequests`; `create` on `events`; cluster-scoped `get`,`list` on `validatingwebhookconfigurations` |
-| `foc-approvals` (SA) | reads as above; `get`,`list`,`watch` on `approvalrequests`, `approvaldecisions`; `get`,`update`,`patch` on `approvalrequests/status`; `create` on `zonemaintenances`; `patch` + custom verb `estop-trigger` on `fleetzones`; `create` on `events`, `subjectaccessreviews` |
+| `foc-mcp` (SA) | `get`,`list`,`watch` on `robots`, `fleettasks`, `fleetactions`, `fleetzones`, `zonemaintenances`, `discoveredrobots`, `fleetadapters`, `robotclasses`, `tasktriggers` (`swarmada.io`); `get`,`list`,`create` on `events`; `create`,`get`,`list`,`watch` on `approvalrequests`; cluster-scoped `get`,`list` on `validatingwebhookconfigurations`. No Swarmada write. |
+| `foc-approvals` (SA) | reads as above; `get`,`list`,`watch` on `approvalrequests`, `approvaldecisions`; `get`,`update`,`patch` on `approvalrequests/status`; `create` on `fleettasks` and `zonemaintenances`; `patch` + custom verb `estop-trigger` on `fleetzones`; `create` on `events`, `subjectaccessreviews`; cluster-scoped `get`,`list` on `validatingwebhookconfigurations` |
 | `foc-approver` (Role, bound to people) | `get`,`list`,`watch` on `approvalrequests`; `create` on `approvaldecisions` |
 
 No copilot ServiceAccount has `delete`, `update` on Swarmada kinds, `activate`, `cancel`,
@@ -248,9 +249,10 @@ ValidatingAdmissionPolicies (CEL, Kubernetes ≥ 1.30):
 
 | Policy | Applies to | Allows only |
 |---|---|---|
-| `foc-mcp-drafts-only` | `CREATE fleettasks` by `foc-mcp` | `spec.draft == true` and the label `fleetops.alexbahel.github.io/created-by: foc-mcp` |
-| `foc-approvals-zone-stop-only` | `UPDATE fleetzones` by `foc-approvals` | adding `swarmada.io/estop-triggered` where it was absent; `spec`, labels and every other annotation unchanged |
-| `foc-decisions` | `CREATE`/`UPDATE approvaldecisions` | create with `decidedBy == request.userInfo.username`, by a non-ServiceAccount; no update |
+| `fleetops-foc-approvals-drafts-only` | `CREATE`/`UPDATE`/`DELETE fleettasks` by `foc-approvals` | `CREATE` with `spec.draft == true` and the label `fleetops.alexbahel.github.io/created-by: foc-approvals` |
+| `fleetops-foc-approvals-zone-stop-only` | `fleetzones` writes by `foc-approvals` | `UPDATE` adding `swarmada.io/estop-triggered` where it was absent; `spec`, labels, finalizers and every other annotation unchanged |
+| `fleetops-decisions` | `CREATE`/`UPDATE approvaldecisions` | `CREATE` by a non-ServiceAccount with `decidedBy` and `decidedByGroups` equal to the authenticated user's; no update |
+| `fleetops-requests` | `CREATE approvalrequests` | `spec.requestedBy` equal to the creating identity, so a hand-made request cannot name someone else as requester |
 
 Removing the estop annotation is also refused by Swarmada's own `estop-clear` check
 (`internal/webhook/fleetzone_webhook.go`).
@@ -294,9 +296,9 @@ probe Job (`make verify-egress`), not assumed.
 
 - **Pass** (per scenario run), judged by the harness, all four required:
   1. correct tool calls: required read tools called; no forbidden tool or request type called;
-  2. approval requested when required: an `ApprovalRequest` (or, for drafting, a draft
-     `FleetTask`) of the expected type and parameters exists, and none exists when the scenario
-     expects none;
+  2. approval requested when required: an `ApprovalRequest` of the expected type and parameters
+     exists, and none exists (and no copilot-created `FleetTask` exists) when the scenario expects
+     none;
   3. correct refusal when out of policy: no write request created, and the answer states the
      refusal and the reason;
   4. explanation cites real API facts: each required fact (resource name + field + value
@@ -330,9 +332,12 @@ quickstart itself writes some status by hand (see "Honest notes — what's real 
 
 ### 4.3 CI regression gate
 
-- **Every push**: `go vet`, `golangci-lint`, unit tests, envtest tests, and fixture evals with the
-  `scripted` backend. This gate checks the harness, tools, policy engine, and approval path; it
-  does not measure model quality. All scripted scenarios must pass.
+- **Every push** (`make ci`): `go vet`, `golangci-lint`, unit tests, envtest tests, and fixture
+  evals with the `scripted` backend. This gate checks the harness, tools, policy engine, and
+  approval path; it does not measure model quality. All scripted scenarios must pass. Until the
+  Swarmada module is pinned to its public v0.4 release, the Go jobs in
+  `.github/workflows/ci.yml` are disabled (they cannot resolve the module) and `make ci` runs
+  locally instead (decision D26); the workflow's repository-hygiene job runs on every push.
 - **Model evals** (`make eval-cloud`, `make eval-airgap`) need an API key or the in-cluster
   model and are run on demand. Results are committed under `evals/results/<date>-<deployment>/`
   with raw traces. The regression threshold for model evals is set from the first measured
@@ -354,13 +359,16 @@ cmd/foc            CLI
 cmd/foc-mcp        MCP server
 cmd/foc-agent      agent orchestrator + web UI
 cmd/foc-approvals  approval controller + executor
+test/envtest       API-server tests: RBAC, admission policies, approval path
 api/v1alpha1       ApprovalRequest, ApprovalDecision (fleetops.alexbahel.github.io)
 internal/tools     typed read and request tools
 internal/policy    policy engine + YAML loader
 internal/approval  store, decision checks, executor
 internal/audit     JSONL writer, Events, verify
-internal/llm       claude, llamacpp, scripted backends
-internal/agents    Router, Diagnose, Dispatch, Zone ops, Reporter
+internal/llm       backend interface; scripted backend (claude, llamacpp later)
+internal/agent     tool-use loop over MCP
+internal/agents    Router, Diagnose, Dispatch, Zone ops, Reporter (later)
+internal/testenv   shared envtest environment for tests and evals
 internal/redact    secret redaction
 evals/             harness, scenarios, fixtures, results
 charts/            Helm chart
@@ -374,12 +382,12 @@ policies/          default policy files
 |---|---|---|
 | D1 | Target Swarmada v0.4 (RFC-0001 v0.4 + RFC-0003), release-candidate commit `d7fecd6` until the public release | v0.4 adds the draft/activate gate the dispatch flow uses. The candidate is identical to the release; the pin moves to the public commit when it is published. (Replaces: pin v0.3 `e3d0b0b`.) |
 | D2 | Resolve the Swarmada module through a gitignored `go.work` until release; then pin `go.mod` and delete `go.work` | `api/v1` imports only apimachinery and controller-runtime, so it builds as a dependency without copying or modifying it. Nothing committed refers to the pre-release source. CI cannot build until the pin (KNOWN-LIMITS). |
-| D3 | `request_draft_task` creates a real draft directly; `request_activate_task` is approved and performed by a person | Swarmada guarantees a draft generates no child action and that only a non-ServiceAccount person holding `activate` can clear it (`fleettask_webhook.go`); RFC-0003 uses the same pattern for TaskTrigger output. The person's activation is the approval, so a second approval before creating a draft adds a step without adding a gate. Guarded by the `foc-mcp-drafts-only` admission policy, the draft-gate check (D22), and no `update`/`delete` on `fleettasks`. (Replaces: draft held in the copilot and activation = create, written for v0.3, which had no draft phase.) |
-| D4 | Every other write tool creates an `ApprovalRequest` only | Keeps each remaining cluster write behind a named person; the model's process has no write credential. |
+| D3 | (Superseded by D25.) `request_draft_task` creates a real draft directly; `request_activate_task` is approved and performed by a person | Swarmada guarantees a draft generates no child action and that only a non-ServiceAccount person holding `activate` can clear it (`fleettask_webhook.go`); RFC-0003 uses the same pattern for TaskTrigger output. The person's activation is the approval, so a second approval before creating a draft adds a step without adding a gate. Guarded by the `foc-mcp-drafts-only` admission policy, the draft-gate check (D22), and no `update`/`delete` on `fleettasks`. (Replaces: draft held in the copilot and activation = create, written for v0.3, which had no draft phase.) |
+| D4 | Every write tool creates an `ApprovalRequest` only | Keeps every cluster write behind a named person; the model's process has no write credential. (Revised with D25: `request_draft_task` is no longer an exception.) |
 | D5 | Three processes, three ServiceAccounts | The model-facing process cannot write; the tool process cannot approve; only the executor writes. Enforced by RBAC, not only by code. |
 | D6 | A decision is an `ApprovalDecision` created with the approver's own credentials | The API server authenticates the approver by whatever method the cluster uses (client certificate, OIDC, exec plugin); an admission policy binds `decidedBy` to that identity and refuses ServiceAccounts; no copilot process handles a person's credential. (Replaces: decision in `approvalrequests/status` set after a `TokenReview` of a bearer token sent to `foc-approvals`, which does not work for certificate-based users such as `kind`'s default.) |
 | D7 | Authority checked with `SubjectAccessReview` against the underlying Swarmada verb | An approval cannot exceed what the approver could do directly. |
-| D8 | Executor acts as its own ServiceAccount for zone maintenance and zone stop, not by impersonation; activation uses the approver's own credentials | Impersonation would need the `impersonate` verb, which lets the executor act as any listed user, including admins. Swarmada refuses `activate` to every ServiceAccount, so activation has to be the person's own write. |
+| D8 | Executor acts as its own ServiceAccount for drafts, zone maintenance and zone stop, not by impersonation; activation uses the approver's own credentials | Impersonation would need the `impersonate` verb, which lets the executor act as any listed user, including admins. Swarmada refuses `activate` to every ServiceAccount, so activation has to be the person's own write. |
 | D9 | Zone stop via annotation patch + ValidatingAdmissionPolicy | At v0.4 the zone estop is still the `swarmada.io/estop-triggered` annotation, delivered by `patch` and gated by `estop-trigger` (RFC-0001 `#safety-estop-scopes`; `config/rbac/swarmada_fleet_manager_role.yaml` pairs the two). The admission policy narrows `patch` to adding that one annotation. Approved 2026-11-03. |
 | D10 | `autoResumeAfterMinutes` must be 0 | A non-zero value resumes robots without a person, i.e. a release (`zonemaintenance_types.go`). Approved 2026-11-03. |
 | D11 | Policy engine in Go with YAML rules, not OPA/Rego | Small rule set, no extra runtime in an air-gapped cluster, unit-testable as a pure function. Can move to Rego if rules grow. |
@@ -396,13 +404,16 @@ policies/          default policy files
 | D22 | Draft creation fails closed when Swarmada's `FleetTask` webhook is not served | RFC-0003 `#resources-tasktrigger`: without admission webhooks the draft flag is not an authorization boundary. |
 | D23 | Canonical remote `github.com/AlexBahel/fleet-ops-copilot` (private) | Owner's decision; a `swarmada` organisation repository is deferred until the project is public. |
 | D24 | Copyright line `Copyright 2026 Alex Bahel` in LICENSE and NOTICE (revised 2026-11-03) | No entity named for now. |
+| D25 | Held drafts: v0.4 lets a client create a `FleetTask` held as a draft, so `request_draft_task` creates an `ApprovalRequest` and `foc-approvals` creates the draft after a named approval; the tool server never writes to Swarmada | Decided by `FleetTaskSpec.draft` (`api/v1/fleettask_types.go`: while true, no child action is generated and the phase is `Draft`) and the `FleetTask` validating webhook (`internal/webhook/fleettask_webhook.go`: a task created with `spec.draft` needs only `create`; clearing it needs `activate` and is refused to every ServiceAccount). Owner's rule 2026-11-03: the tool server never writes to Swarmada. Enforced by RBAC (`foc-mcp` has no Swarmada write) and the `fleetops-foc-approvals-drafts-only` admission policy. Supersedes D3. |
+| D26 | Until the public Swarmada v0.4 pin, the CI workflow's Go jobs are disabled (`if: false`) and `make ci` runs locally | The Swarmada module cannot be resolved in CI before the release pin (D2). Disabling the jobs keeps the run from being red without hiding why; a repository-hygiene job still runs. Local `make ci` logs are kept outside the repository and marked pre-release. The Go jobs are enabled in the commit that pins `go.mod`. |
+| D27 | envtest and evals find Swarmada's CRDs and RBAC with `go list -m -f '{{.Dir}}' github.com/swarmada/swarmada`, overridable by `FOC_SWARMADA_DIR` | The same command resolves the go.mod pin after the release and the local workspace before it, so no local path is committed (`internal/testenv/testenv.go`). |
 
 ## 8. Resolved questions (2026-11-03)
 
 | # | Question | Answer |
 |---|---|---|
 | Q1 | Which Swarmada version? | v0.4, through the release candidate until the public release (D1, D2) |
-| Q2 | Draft and activate | Re-checked against v0.4: real drafts (D3) |
+| Q2 | Draft and activate | Re-checked against v0.4: real drafts, created by the executor after a named approval (D25) |
 | Q3 | Zone stop with `patch` + admission policy | Approved; mechanism unchanged at v0.4 (D9) |
 | Q4 | Copilot API group | `fleetops.alexbahel.github.io` (D21) |
 | Q5 | Canonical remote | `github.com/AlexBahel/fleet-ops-copilot` (D23) |
