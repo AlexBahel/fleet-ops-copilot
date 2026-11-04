@@ -1,0 +1,23 @@
+# Default Fleet Ops Copilot policy. Site rules only: the operations the copilot
+# never performs (clear a stop, release a robot, delete, approve, edit existing
+# work) are refused in code and cannot be enabled here. See docs/DESIGN.md §3.2.
+apiVersion: fleetops.alexbahel.github.io/v1alpha1
+kind: CopilotPolicy
+namespaces:
+  - warehouse-a
+draftTask:
+  # Swarmada FleetAction spec.type values the copilot may draft. External
+  # (dispatch to a ComputeEndpoint) is left out.
+  allowedActionTypes: [Navigate, PickUp, DropOff, Patrol, Charge, Clean]
+  # Critical can preempt other work at a shared resource; left to people.
+  allowedPriorities: [High, Normal, Low]
+  maxActions: 10
+  maxDraftsPerSession: 5
+zoneMaintenance:
+  allowedModes: [Graceful, Immediate]
+  allowNamespaceScope: false
+zoneStop:
+  enabled: true
+approval:
+  ttl: 30m
+  allowSelfApproval: false
