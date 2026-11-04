@@ -60,10 +60,27 @@ func TestRBACMatrix(t *testing.T) {
 	}
 	sw, fo, core := "swarmada.io", "fleetops.alexbahel.github.io", ""
 	rows := []row{
-		// foc-agent holds nothing.
-		{agentUser, sw, "robots", "", "list", false},
+		// foc-agent reads ApprovalRequests for the web UI and nothing else.
+		{agentUser, fo, "approvalrequests", "", "get", true},
+		{agentUser, fo, "approvalrequests", "", "list", true},
+		{agentUser, fo, "approvalrequests", "", "watch", false},
 		{agentUser, fo, "approvalrequests", "", "create", false},
+		{agentUser, fo, "approvalrequests", "", "update", false},
+		{agentUser, fo, "approvalrequests", "", "patch", false},
+		{agentUser, fo, "approvalrequests", "", "delete", false},
+		{agentUser, fo, "approvalrequests", "status", "update", false},
+		{agentUser, fo, "approvalrequests", "status", "patch", false},
+		{agentUser, fo, "approvaldecisions", "", "create", false},
+		{agentUser, fo, "approvaldecisions", "", "list", false},
+		{agentUser, sw, "robots", "", "list", false},
+		{agentUser, sw, "fleetzones", "", "get", false},
 		{agentUser, sw, "fleettasks", "", "create", false},
+		{agentUser, sw, "fleettasks", "", "activate", false},
+		{agentUser, sw, "fleetzones", "", "patch", false},
+		{agentUser, sw, "fleetzones", "", "estop-trigger", false},
+		{agentUser, sw, "zonemaintenances", "", "create", false},
+		{agentUser, core, "events", "", "list", false},
+		{agentUser, core, "secrets", "", "get", false},
 
 		// foc-mcp: reads and request create; no Swarmada write.
 		{mcpUser, sw, "robots", "", "list", true},
@@ -122,6 +139,13 @@ func TestRBACMatrix(t *testing.T) {
 		{approvUser, sw, "tasktriggers", "", "trigger-response-approve", false},
 		{approvUser, fo, "approvaldecisions", "", "create", false},
 		{approvUser, fo, "approvalrequests", "", "create", false},
+	}
+	// foc-agent's read is granted per Swarmada namespace only: not in its own
+	// namespace and not cluster-wide.
+	for _, ns := range []string{focNS, ""} {
+		if sar(t, agentUser, saGroups(), ns, fo, "approvalrequests", "", "list") {
+			t.Errorf("foc-agent may list approvalrequests in namespace %q", ns)
+		}
 	}
 	for _, r := range rows {
 		name := fmt.Sprintf("%s %s %s/%s %s", strings.TrimPrefix(r.user, "system:serviceaccount:foc-system:"), r.verb, r.resource, r.sub, r.group)

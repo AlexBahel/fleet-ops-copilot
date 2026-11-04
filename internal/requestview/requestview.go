@@ -157,14 +157,14 @@ func ChangeOf(r *focv1.ApprovalRequest) Change {
 			break
 		}
 		c := create(approval.DraftTaskObject(r, approver))
-		c.Notes = []string{"spec.draft is true: Swarmada creates no FleetAction for this task, and nothing is dispatched until a person activates it (a separate ActivateTask request)."}
+		c.Notes = append([]string{"spec.draft is true: Swarmada creates no FleetAction for this task, and nothing is dispatched until a person activates it (a separate ActivateTask request)."}, c.Notes...)
 		return c
 	case focv1.RequestZoneMaintenance:
 		if r.Spec.ZoneMaintenance == nil {
 			break
 		}
 		c := create(approval.MaintenanceObject(r, approver))
-		c.Notes = []string{"autoResumeAfterMinutes is 0 (left out of the body, which is how 0 is sent): robots stay paused until a person ends the window. The copilot never ends it."}
+		c.Notes = append([]string{"autoResumeAfterMinutes is 0 (left out of the body, which is how 0 is sent): robots stay paused until a person ends the window. The copilot never ends it."}, c.Notes...)
 		return c
 	case focv1.RequestZoneStop:
 		if r.Spec.ZoneStop == nil {
@@ -223,6 +223,7 @@ func create(obj client.Object) Change {
 	for _, l := range strings.Split(strings.TrimRight(body, "\n"), "\n") {
 		c.Diff = append(c.Diff, Line{Op: "+", Text: l})
 	}
+	c.Notes = append(c.Notes, "The API server fills in the "+gvk.Kind+" CRD's defaults for fields this body leaves out; they are not shown.")
 	return c
 }
 

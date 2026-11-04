@@ -1,5 +1,5 @@
 {{- include "foc.validate" . }}
-# Two RoleBindings in every Swarmada namespace in swarmadaNamespaces, and the
+# Three RoleBindings in every Swarmada namespace in swarmadaNamespaces, and the
 # two cluster-scoped bindings for the webhook-configuration reads and
 # SubjectAccessReviews.
 {{- range .Values.swarmadaNamespaces }}
@@ -25,6 +25,17 @@ metadata:
 roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: "fleetops:foc-approvals"}
 subjects:
   - {kind: ServiceAccount, name: foc-approvals, namespace: {{ $.Release.Namespace }}}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: fleetops-foc-agent
+  namespace: {{ . }}
+  labels:
+    {{- include "foc.chartLabels" $ | nindent 4 }}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: "fleetops:foc-agent"}
+subjects:
+  - {kind: ServiceAccount, name: foc-agent, namespace: {{ $.Release.Namespace }}}
 {{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
