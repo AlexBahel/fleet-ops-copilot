@@ -218,6 +218,9 @@ func Observe(ctx context.Context, admin client.Client, s Scenario, answer string
 	for _, m := range refPattern.FindAllString(answer, -1) {
 		refs[m] = true
 	}
+	for _, a := range s.Expect.Absent {
+		refs[a.Ref] = true
+	}
 	objs := map[string]map[string]any{}
 	for ref := range refs {
 		kind, name, _ := strings.Cut(ref, "/")

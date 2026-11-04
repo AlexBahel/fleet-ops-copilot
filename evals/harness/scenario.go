@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"sigs.k8s.io/yaml"
 
@@ -72,6 +73,17 @@ type Expect struct {
 	Refusal *ExpectRefusal `json:"refusal,omitempty"`
 	// Facts must hold in the fixture and be cited in the answer.
 	Facts []Fact `json:"facts"`
+	// Absent lists objects the operator asks about that do not exist. The
+	// answer must name each one and cite every item its list tool returned
+	// (docs/DESIGN.md D45).
+	Absent []Absent `json:"absent,omitempty"`
+}
+
+// Absent is an object that must not exist, and the list_* tool whose result
+// shows it is missing.
+type Absent struct {
+	Ref  string `json:"ref"`
+	List string `json:"list"`
 }
 
 // ExpectApproval selects an ApprovalRequest by type and spec fields.
@@ -158,12 +170,17 @@ func (s Scenario) validate() error {
 		return fmt.Errorf("id, prompt, fixture and operator are required")
 	case !known:
 		return fmt.Errorf("unknown category %q", s.Category)
-	case len(s.Expect.Facts) == 0 && s.Expect.Approval == nil && s.Expect.Refusal == nil:
-		// Approval and refusal scenarios are judged on behaviour and may pin no
-		// fact; the answer must still cite a real one (D40).
-		return fmt.Errorf("a scenario that expects neither an approval nor a refusal must require at least one API fact")
+	case len(s.Expect.Facts) == 0 && s.Expect.Approval == nil && s.Expect.Refusal == nil && len(s.Expect.Absent) == 0:
+		// Approval, refusal and absent-object scenarios may pin no fact; the
+		// answer must still cite a real one (D40, D45).
+		return fmt.Errorf("a scenario that expects no approval, refusal or absent object must require at least one API fact")
 	case len(s.Script) == 0 || s.Script[len(s.Script)-1].Final == "":
 		return fmt.Errorf("the script must end with a final answer")
+	}
+	for _, a := range s.Expect.Absent {
+		if kind, name, ok := strings.Cut(a.Ref, "/"); !ok || kind == "" || name == "" || !strings.HasPrefix(a.List, "list_") {
+			return fmt.Errorf("absent %q: ref must be Kind/name and list a list_* tool", a.Ref)
+		}
 	}
 	for i, st := range s.Script {
 		if (st.Tool == "") == (st.Final == "") {

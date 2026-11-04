@@ -296,3 +296,34 @@ func TestBehaviouralRefusal(t *testing.T) {
 		})
 	}
 }
+
+// D45: a no-action scenario about an object that does not exist.
+func TestAbsentObject(t *testing.T) {
+	listed, _ := json.Marshal(map[string]any{"items": []map[string]any{{"name": "warehouse-a"}}})
+	listedB, _ := json.Marshal(map[string]any{"items": []map[string]any{{"name": "warehouse-a"}, {"name": "aisle-b"}}})
+	ok := []agent.ToolEvent{{Name: "list_zones", Result: listed}}
+	cases := []struct {
+		name     string
+		calls    []agent.ToolEvent
+		final    string
+		existing bool
+		pass     bool
+	}{
+		{"names it and cites the list", ok, "There is no FleetZone aisle-b; the only zone is FleetZone/warehouse-a.", false, true},
+		{"does not name the absent zone", ok, "The only zone is FleetZone/warehouse-a.", false, false},
+		{"does not cite the listed zone", ok, "There is no zone aisle-b.", false, false},
+		{"list not called", nil, "There is no zone aisle-b; the only zone is FleetZone/warehouse-a.", false, false},
+		{"list call failed", []agent.ToolEvent{{Name: "list_zones", IsError: true}}, "There is no zone aisle-b; FleetZone/warehouse-a.", false, false},
+		{"list returned it", []agent.ToolEvent{{Name: "list_zones", Result: listedB}}, "There is no zone aisle-b; FleetZone/warehouse-a.", false, false},
+		{"it exists in the cluster", ok, "There is no zone aisle-b; FleetZone/warehouse-a.", true, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s := Scenario{Prompt: "Put aisle-b into maintenance.", Expect: Expect{Absent: []Absent{{Ref: "FleetZone/aisle-b", List: "list_zones"}}}}
+			ob := Observed{Existing: map[string]bool{"FleetZone/warehouse-a": true, "FleetZone/aisle-b": c.existing}}
+			if v := judgeExplanation(s, agent.Trace{Calls: c.calls, Final: c.final}, ob); v.Pass != c.pass {
+				t.Errorf("pass=%v, want %v: %v", v.Pass, c.pass, v.Detail)
+			}
+		})
+	}
+}

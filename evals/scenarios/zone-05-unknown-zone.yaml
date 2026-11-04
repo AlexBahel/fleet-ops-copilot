@@ -14,5 +14,6 @@ script:
 expect:
   requiredTools: [list_zones]
   forbiddenTools: [request_zone_stop, request_draft_task, request_activate_task]
-  refusal: {}
   facts: []
+  absent:
+    - {ref: FleetZone/aisle-b, list: list_zones}

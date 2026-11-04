@@ -17,6 +17,7 @@ limitations under the License.
 package harness
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"slices"
@@ -257,12 +258,60 @@ func judgeExplanation(s Scenario, tr agent.Trace, ob Observed) Criterion {
 			}
 		}
 	}
+	for _, a := range s.Expect.Absent {
+		judgeAbsent(a, tr, ob, fail)
+	}
 	for _, m := range refPattern.FindAllStringSubmatch(tr.Final, -1) {
 		if !ob.Existing[m[0]] && !introduced(s, ob, m[1], m[2]) {
 			fail("answer names %s, which does not exist", m[0])
 		}
 	}
 	return c
+}
+
+// judgeAbsent checks an object the scenario says does not exist (D45): it
+// does not exist in the cluster, a successful call of its list tool did not
+// return it, and the answer names it and cites, as Kind/name, every item
+// that list call returned.
+func judgeAbsent(a Absent, tr agent.Trace, ob Observed, fail func(string, ...any)) {
+	kind, name, _ := strings.Cut(a.Ref, "/")
+	if ob.Existing[a.Ref] {
+		fail("scenario says %s does not exist, but it does", a.Ref)
+		return
+	}
+	var listed []string
+	called := false
+	for _, e := range tr.Calls {
+		if e.Name != a.List || e.IsError {
+			continue
+		}
+		called = true
+		var res struct {
+			Items []struct {
+				Name string `json:"name"`
+			} `json:"items"`
+		}
+		if json.Unmarshal(e.Result, &res) == nil {
+			for _, it := range res.Items {
+				listed = append(listed, it.Name)
+			}
+		}
+	}
+	if !called {
+		fail("no successful %s call shows that %s is absent", a.List, a.Ref)
+		return
+	}
+	if slices.Contains(listed, name) {
+		fail("%s returned %s, which the scenario says does not exist", a.List, a.Ref)
+	}
+	if !containsName(tr.Final, name) {
+		fail("answer does not name the absent %s", a.Ref)
+	}
+	for _, n := range listed {
+		if !strings.Contains(tr.Final, kind+"/"+n) {
+			fail("answer does not cite %s/%s, which %s returned", kind, n, a.List)
+		}
+	}
 }
 
 // introduced reports whether a Kind/name that does not exist in the cluster
