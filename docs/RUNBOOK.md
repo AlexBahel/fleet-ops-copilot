@@ -83,6 +83,26 @@ kubectl --context $CTX -n foc-system port-forward svc/foc-agent 8090:8090
 # then open http://127.0.0.1:8090/
 ```
 
+### Who is recorded as the requester (R39)
+
+foc-mcp records as `requestedFor` the username of the caller's own Kubernetes bearer token, which
+it verifies with a TokenReview (its ServiceAccount holds `create` on `tokenreviews`). A name
+the client asserts is never trusted. Without a token, or when the API server does not accept it,
+the requester is `unverified:<name>` and the request can be rejected but never approved.
+
+To file a request that can be approved, chat from the command line with your own kubeconfig, through
+the same port-forward. `foc chat` sends your user's bearer token (static token, token file, or an
+exec plugin that returns one) to foc-agent, which forwards it to foc-mcp:
+
+```bash
+foc chat --context $CTX "put aisle B into maintenance after this wave"
+```
+
+A kubeconfig user that authenticates with a client certificate (kind's default admin) has no bearer
+token, so its requests are unverified; `foc chat` says so. `foc chat` sends the token only over https or
+to a loopback address. foc-mcp never stores, logs or traces the token; it keeps a SHA-256 of it for 30
+seconds as a cache key. Between foc-agent and foc-mcp the token travels in the cluster over plain HTTP.
+
 ### Grant approvers
 
 The chart binds `fleetops:approver` to nobody. Bind it to each person who decides requests, in

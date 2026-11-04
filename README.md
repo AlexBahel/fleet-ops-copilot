@@ -17,11 +17,12 @@ what is not built, not measured, or not enforced is listed in
 | `cmd/foc-mcp` | MCP server: read tools and policy-gated request tools |
 | `cmd/foc-approvals` | Approval controller and executor |
 | `cmd/foc-agent` | Agent process: model loop over MCP, web chat and approval-requests panel (shows `foc approve`/`foc reject` commands; cannot approve), OpenTelemetry traces |
-| `cmd/foc` | CLI: `requests`, `approve`, `reject`, `audit verify` |
+| `cmd/foc` | CLI: `chat` (sends your bearer token so foc-mcp can verify you as the requester), `requests`, `approve`, `reject`, `audit verify` |
 | `api/v1alpha1` | `ApprovalRequest`, `ApprovalDecision` (`fleetops.alexbahel.github.io`) |
 | `internal/policy` | Policy engine; default policy in `policies/default.yaml` |
 | `internal/llm` | Model backends: `claude` (Claude API) and `scripted` |
 | `internal/webui`, `internal/requestview` | foc-agent's web UI; an ApprovalRequest shown with the exact write it leads to |
+| `internal/authn` | Requester authentication: TokenReview of the caller's bearer token; `unverified:<name>` otherwise |
 | `internal/tracing` | OpenTelemetry setup (OTLP/gRPC), redacting exporter, trace context over MCP `_meta` |
 | `config/` | CRDs, RBAC, ValidatingAdmissionPolicies, Deployments (`config/deploy`) |
 | `charts/fleet-ops-copilot` | Helm chart: the objects in `config/` plus an optional NetworkPolicy; `make chart-check` |

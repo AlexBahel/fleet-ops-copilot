@@ -28,7 +28,7 @@ otel: "OTLP collector\n(optional: tracing.otlpEndpoint)" {class: external}
 cluster: Kubernetes cluster {
   foc: "namespace foc-system (Helm chart fleet-ops-copilot)" {
     agent: "foc-agent (model loop, web UI)\nSA foc-agent: get/list ApprovalRequest only\nweb chat + requests panel: shows foc approve/reject,\ncannot decide; ClusterIP, no Ingress, no login\nbackend: claude, llamacpp or scripted\n(roles Router ... Reporter: not built)" {class: built}
-    mcp: "foc-mcp (MCP server)\nSA foc-mcp: get/list/watch Swarmada,\ncreate ApprovalRequest; no Swarmada write\npolicy engine, audit JSONL" {class: built}
+    mcp: "foc-mcp (MCP server)\nSA foc-mcp: get/list/watch Swarmada,\ncreate ApprovalRequest, create TokenReview;\nno Swarmada write; requester = TokenReview of\nthe caller's bearer token (R39)\npolicy engine, audit JSONL" {class: built}
     approvals: "foc-approvals (controller, executor)\nSA foc-approvals: create draft FleetTask,\ncreate ZoneMaintenance, patch + estop-trigger FleetZone\nSubjectAccessReview, policy re-check, audit JSONL" {class: built}
     policy: "ConfigMap fleetops-policy\n(policies/default.yaml)" {class: built}
     netpol: "NetworkPolicy (networkPolicy.enabled, off by default)\ndefault deny; DNS; API server ipBlock (incl. foc-agent);\nfoc-agent -> foc-mcp; foc-agent -> Claude API ipBlock;\nOTLP egress if given; no ingress to the web UI" {class: planned}
@@ -62,7 +62,7 @@ cluster: Kubernetes cluster {
   apiserver -> swarmada.webhooks: "admission calls\nfor swarmada.io writes"
 }
 
-people.operator -> cluster.foc.agent: "web chat (kubectl port-forward);\nrequester recorded as unverified:<name>,\nnever approvable (R38)"
+people.operator -> cluster.foc.agent: "foc chat with own token: verified requester;\nweb chat (no token): unverified:<name>,\nnever approvable (R38, R39)"
 cluster.foc.agent -> claude_api: "Messages API (cloud profile)\nkey from an existing Secret"
 cluster.foc.agent -> otel: "traces (OTLP/gRPC)" {style.stroke-dash: 5}
 cluster.foc.mcp -> otel: "traces: tool calls,\npolicy decisions" {style.stroke-dash: 5}

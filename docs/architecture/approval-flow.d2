@@ -2,15 +2,15 @@
 # (docs/DESIGN.md §3.3, D25, D28). Source for approval-flow.svg; render with
 # `d2 approval-flow.d2 approval-flow.svg` (see README.md in this directory).
 # Zone maintenance and zone stop follow steps 1-9 with a different write in
-# step 8. A request filed from foc-agent's web UI records the typed name as
-# requestedFor unverified:<name> and is refused at step 7 (R38): it can be
-# rejected, never approved, so steps 8-16 need a requester not marked
-# unverified (another MCP client).
+# step 8. foc-mcp records as requestedFor the username of the caller's bearer
+# token, verified with a TokenReview (R39); without a verified token it records
+# unverified:<name>, which is refused at step 7 (R38). The web UI sends no token,
+# so its requests stop there; foc chat sends the person's token.
 
 shape: sequence_diagram
 
 operator: Operator {shape: person}
-agent: "foc-agent or another MCP client\n(SA foc-agent: no write)"
+agent: "foc chat -> foc-agent\n(SA foc-agent: no write;\nforwards the person's token)"
 mcp: "foc-mcp\n(SA foc-mcp)"
 api: "Kubernetes API server\n+ copilot admission policies"
 webhooks: "Swarmada webhooks\n(vfleettask)"
@@ -19,15 +19,16 @@ approver: "Approver\n(named person)" {shape: person}
 
 request: "Request" {
   operator -> agent: "1. 'draft a patrol of aisle B'"
-  agent -> mcp: "2. tool call request_draft_task"
+  agent -> mcp: "2. tool call request_draft_task\n(Authorization: Bearer <person's token>)"
+  mcp -> api: "2a. TokenReview: requester = authenticated username"
   mcp -> mcp: "3. policy engine: require_approval or deny;\ndraft gate: a fail-closed webhook covers UPDATE fleettasks?"
-  mcp -> api: "4. create ApprovalRequest (fleetops-requests: requestedBy = caller)"
+  mcp -> api: "4. create ApprovalRequest: requestedFor = reviewed username\n(fleetops-requests: requestedBy = caller)"
   approvals -> api: "5. status.state: Pending"
 }
 
 decide: "Decision (person)" {
   approver -> api: "6. foc approve <id>: create ApprovalDecision with own credentials\n(fleetops-decisions: not a ServiceAccount, decidedBy = caller)"
-  approvals -> api: "7. checks: requester not unverified (R38: a web UI request is refused here);\ndecider != requester; SubjectAccessReview (decider may create fleettasks);\nnot expired; policy re-run on fresh state; status Approved, approvedBy"
+  approvals -> api: "7. checks: requester not unverified (R38: a request without a verified token, e.g. from the web UI, is refused here);\ndecider != requester; SubjectAccessReview (decider may create fleettasks);\nnot expired; policy re-run on fresh state; status Approved, approvedBy"
 }
 
 execute: "Execution (draft)" {
