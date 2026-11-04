@@ -123,3 +123,29 @@ spec:
         requiredCapabilities: [navigation]
 status:
   phase: Draft
+---
+# FleetAdapter added 2026-11-04 (docs/DESIGN.md D47): the robots above name
+# sim-fleet-adapter in spec.adapter. Spec copied from live/battery-edge.yaml;
+# status written for this fixture: phase Connected, because this snapshot is
+# taken while the scenario runs (the live captures show Disconnected only
+# because the quickstart stops its adapter on exit, D31); conformance Passed
+# as captured.
+apiVersion: swarmada.io/v1
+kind: FleetAdapter
+metadata:
+  name: sim-fleet-adapter
+spec:
+  conformanceReport:
+    configMapRef: sim-adapter-conformance
+    digest: sha256:9ba950153e6e1a67f490e78aaf43bd4cef2e0f04d7b6237ab15eca98a00fb6f4
+    suiteVersion: C1-C15
+  endpoint: 127.0.0.1:19443
+  heartbeatIntervalSeconds: 600
+  protocolVersion: fleet_adapter.v1
+  servesRobotClasses:
+  - simbot-v1
+  simulated: false
+  vendor: simulation
+status:
+  phase: Connected
+  conformance: Passed

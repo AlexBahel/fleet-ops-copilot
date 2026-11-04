@@ -26,6 +26,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -48,52 +49,70 @@ func gvkFor(kind string) (schema.GroupVersionKind, bool) {
 	return schema.GroupVersionKind{}, false
 }
 
-// resetKinds are cleared before every run.
-var resetKinds = []client.Object{
-	&focv1.ApprovalDecision{}, &focv1.ApprovalRequest{}, &swarmv1.ZoneMaintenance{}, &swarmv1.FleetTask{},
-	&swarmv1.FleetAction{}, &swarmv1.Robot{}, &swarmv1.FleetZone{}, &corev1.Event{},
-	&swarmv1.FleetAdapter{}, &swarmv1.DiscoveredRobot{}, &swarmv1.TaskTrigger{},
+// resetKinds are cleared before every run: every kind a fixture can hold or a
+// run can create in the namespace. Each entry pairs a kind with its list type.
+var resetKinds = []struct {
+	obj  client.Object
+	list client.ObjectList
+}{
+	{&focv1.ApprovalDecision{}, &focv1.ApprovalDecisionList{}},
+	{&focv1.ApprovalRequest{}, &focv1.ApprovalRequestList{}},
+	{&swarmv1.ZoneMaintenance{}, &swarmv1.ZoneMaintenanceList{}},
+	{&swarmv1.FleetTask{}, &swarmv1.FleetTaskList{}},
+	{&swarmv1.FleetAction{}, &swarmv1.FleetActionList{}},
+	{&swarmv1.Robot{}, &swarmv1.RobotList{}},
+	{&swarmv1.FleetZone{}, &swarmv1.FleetZoneList{}},
+	{&corev1.Event{}, &corev1.EventList{}},
+	{&swarmv1.FleetAdapter{}, &swarmv1.FleetAdapterList{}},
+	{&swarmv1.DiscoveredRobot{}, &swarmv1.DiscoveredRobotList{}},
+	{&swarmv1.TaskTrigger{}, &swarmv1.TaskTriggerList{}},
 }
 
-// Reset deletes every object a run could read or create in the namespace.
-// FleetZone finalizers (Swarmada's estop-in-force) are removed first so a
-// stopped zone can be deleted.
+// Reset deletes every object of resetKinds in the namespace and waits until
+// none is left (docs/DESIGN.md D47). Finalizers are removed first, from every
+// kind (Swarmada's estop-in-force on a stopped FleetZone, or any other), so
+// no object stays behind in deletion and collides with the next fixture.
 func Reset(ctx context.Context, admin client.Client) error {
-	var zones swarmv1.FleetZoneList
-	if err := admin.List(ctx, &zones, client.InNamespace(testenv.SwarmNS)); err != nil {
-		return err
-	}
-	for i := range zones.Items {
-		z := &zones.Items[i]
-		if len(z.Finalizers) > 0 {
-			z.Finalizers = nil
-			if err := admin.Update(ctx, z); err != nil && !apierrors.IsNotFound(err) {
-				return err
+	for _, k := range resetKinds {
+		if err := admin.List(ctx, k.list, client.InNamespace(testenv.SwarmNS)); err != nil {
+			return fmt.Errorf("listing %T: %w", k.list, err)
+		}
+		items, err := meta.ExtractList(k.list)
+		if err != nil {
+			return err
+		}
+		for _, it := range items {
+			o, ok := it.(client.Object)
+			if !ok || len(o.GetFinalizers()) == 0 {
+				continue
+			}
+			o.SetFinalizers(nil)
+			if err := admin.Update(ctx, o); err != nil && !apierrors.IsNotFound(err) {
+				return fmt.Errorf("removing finalizers from %T %s: %w", o, o.GetName(), err)
 			}
 		}
 	}
 	for _, k := range resetKinds {
-		if err := admin.DeleteAllOf(ctx, k, client.InNamespace(testenv.SwarmNS)); err != nil && !apierrors.IsNotFound(err) {
-			return fmt.Errorf("clearing %T: %w", k, err)
+		if err := admin.DeleteAllOf(ctx, k.obj, client.InNamespace(testenv.SwarmNS)); err != nil && !apierrors.IsNotFound(err) {
+			return fmt.Errorf("clearing %T: %w", k.obj, err)
 		}
 	}
 	deadline := time.Now().Add(20 * time.Second)
 	for {
-		left := 0
-		for _, l := range []client.ObjectList{&focv1.ApprovalRequestList{}, &swarmv1.FleetTaskList{}, &swarmv1.FleetZoneList{}, &swarmv1.RobotList{}, &swarmv1.ZoneMaintenanceList{}, &swarmv1.FleetActionList{}, &swarmv1.FleetAdapterList{}} {
-			if err := admin.List(ctx, l, client.InNamespace(testenv.SwarmNS)); err != nil {
+		var left []string
+		for _, k := range resetKinds {
+			if err := admin.List(ctx, k.list, client.InNamespace(testenv.SwarmNS)); err != nil {
 				return err
 			}
-			b, _ := json.Marshal(l)
-			var m struct{ Items []any }
-			_ = json.Unmarshal(b, &m)
-			left += len(m.Items)
+			if n := meta.LenList(k.list); n > 0 {
+				left = append(left, fmt.Sprintf("%d %T", n, k.obj))
+			}
 		}
-		if left == 0 {
+		if len(left) == 0 {
 			return nil
 		}
 		if time.Now().After(deadline) {
-			return fmt.Errorf("%d objects left after reset", left)
+			return fmt.Errorf("objects left after reset: %s", strings.Join(left, ", "))
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
