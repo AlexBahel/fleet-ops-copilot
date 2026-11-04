@@ -117,7 +117,7 @@ to a Swarmada object (decision D25).
 | `request_draft_task` | Creates an `ApprovalRequest` of type `DraftTask`. On approval `foc-approvals` creates the `FleetTask` with `spec.draft: true` (decision D25). It sits at phase `Draft`; no child action is generated and nothing is dispatched. | `spec.draft` and phase `Draft` (`fleettask_types.go`). Creating a held draft needs only `create` (`internal/webhook/fleettask_webhook.go`); the TaskTrigger controller creates drafts the same way (RFC-0003 `#design-details-the-tasktrigger-resource`). |
 | `request_activate_task` | Creates an `ApprovalRequest` naming the draft. After a named approval the copilot records it and gives the approver the exact command in `status.instruction`; the approver runs it with their own credentials, and `foc-approvals` watches for the task to leave `Draft` and writes an audit record. The copilot never activates (D28). | Clearing `spec.draft` needs the `activate` verb and is refused to every ServiceAccount (`authorizeActivate`, `internal/webhook/fleettask_webhook.go`; RFC-0001 `#security-permission-matrix`). swarmctl v0.4 has no activate subcommand, so the command is `kubectl patch fleettask <name> -n <ns> --type merge -p '{"spec":{"draft":false}}'`. |
 | `request_zone_maintenance` | Creates an `ApprovalRequest`; on approval `foc-approvals` creates a `ZoneMaintenance` with `scope`, `mode`, `reason`, optional `scheduledStart`, `autoResumeAfterMinutes: 0`. | `spec.mode` is `Graceful` or `Immediate`; creation pauses robots in scope; `spec.desiredState: Completed` or deletion resumes them (`zonemaintenance_types.go`; RFC-0001 `#zonemaintenance`). |
-| `request_zone_stop` | Creates an `ApprovalRequest`; on approval `foc-approvals` sets annotation `swarmada.io/estop-triggered=<reason>` on one `FleetZone` with a merge patch that touches only that key. Swarmada's mutating webhook then adds `swarmada.io/estop-actor` (the executor's ServiceAccount) and the `swarmada.io/estop-in-force` finalizer. | Zone estop is triggered by that annotation, delivered by `patch` and gated by the `estop-trigger` verb, which Swarmada checks for the requesting user with no ServiceAccount exception (`authorizeEstopChange`/`authorizeEstopVerb`, `internal/webhook/fleetzone_webhook.go`); removing it is the clear (RFC-0001 `#safety-estop-scopes`). Actor and finalizer: `stampEstopActor`, `internal/webhook/estop_actor_defaulter.go`. |
+| `request_zone_stop` | Creates an `ApprovalRequest`; on approval `foc-approvals` sets annotation `swarmada.io/estop-triggered=<reason>` on one `FleetZone` with a merge patch that touches only that key. Swarmada's mutating webhook then adds `swarmada.io/estop-actor` (the executor's ServiceAccount) and the `swarmada.io/estop-in-force` finalizer. | Zone estop is triggered by that annotation, delivered by `patch` and gated by the `estop-trigger` verb, which Swarmada checks for the requesting user with no ServiceAccount exception (`authorizeEstopChange`/`authorizeEstopVerb`, `internal/webhook/fleetzone_webhook.go`); removing it is the clear (RFC-0001 `#safety-estop-scopes`). Actor and finalizer: `stampEstopActor`, `internal/webhook/estop_actor_defaulter.go`. The actor annotation is transient: the zone-estop controller seals it into Swarmada's safety audit log (`ESTOP_TRIGGERED`) and removes it in the patch that sets `swarmada.io/estop-processed` (`consumeEstopActor`, `internal/controller/estop_actor.go`; D33). |
 
 **Operations with no tool.** No tool exists for these, the policy engine refuses them as hard
 invariants (§3.2), and the RBAC in §3.6 does not grant them:
@@ -323,8 +323,8 @@ probe Job (`make verify-egress`), not assumed.
 
 ### 4.2 Scenarios
 
-25 scenarios planned, each run **N = 3** times per deployment; 20 exist (8 on hand-written
-fixtures, 12 on live captures).
+25 scenarios, each run **N = 3** times per deployment. This branch has 8; the 25-scenario set
+of record is added separately.
 
 | Category | Count | Fixture states (from the Swarmada quickstart scenarios, `docs/quickstart.md`) |
 |---|---|---|
@@ -337,9 +337,9 @@ Fixtures are YAML snapshots of Swarmada objects including `status`, loaded into 
 server that has the CRDs from the pinned Swarmada module (`config/crd/bases`). Two kinds exist:
 hand-written fixtures (`evals/fixtures/*.yaml`) and fixtures captured from live quickstart runs
 with `evals/cmd/foc-capture` (`evals/fixtures/live/*.yaml`, produced by
-`hack/capture-live-fixtures.sh`, D31). Scenarios on live fixtures are also run against the live
-quickstart state itself, through the deployed `foc-mcp` (`foc-eval -live-context`,
-`hack/live-scenarios.sh`). No Swarmada
+`hack/capture-live-fixtures.sh`, D31). A scenario on a live fixture can also be run against the
+live quickstart state itself, through the deployed `foc-mcp` (`foc-eval -live-context`,
+`hack/live-scenarios.sh`); no scenario on this branch uses a live fixture yet. No Swarmada
 controller or webhook runs during fixture evals, so state is static and reproducible. The
 quickstart itself writes some status by hand (see "Honest notes — what's real vs. simulated" in
 `docs/quickstart.md`); fixtures copy those states and say so.
@@ -428,7 +428,9 @@ policies/          default policy files
 | D29 | Cloud default model `claude-sonnet-5-5`; `claude-opus-5-5` is measured once as a comparison (N = 3) | Owner's brief for FOC-1, 2026-11-03. (Replaces: default `claude-opus-5-5`.) |
 | D30 | Model evals use effort `medium` for both models, adaptive thinking, prompt caching of tools and system prompt, and no server-side refusal fallback | Same settings for both models so the comparison differs only in the model; a fallback would let another model answer and the result would no longer name the model measured. A refusal is recorded (`stopReasons`) and judged like any other answer. |
 | D31 | Fixtures are also captured from live Swarmada quickstart runs (`evals/cmd/foc-capture`); the hand-written fixtures stay | Live captures show what Swarmada v0.4 actually writes. They differ from the hand-written ones in places (for example a FleetZone with no stop carries no `status.estopStatus` at all, where the hand fixture says `Clear`; robots of a zone stop the adapter cannot confirm reach `estopState: Failed`). Captures are taken after the quickstart script exits, which stops its simulated adapter, and say so in their header. |
-| D32 | The approval path is proven against a live Swarmada v0.4 control plane with its admission webhooks served (`test/live`, build tag `live`; `hack/live-approval-path.sh`) | envtest runs only stand-ins for Swarmada's webhooks. The quickstart's overlay (`config/overlays/quickstart-mtls`) serves no admission webhooks, so the live test first shows the copilot refusing drafts there (`DENY_DRAFT_GATE_ABSENT`, D22), then runs every path after Swarmada's own `config/overlays/demo-webhooks` is applied to the same cluster. The approver is a person with a client certificate (`hack/kind-person.sh`), never a ServiceAccount; ServiceAccount checks use real tokens from the TokenRequest API, not impersonation. |
+| D32 | The approval path is proven against a live Swarmada v0.4 control plane with its admission webhooks served (`test/live`, build tag `live`; `hack/live-approval-path.sh`) | envtest runs only stand-ins for Swarmada's webhooks. The quickstart's overlay (`config/overlays/quickstart-mtls`) serves no admission webhooks, so the live test first shows the copilot refusing drafts there (`DENY_DRAFT_GATE_ABSENT`, D22), then runs every path after Swarmada's own `config/controlstream-tls` (what its `make deploy` applies: `ENABLE_WEBHOOKS=true`, webhook configurations, serving certificate) is applied to the same cluster. The approver is a person with a client certificate (`hack/kind-person.sh`), never a ServiceAccount; ServiceAccount checks use real tokens from the TokenRequest API, not impersonation. |
+
+| D33 | The executor's zone stop is attributed by Swarmada's safety audit log, not by an annotation that stays on the zone | Observed live on v0.4 (`test/live`): Swarmada's mutator stamps `swarmada.io/estop-actor` with the executor's ServiceAccount and adds the `swarmada.io/estop-in-force` finalizer; its zone-estop controller seals the actor into an `ESTOP_TRIGGERED` audit entry and then removes the annotation (`consumeEstopActor`). The live test therefore checks the finalizer, `swarmada.io/estop-processed`, and the sealed actor in a copy of Swarmada's audit log (`TestLiveSwarmadaAuditActor`). The envtest stand-in models only the webhook, so there the annotation stays. |
 
 ## 8. Resolved questions (2026-11-03)
 

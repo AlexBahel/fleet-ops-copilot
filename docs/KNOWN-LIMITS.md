@@ -15,22 +15,25 @@ remove it.
 
 ## Not built yet
 
-- Model backends: `claude` (Claude API) and `llamacpp` (`llama-server`). Only the `scripted`
-  backend exists (`internal/llm`).
+- Model backend `llamacpp` (`llama-server`). The `claude` and `scripted` backends exist
+  (`internal/llm`).
 - The five agent roles (Router, Diagnose, Dispatch, Zone ops, Reporter) and their tool
   allow-lists. The tool-use loop (`internal/agent`) offers every tool.
 - `foc-agent`, the web chat UI, and the OIDC pass-through for approving in a browser.
 - Helm chart, `make foc-up`, NetworkPolicy, egress probe, OpenTelemetry tracing, `docs/RUNBOOK.md`.
+  Until the chart exists, `make deploy-kind` installs plain manifests (`config/deploy`) on a kind
+  cluster; the image is built from binaries compiled on the host.
 - More than one approver per request (`minApprovers`): one accepted decision approves.
 
 ## Not measured yet
 
-- No model has been evaluated. `evals/results/fixtures/results.json` is a harness self-test with
-  the scripted backend: it shows the harness, tools, policy and approval path behave as designed
-  on fixture states, and says nothing about a model's pass rate.
+- No model evaluation of record has been run. `evals/results/fixtures/results.json` is a harness
+  self-test with the scripted backend: it shows the harness, tools, policy and approval path
+  behave as designed on fixture states, and says nothing about a model's pass rate.
 - Model latency (p50, p95) and cost per 100 requests, for both deployments. The latency in the
   fixture results covers tool execution against a test API server only.
-- 8 of the 25 planned scenarios exist.
+- This branch has 8 of the 25 scenarios; the 25-scenario set of record is added separately. No
+  scenario uses the live-captured fixtures (`evals/fixtures/live/`) yet.
 
 ## Not enforced, or enforced only partly
 
@@ -47,10 +50,11 @@ remove it.
   verify that it is Swarmada's webhook or that it is serving.
 - **ServiceAccount names** in the admission policies are fixed to namespace `foc-system`.
 - **Per-session draft limit** is applied when a request is made, not when it is approved.
-- **Estop attribution.** When `foc-approvals` triggers an approved zone stop, Swarmada records the
-  executor's ServiceAccount as `swarmada.io/estop-actor` (its mutating webhook stamps the
-  admission user). The approving person is recorded only in the copilot's `ApprovalRequest`,
-  Events and audit file.
+- **Estop attribution.** When `foc-approvals` triggers an approved zone stop, Swarmada attributes
+  it to the executor's ServiceAccount: its mutating webhook stamps `swarmada.io/estop-actor`,
+  its controller seals that actor into an `ESTOP_TRIGGERED` entry of Swarmada's safety audit log
+  and then removes the annotation (D33). The approving person is recorded only in the copilot's
+  `ApprovalRequest`, Events and audit file.
 - **Activation is done by the approver, outside the copilot.** After approval the copilot gives
   the exact command (`status.instruction`) and watches for the task to leave `Draft`; it cannot
   tell who ran the command, and it waits without a deadline. swarmctl v0.4 has no activate
@@ -58,7 +62,8 @@ remove it.
   performing the write with the approver's own credentials (OIDC, passed through for that one
   call); until then the approver runs the command.
 - **Audit storage.** Each process writes its own JSONL file; there is no shared store, rotation
-  or retention yet. A failed Event write is recorded in the JSONL file only.
+  or retention yet. In `config/deploy` the files are on `emptyDir` volumes and are lost when a
+  pod is replaced. A failed Event write is recorded in the JSONL file only.
 
 ## Test environment
 
@@ -70,10 +75,21 @@ remove it.
   the FleetTask activation rule (validating) and the FleetZone estop-actor stamp (mutating).
   Not exercised at all: the rest of `vfleettask` (flow, bindings, producer contracts),
   `vfleetzone` (the `estop-trigger` SubjectAccessReview, composite-zone refusal),
-  `vzonemaintenance` (zone exists), and every other Swarmada webhook. Running the copilot's
-  approval path against a live Swarmada v0.4 control plane is FOC-1 work.
-- Fixtures under `evals/fixtures/` are hand-written snapshots modelled on the Swarmada quickstart
-  scenarios, not captured from a live run. The quickstart itself writes some status by hand (see
+  `vzonemaintenance` (zone exists), and every other Swarmada webhook. The stand-ins also leave
+  out Swarmada's controllers, so the estop-actor annotation, which Swarmada's controller removes
+  after sealing it (D33), stays on the zone in envtest.
+- **Live approval-path test** (`test/live`, D32) runs against Swarmada v0.4 with its webhooks
+  served (`config/controlstream-tls` applied over the quickstart). It has been run on the release
+  candidate only; a run after the public release pin has not happened yet. To read Swarmada's
+  safety audit log it starts an ephemeral busybox container in the manager pod that mounts the
+  manager's `audit-log` volume read-only as user 65532; both names come from Swarmada's
+  manifests and are not checked. The quickstart's own overlay serves no admission webhooks, and
+  there the copilot refuses every draft (`DENY_DRAFT_GATE_ABSENT`), so dispatch cannot be used on
+  a plain quickstart install.
+- Fixtures directly under `evals/fixtures/` are hand-written snapshots modelled on the Swarmada
+  quickstart scenarios. Those under `evals/fixtures/live/` were captured from live quickstart runs
+  of the release candidate after the quickstart script exited (its simulated adapter stops then,
+  so robot phase and connectivity drift); they differ from the hand-written ones in places (D31). The quickstart itself writes some status by hand (see
   its "Honest notes" section), and so do the fixtures.
 
 ## By design (not limits to remove)
