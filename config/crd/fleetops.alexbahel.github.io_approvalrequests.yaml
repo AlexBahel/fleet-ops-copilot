@@ -1,0 +1,229 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.5
+  name: approvalrequests.fleetops.alexbahel.github.io
+spec:
+  group: fleetops.alexbahel.github.io
+  names:
+    kind: ApprovalRequest
+    listKind: ApprovalRequestList
+    plural: approvalrequests
+    shortNames:
+    - areq
+    singular: approvalrequest
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.type
+      name: Type
+      type: string
+    - jsonPath: .spec.requestedFor
+      name: For
+      type: string
+    - jsonPath: .status.state
+      name: State
+      type: string
+    - jsonPath: .status.decidedBy
+      name: DecidedBy
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: ApprovalRequest is a proposed Swarmada write that a named person
+          must approve.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ApprovalRequestSpec is written once by foc-mcp and never
+              changed.
+            properties:
+              activateTask:
+                description: ActivateTaskParams names the draft FleetTask to activate.
+                properties:
+                  taskName:
+                    description: TaskName is the draft FleetTask in the request's
+                      namespace.
+                    minLength: 1
+                    type: string
+                required:
+                - taskName
+                type: object
+              expiresAt:
+                description: ExpiresAt is when the request stops being approvable.
+                format: date-time
+                type: string
+              policy:
+                description: PolicyRecord is the policy engine's decision when the
+                  request was created.
+                properties:
+                  code:
+                    description: Code is a stable reason code.
+                    type: string
+                  effect:
+                    description: Effect is RequireApproval for every stored request.
+                    type: string
+                  message:
+                    type: string
+                required:
+                - code
+                - effect
+                type: object
+              requestedBy:
+                description: RequestedBy is the principal that created the object
+                  (the copilot).
+                minLength: 1
+                type: string
+              requestedFor:
+                description: RequestedFor is the operator whose chat session produced
+                  the request.
+                minLength: 1
+                type: string
+              sessionID:
+                description: SessionID links the request to the copilot session and
+                  audit trail.
+                type: string
+              type:
+                description: RequestType names the single Swarmada write an approved
+                  request leads to.
+                enum:
+                - ActivateTask
+                - ZoneMaintenance
+                - ZoneStop
+                type: string
+              zoneMaintenance:
+                description: |-
+                  ZoneMaintenanceParams are the ZoneMaintenance fields the copilot may set.
+                  autoResumeAfterMinutes is not a parameter: the copilot always writes 0.
+                properties:
+                  mode:
+                    description: Mode is Graceful or Immediate (Swarmada ZoneMaintenance
+                      spec.mode).
+                    enum:
+                    - Graceful
+                    - Immediate
+                    type: string
+                  reason:
+                    description: Reason is copied to the ZoneMaintenance spec.reason.
+                    minLength: 1
+                    type: string
+                  scheduledStart:
+                    description: ScheduledStart is copied to spec.scheduledStart;
+                      empty means on creation.
+                    format: date-time
+                    type: string
+                  scopeType:
+                    description: ScopeType is Zone or Namespace (Swarmada ZoneMaintenance
+                      spec.scope.type).
+                    enum:
+                    - Zone
+                    - Namespace
+                    type: string
+                  zoneName:
+                    description: ZoneName is required when ScopeType is Zone.
+                    type: string
+                required:
+                - mode
+                - reason
+                - scopeType
+                type: object
+              zoneStop:
+                description: ZoneStopParams names the FleetZone to stop.
+                properties:
+                  reason:
+                    description: Reason becomes the swarmada.io/estop-triggered annotation
+                      value.
+                    minLength: 1
+                    type: string
+                  zoneName:
+                    minLength: 1
+                    type: string
+                required:
+                - reason
+                - zoneName
+                type: object
+            required:
+            - expiresAt
+            - policy
+            - requestedBy
+            - requestedFor
+            - type
+            type: object
+            x-kubernetes-validations:
+            - message: spec is immutable
+              rule: self == oldSelf
+            - message: activateTask is set exactly when type is ActivateTask
+              rule: (self.type == 'ActivateTask') == has(self.activateTask)
+            - message: zoneMaintenance is set exactly when type is ZoneMaintenance
+              rule: (self.type == 'ZoneMaintenance') == has(self.zoneMaintenance)
+            - message: zoneStop is set exactly when type is ZoneStop
+              rule: (self.type == 'ZoneStop') == has(self.zoneStop)
+          status:
+            description: ApprovalRequestStatus is written only by foc-approvals.
+            properties:
+              decidedAt:
+                format: date-time
+                type: string
+              decidedBy:
+                type: string
+              decisionRef:
+                type: string
+              executedAt:
+                format: date-time
+                type: string
+              message:
+                type: string
+              state:
+                description: RequestState is the lifecycle state of an ApprovalRequest.
+                enum:
+                - Pending
+                - Approved
+                - Rejected
+                - Expired
+                - Executed
+                - Failed
+                type: string
+              target:
+                description: TargetRef identifies the Swarmada object an executed
+                  request wrote.
+                properties:
+                  apiVersion:
+                    type: string
+                  kind:
+                    type: string
+                  name:
+                    type: string
+                required:
+                - apiVersion
+                - kind
+                - name
+                type: object
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
