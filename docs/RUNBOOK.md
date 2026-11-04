@@ -130,10 +130,10 @@ anyway, revoke it.
 | Profile | Model | Status on main |
 |---|---|---|
 | `cloud` | Claude via the Claude API | Chart value `llm.profile: cloud` (default). The `claude` backend exists (`internal/llm/claude.go`); no in-cluster process uses it yet. |
-| `airgap` | Qwen2.5-7B-Instruct served by `llama-server` in the cluster | Not on main. Manifests, make targets and the `llamacpp` backend are on branch `airgap-prep`. `llm.profile: airgap` makes the chart render fail on purpose. |
+| `airgap` | Qwen2.5-7B-Instruct served by `llama-server` in the cluster | Plain manifests and make targets (`config/airgap/`, `hack/airgap.mk`) and the `llamacpp` backend (`internal/llm/llamacpp.go`); not templated in the chart, and not yet run against a cluster or a model (docs/KNOWN-LIMITS.md). `llm.profile: airgap` makes the chart render fail on purpose. |
 
-Until the air-gapped profile is in the chart, after `airgap-prep` is merged it is installed beside
-the chart with that branch's targets, in this order:
+Until the air-gapped profile is in the chart, it is installed beside the chart with these targets,
+in this order:
 
 ```bash
 make load-llama-image KIND_CLUSTER=foc-<name>

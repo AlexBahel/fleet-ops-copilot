@@ -48,7 +48,7 @@ agent:
 llm:
   # cloud | airgap. Only cloud is templated. airgap fails the render on
   # purpose: the air-gapped profile (llama-server, its storage and egress
-  # policy) is on branch airgap-prep, not on main.
+  # policy) is installed beside the chart from config/airgap (make deploy-airgap).
   profile: cloud
   cloud:
     model: claude-sonnet-5-5

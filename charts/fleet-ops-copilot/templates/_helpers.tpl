@@ -53,7 +53,7 @@ on a single file still fails on a bad configuration.
 {{- fail (printf "release namespace is %q; this chart installs into foc-system only (the admission policies name ServiceAccounts in foc-system)" .Release.Namespace) -}}
 {{- end -}}
 {{- if eq .Values.llm.profile "airgap" -}}
-{{- fail "llm.profile=airgap is not templated yet: the air-gapped profile (llama-server, model storage, egress policy) is on branch airgap-prep, not on main. Install with llm.profile=cloud; see docs/RUNBOOK.md, \"Switch between cloud and air-gapped\"." -}}
+{{- fail "llm.profile=airgap is not templated yet: the air-gapped profile (llama-server, model storage, egress policy) is installed beside the chart from config/airgap with make deploy-airgap. Install with llm.profile=cloud; see docs/RUNBOOK.md, \"Switch between cloud and air-gapped\"." -}}
 {{- end -}}
 {{- if ne .Values.llm.profile "cloud" -}}
 {{- fail (printf "llm.profile must be cloud or airgap, got %q" .Values.llm.profile) -}}

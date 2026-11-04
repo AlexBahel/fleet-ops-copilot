@@ -6,8 +6,9 @@
 | `approval-flow.d2` | `approval-flow.svg` | A draft `FleetTask` from request to execution, then its activation, which the approver performs with their own credentials |
 
 Solid boxes are on main. Dashed boxes are designed in `docs/DESIGN.md` but not on main:
-`foc-agent` (only its ServiceAccount exists), the NetworkPolicy (a chart value, off by default),
-and the air-gapped profile.
+`foc-agent` (only its ServiceAccount exists) and the NetworkPolicy (a chart value, off by default).
+The air-gapped profile is drawn dashed but is on main as plain manifests (`config/airgap/`,
+`make deploy-airgap`), not in the chart; its box style changes at the next re-render.
 
 The diagrams summarise `docs/DESIGN.md` §3; where they differ, the design document is correct.
 

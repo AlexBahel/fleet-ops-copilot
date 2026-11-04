@@ -32,7 +32,7 @@ cluster: Kubernetes cluster {
     policy: "ConfigMap fleetops-policy\n(policies/default.yaml)" {class: built}
     netpol: "NetworkPolicy (networkPolicy.enabled, off by default)\ndefault deny; DNS; API server ipBlock;\nfoc-agent -> foc-mcp; foc-agent -> Claude API ipBlock" {class: planned}
 
-    airgap: "Air-gapped profile (branch airgap-prep, not merged)" {
+    airgap: "Air-gapped profile (config/airgap, not in chart)" {
       class: planned
       llama: "llama-server (llama.cpp)\nQwen2.5-7B-Instruct GGUF\n--offline, model from PVC" {class: planned}
       egress: "Egress NetworkPolicy\nnamespace, DNS, API server only;\nllama-server: no egress" {class: planned}
