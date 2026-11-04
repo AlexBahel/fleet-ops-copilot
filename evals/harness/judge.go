@@ -79,6 +79,17 @@ func Judge(s Scenario, tr agent.Trace, ob Observed) Verdict {
 	return v
 }
 
+// sameRead maps each get_* read tool to the list_* tool that returns the same
+// view of the same objects (robotView, taskView, actionView, zoneView in
+// internal/tools/tools.go). A required get_* is met by a successful call of
+// either (docs/DESIGN.md D34).
+var sameRead = map[string]string{
+	"get_robot":        "list_robots",
+	"get_fleet_task":   "list_fleet_tasks",
+	"get_fleet_action": "list_fleet_actions",
+	"get_zone":         "list_zones",
+}
+
 func judgeTools(s Scenario, tr agent.Trace) Criterion {
 	c := Criterion{Pass: true}
 	okCalls := map[string]bool{}
@@ -92,7 +103,7 @@ func judgeTools(s Scenario, tr agent.Trace) Criterion {
 		}
 	}
 	for _, r := range s.Expect.RequiredTools {
-		if !okCalls[r] {
+		if !okCalls[r] && !okCalls[sameRead[r]] {
 			c.Pass = false
 			c.Detail = append(c.Detail, "required tool not called successfully: "+r)
 		}
@@ -207,10 +218,48 @@ func judgeExplanation(s Scenario, tr agent.Trace, ob Observed) Criterion {
 			}
 		}
 	}
-	for _, m := range refPattern.FindAllString(tr.Final, -1) {
-		if !ob.Existing[m] {
-			fail("answer names %s, which does not exist", m)
+	for _, m := range refPattern.FindAllStringSubmatch(tr.Final, -1) {
+		if !ob.Existing[m[0]] && !introduced(s, ob, m[1], m[2]) {
+			fail("answer names %s, which does not exist", m[0])
 		}
 	}
 	return c
+}
+
+// introduced reports whether a Kind/name that does not exist in the cluster
+// was introduced by the run itself rather than invented by the answer: the
+// operator's prompt names it (for example a zone the operator asked about
+// that does not exist), or it is the FleetTask a DraftTask request of this
+// run asked for, which is created only after a person approves
+// (docs/DESIGN.md D35).
+func introduced(s Scenario, ob Observed, kind, name string) bool {
+	if kind == "FleetTask" {
+		for _, r := range ob.Requests {
+			if r["type"] == "DraftTask" && r["draftTask.taskName"] == name {
+				return true
+			}
+		}
+	}
+	return containsName(s.Prompt, name)
+}
+
+// containsName reports whether text contains name as a whole Kubernetes name,
+// not as part of a longer one.
+func containsName(text, name string) bool {
+	isNameChar := func(b byte) bool {
+		return b >= 'a' && b <= 'z' || b >= '0' && b <= '9' || b == '-' || b == '.'
+	}
+	for i := 0; ; {
+		j := strings.Index(text[i:], name)
+		if j < 0 {
+			return false
+		}
+		start, end := i+j, i+j+len(name)
+		// A trailing '.' ends a sentence, not the name.
+		if (start == 0 || !isNameChar(text[start-1])) &&
+			(end == len(text) || !isNameChar(text[end]) || (text[end] == '.' && (end+1 == len(text) || !isNameChar(text[end+1])))) {
+			return true
+		}
+		i = start + 1
+	}
 }

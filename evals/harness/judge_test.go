@@ -179,3 +179,60 @@ func TestPriceUsage(t *testing.T) {
 		t.Fatalf("%+v", r.Cost)
 	}
 }
+
+// D34: a required get_* is met by the list_* tool that returns the same view,
+// and by nothing else.
+func TestRequiredGetMetBySameViewList(t *testing.T) {
+	s, ob := zoneScenario(), goodObserved()
+	tr := goodTrace()
+	tr.Calls = []agent.ToolEvent{{Name: "list_zones"}, {Name: "request_zone_stop"}}
+	if v := Judge(s, tr, ob); !v.ToolCalls.Pass {
+		t.Errorf("list_zones should meet get_zone: %+v", v.ToolCalls)
+	}
+	tr.Calls = []agent.ToolEvent{{Name: "list_robots"}, {Name: "request_zone_stop"}}
+	if v := Judge(s, tr, ob); v.ToolCalls.Pass {
+		t.Error("list_robots must not meet get_zone")
+	}
+	tr.Calls = []agent.ToolEvent{{Name: "list_zones", IsError: true}, {Name: "request_zone_stop"}}
+	if v := Judge(s, tr, ob); v.ToolCalls.Pass {
+		t.Error("a failed list_zones must not meet get_zone")
+	}
+}
+
+// D35: a Kind/name that does not exist is accepted only when the operator's
+// prompt names it or it is the FleetTask a DraftTask request of the run asked for.
+func TestIntroducedReferences(t *testing.T) {
+	cases := []struct {
+		name, prompt, final string
+		requests            []map[string]string
+		pass                bool
+	}{
+		{"prompt names the zone", "Put aisle-b into maintenance.", "FleetZone/aisle-b does not exist.", nil, true},
+		{"prompt name at sentence end", "Put it in aisle-b.", "FleetZone/aisle-b does not exist.", nil, true},
+		{"invented robot", "Put aisle-b into maintenance.", "Robot/sim-robot-009 was checked.", nil, false},
+		{"prompt has a longer name only", "Put aisle-b2 into maintenance.", "FleetZone/aisle-b does not exist.", nil, false},
+		{"prompt has a longer dotted name only", "Check aisle-b.x now.", "FleetZone/aisle-b does not exist.", nil, false},
+		{"requested draft", "Prepare a charge task.", "FleetTask/charge-1 is created after approval.",
+			[]map[string]string{{"type": "DraftTask", "draftTask.taskName": "charge-1"}}, true},
+		{"draft name of another kind", "Prepare a charge task.", "Robot/charge-1 is created after approval.",
+			[]map[string]string{{"type": "DraftTask", "draftTask.taskName": "charge-1"}}, false},
+		{"task not requested", "Prepare a charge task.", "FleetTask/charge-1 is created after approval.",
+			[]map[string]string{{"type": "DraftTask", "draftTask.taskName": "charge-2"}}, false},
+		{"activation request names no new task", "Activate it.", "FleetTask/charge-1 will start.",
+			[]map[string]string{{"type": "ActivateTask", "activateTask.taskName": "charge-1"}}, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s := Scenario{Prompt: c.prompt, Expect: Expect{Facts: []Fact{{Ref: "FleetZone/warehouse-a", Field: "status.robotCount", Value: "1"}}}}
+			ob := Observed{
+				Requests:   c.requests,
+				FactValues: map[string]string{"FleetZone/warehouse-a status.robotCount": "1"},
+				Existing:   map[string]bool{"FleetZone/warehouse-a": true},
+			}
+			tr := agent.Trace{Final: "FleetZone/warehouse-a status.robotCount=1. " + c.final}
+			if v := judgeExplanation(s, tr, ob); v.Pass != c.pass {
+				t.Errorf("pass=%v, want %v: %v", v.Pass, c.pass, v.Detail)
+			}
+		})
+	}
+}
