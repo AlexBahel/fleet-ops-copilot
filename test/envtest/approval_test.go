@@ -26,7 +26,6 @@ import (
 	"testing"
 	"time"
 
-	admissionv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -427,16 +426,6 @@ func TestPolicyRefusalsCreateNothing(t *testing.T) {
 	if err := admin.Get(ctx, client.ObjectKey{Namespace: swarmNS, Name: "crit"}, &task); err == nil {
 		t.Fatal("refused draft was created")
 	}
-}
-
-func setStandinFailurePolicy(ctx context.Context, fp string) error {
-	var cfg admissionv1.ValidatingWebhookConfiguration
-	if err := admin.Get(ctx, client.ObjectKey{Name: "standin-swarmada-fleettask"}, &cfg); err != nil {
-		return err
-	}
-	p := admissionv1.FailurePolicyType(fp)
-	cfg.Webhooks[0].FailurePolicy = &p
-	return admin.Update(ctx, &cfg)
 }
 
 func countRequests(t *testing.T) int {
