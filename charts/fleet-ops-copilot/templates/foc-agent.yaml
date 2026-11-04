@@ -1,0 +1,64 @@
+{{- include "foc.validate" . }}
+{{- if .Values.agent.enabled }}
+# foc-agent: talks to the model (cloud profile: the Claude API, key from an
+# existing Secret), reaches foc-mcp over MCP, and serves the web chat and the
+# approval-requests panel on its Service. Its ServiceAccount may only get and
+# list ApprovalRequests: the page shows the `foc approve` / `foc reject`
+# command a person runs with their own kubeconfig; it cannot decide.
+# There is no login: reach the Service with `kubectl port-forward` (see
+# docs/RUNBOOK.md) or put an authenticating proxy in front of it.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: foc-agent
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "foc.workloadLabels" (dict "name" "foc-agent" "root" .) | nindent 4 }}
+spec:
+  replicas: {{ .Values.agent.replicas }}
+  selector:
+    matchLabels: {app.kubernetes.io/name: foc-agent}
+  template:
+    metadata:
+      labels:
+        {{- include "foc.workloadLabels" (dict "name" "foc-agent" "root" .) | nindent 8 }}
+    spec:
+      serviceAccountName: foc-agent
+      securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: foc-agent
+          image: {{ include "foc.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: [/usr/local/bin/foc-agent]
+          args:
+            - -backend=claude
+            - -listen=:{{ .Values.agent.port }}
+            - -mcp-url=http://foc-mcp:{{ .Values.mcp.port }}/mcp
+            - -namespaces={{ join "," .Values.swarmadaNamespaces }}
+            - -max-concurrent={{ .Values.agent.maxConcurrent }}
+            {{- with .Values.tracing.otlpEndpoint }}
+            - -otlp-endpoint={{ . }}
+            {{- end }}
+          env:
+            {{- include "foc.claudeEnv" . | nindent 12 }}
+          ports: [{name: http, containerPort: {{ .Values.agent.port }}}]
+          livenessProbe: {httpGet: {path: /healthz, port: http}, periodSeconds: 10}
+          readinessProbe: {httpGet: {path: /readyz, port: http}, periodSeconds: 10, timeoutSeconds: 5}
+          {{- with .Values.agent.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: foc-agent
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "foc.workloadLabels" (dict "name" "foc-agent" "root" .) | nindent 4 }}
+spec:
+  selector: {app.kubernetes.io/name: foc-agent}
+  ports: [{name: http, port: {{ .Values.agent.port }}, targetPort: http}]
+{{- end }}

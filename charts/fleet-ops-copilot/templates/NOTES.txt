@@ -1,9 +1,15 @@
 Fleet Ops Copilot {{ .Chart.Version }} installed in {{ .Release.Namespace }}.
 
-Workloads: foc-mcp (Service foc-mcp:{{ .Values.mcp.port }}), foc-approvals.
-foc-agent: ServiceAccount only; cmd/foc-agent is not built yet.
+Workloads: foc-mcp (Service foc-mcp:{{ .Values.mcp.port }}), foc-approvals{{ if .Values.agent.enabled }}, foc-agent (Service foc-agent:{{ .Values.agent.port }}){{ end }}.
+{{- if .Values.agent.enabled }}
+Web UI (no login; it shows the foc approve / foc reject command, it cannot decide):
+  kubectl --context <context> -n {{ .Release.Namespace }} port-forward svc/foc-agent {{ .Values.agent.port }}:{{ .Values.agent.port }}
+  then open http://127.0.0.1:{{ .Values.agent.port }}/
+foc-agent does not start until Secret {{ .Values.llm.cloud.apiKeySecretRef.name }} (key {{ .Values.llm.cloud.apiKeySecretRef.key }}) exists in {{ .Release.Namespace }}.
+{{- end }}
 Swarmada namespaces: {{ join ", " .Values.swarmadaNamespaces }}
-Model profile: {{ .Values.llm.profile }}; API key reference: Secret {{ .Values.llm.cloud.apiKeySecretRef.name }}, key {{ .Values.llm.cloud.apiKeySecretRef.key }} (not read by any workload yet).
+Model profile: {{ .Values.llm.profile }} ({{ .Values.llm.cloud.model }}); API key reference: Secret {{ .Values.llm.cloud.apiKeySecretRef.name }}, key {{ .Values.llm.cloud.apiKeySecretRef.key }}.
+Tracing: {{ if .Values.tracing.otlpEndpoint }}OTLP {{ .Values.tracing.otlpEndpoint }}{{ else }}off{{ end }}.
 NetworkPolicy: {{ if .Values.networkPolicy.enabled }}enabled{{ else }}disabled{{ end }}.
 
 Drafts are refused (DENY_DRAFT_GATE_ABSENT) unless Swarmada's FleetTask

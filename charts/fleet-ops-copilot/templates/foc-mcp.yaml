@@ -34,6 +34,9 @@ spec:
             - -audit={{ .Values.audit.dir }}/foc-mcp.jsonl
             - -namespace={{ first .Values.swarmadaNamespaces }}
             - -listen=:{{ .Values.mcp.port }}
+            {{- with .Values.tracing.otlpEndpoint }}
+            - -otlp-endpoint={{ . }}
+            {{- end }}
           env:
             - name: POD_NAMESPACE
               valueFrom: {fieldRef: {fieldPath: metadata.namespace}}

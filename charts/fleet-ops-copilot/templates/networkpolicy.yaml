@@ -2,8 +2,10 @@
 {{- if .Values.networkPolicy.enabled }}
 # Cloud-profile NetworkPolicy (docs/DESIGN.md §3.7): default-deny ingress and
 # egress in the release namespace, then DNS for every pod, the API server for
-# foc-mcp and foc-approvals, foc-agent -> foc-mcp, and foc-agent -> the
-# Claude API when CIDRs are given. Policies are additive: a pod may do what
+# foc-mcp, foc-approvals and foc-agent (which reads ApprovalRequests),
+# foc-agent -> foc-mcp, foc-agent -> the Claude API when CIDRs are given,
+# ingress to the web UI from agentIngressFrom, and egress to the OTLP
+# collector from otlpEgress.to. Policies are additive: a pod may do what
 # any policy selecting it allows.
 #
 # Not applied to a cluster yet. Enforcement needs a CNI that implements
@@ -55,7 +57,7 @@ metadata:
 spec:
   podSelector:
     matchExpressions:
-      - {key: app.kubernetes.io/name, operator: In, values: [foc-mcp, foc-approvals]}
+      - {key: app.kubernetes.io/name, operator: In, values: [foc-mcp, foc-approvals, foc-agent]}
   policyTypes: [Egress]
   egress:
     - to:
@@ -87,7 +89,7 @@ spec:
       ports:
         - {protocol: TCP, port: {{ .Values.mcp.port }}}
 ---
-# foc-agent may open connections to foc-mcp. Selects no pod until foc-agent exists.
+# foc-agent may open connections to foc-mcp.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -105,7 +107,7 @@ spec:
         - {protocol: TCP, port: {{ .Values.mcp.port }}}
 {{- with .Values.networkPolicy.claudeApiEgress.cidrs }}
 ---
-# foc-agent -> Claude API. Selects no pod until foc-agent exists.
+# foc-agent -> Claude API.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -123,6 +125,48 @@ spec:
         {{- end }}
       ports:
         {{- range $.Values.networkPolicy.claudeApiEgress.ports }}
+        - {protocol: TCP, port: {{ . }}}
+        {{- end }}
+{{- end }}
+{{- with .Values.networkPolicy.agentIngressFrom }}
+---
+# Web UI ingress to foc-agent from the given peers only.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: foc-agent-ingress-ui
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "foc.chartLabels" $ | nindent 4 }}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: foc-agent}}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        {{- toYaml . | nindent 8 }}
+      ports:
+        - {protocol: TCP, port: {{ $.Values.agent.port }}}
+{{- end }}
+{{- with .Values.networkPolicy.otlpEgress.to }}
+---
+# foc-agent and foc-mcp -> OTLP collector.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: fleet-ops-copilot-egress-otlp
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "foc.chartLabels" $ | nindent 4 }}
+spec:
+  podSelector:
+    matchExpressions:
+      - {key: app.kubernetes.io/name, operator: In, values: [foc-mcp, foc-agent]}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        {{- toYaml . | nindent 8 }}
+      ports:
+        {{- range $.Values.networkPolicy.otlpEgress.ports }}
         - {protocol: TCP, port: {{ . }}}
         {{- end }}
 {{- end }}

@@ -36,13 +36,30 @@ approvals:
   probePort: 8081
   resources: {}
 
-# foc-agent talks to the model and holds no Kubernetes permission. On main it
-# exists only as a ServiceAccount: cmd/foc-agent is not built yet
-# (docs/KNOWN-LIMITS.md, "Not built yet"), so the chart renders no foc-agent
-# Deployment.
+# foc-agent talks to the model, reaches foc-mcp over MCP and serves the web
+# chat with the approval-requests panel (Service foc-agent, port below). Its
+# ServiceAccount may only get and list ApprovalRequests. With llm.profile
+# cloud it runs the claude backend and needs the Secret in
+# llm.cloud.apiKeySecretRef; the pod does not start without it.
 agent:
   serviceAccount:
     create: true
+  # false renders no foc-agent Deployment or Service (the ServiceAccount and
+  # its read-only RoleBindings stay).
+  enabled: true
+  replicas: 1
+  port: 8090
+  # Chat requests in flight per pod; more get HTTP 429.
+  maxConcurrent: 4
+  resources: {}
+
+# OpenTelemetry traces from foc-agent and foc-mcp: one trace per operator
+# request (model calls, tool calls, policy decisions). OTLP/gRPC collector as
+# host:port (plaintext), http://host:port or https://host:port. Empty: off.
+# Exporter headers, if the collector needs them, go in
+# OTEL_EXPORTER_OTLP_HEADERS from a Secret; the chart does not template them.
+tracing:
+  otlpEndpoint: ""
 
 # Model backend profile.
 llm:
@@ -53,9 +70,8 @@ llm:
   cloud:
     model: claude-sonnet-5-5
     # Reference to a Secret that already exists in foc-system. The chart never
-    # creates, reads or templates the key itself. No workload on main reads it
-    # yet; foc-agent will receive it as the ANTHROPIC_API_KEY environment
-    # variable (docs/DESIGN.md §3.8).
+    # creates, reads or templates the key itself. foc-agent receives it as the
+    # ANTHROPIC_API_KEY environment variable (docs/DESIGN.md §3.8).
     apiKeySecretRef:
       name: fleet-ops-copilot-claude
       key: ANTHROPIC_API_KEY
@@ -84,10 +100,19 @@ networkPolicy:
       k8s-app: kube-dns
   # foc-agent egress to the Claude API. NetworkPolicy has no FQDN rules, so
   # this is a list of CIDRs (or an egress proxy's address). Empty: no rule.
-  # Selects no pod until foc-agent exists.
   claudeApiEgress:
     cidrs: []
     ports: [443]
   # Additional peers allowed to reach foc-mcp's MCP port besides foc-agent,
   # as NetworkPolicy `from` entries.
   mcpExtraIngressFrom: []
+  # Peers allowed to reach the web UI (foc-agent's port), as NetworkPolicy
+  # `from` entries, e.g. an ingress controller's namespace. Empty: no rule,
+  # so only paths NetworkPolicy does not cover (normally kubectl
+  # port-forward, depending on the CNI) reach it.
+  agentIngressFrom: []
+  # Egress from foc-agent and foc-mcp to the OTLP collector, as NetworkPolicy
+  # `to` entries. Empty: no rule (spans are dropped when tracing is on).
+  otlpEgress:
+    to: []
+    ports: [4317]

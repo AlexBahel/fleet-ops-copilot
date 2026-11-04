@@ -16,7 +16,7 @@ all: ci
 
 ci: check-no-local build vet lint test test-envtest eval-fixtures ## Everything the CI Go job runs
 
-build: ## Build foc, foc-mcp, foc-approvals into bin/
+build: ## Build foc, foc-mcp, foc-approvals, foc-agent into bin/
 	$(GO) build -o $(BIN)/ ./cmd/...
 
 vet: ## go vet (including envtest-tagged files)
@@ -60,11 +60,11 @@ KIND_CLUSTER ?=
 IMG ?= fleet-ops-copilot:dev
 ARCH ?= $(shell $(GO) env GOARCH)
 
-image: ## Build the foc-mcp/foc-approvals image (binaries built on the host, see Dockerfile)
-	CGO_ENABLED=0 GOOS=linux GOARCH=$(ARCH) $(GO) build -o $(BIN)/linux-$(ARCH)/ ./cmd/foc-mcp ./cmd/foc-approvals
+image: ## Build the foc-mcp/foc-approvals/foc-agent image (binaries built on the host, see Dockerfile)
+	CGO_ENABLED=0 GOOS=linux GOARCH=$(ARCH) $(GO) build -o $(BIN)/linux-$(ARCH)/ ./cmd/foc-mcp ./cmd/foc-approvals ./cmd/foc-agent
 	docker build --platform linux/$(ARCH) -t $(IMG) .
 
-deploy-kind: image ## Install CRDs, RBAC, admission policies, foc-mcp and foc-approvals into kind cluster KIND_CLUSTER (foc-*)
+deploy-kind: image ## Install CRDs, RBAC, admission policies, foc-mcp, foc-approvals and foc-agent into kind cluster KIND_CLUSTER (foc-*)
 	@case "$(KIND_CLUSTER)" in foc-*) ;; *) echo "KIND_CLUSTER must be set and start with foc-"; exit 1;; esac
 	kind load docker-image $(IMG) --name $(KIND_CLUSTER)
 	kubectl --context kind-$(KIND_CLUSTER) apply -f config/crd/ -f config/rbac/ -f config/admission/
@@ -72,8 +72,9 @@ deploy-kind: image ## Install CRDs, RBAC, admission policies, foc-mcp and foc-ap
 		--from-file=default.yaml=policies/default.yaml --dry-run=client -o yaml \
 		| kubectl --context kind-$(KIND_CLUSTER) apply -f -
 	kubectl --context kind-$(KIND_CLUSTER) apply -f config/deploy/
-	kubectl --context kind-$(KIND_CLUSTER) -n foc-system rollout restart deploy/foc-mcp deploy/foc-approvals
+	kubectl --context kind-$(KIND_CLUSTER) -n foc-system rollout restart deploy/foc-mcp deploy/foc-approvals deploy/foc-agent
 	kubectl --context kind-$(KIND_CLUSTER) -n foc-system rollout status deploy/foc-mcp deploy/foc-approvals --timeout=180s
+	@echo "foc-agent starts once Secret fleet-ops-copilot-claude (key ANTHROPIC_API_KEY) exists in foc-system; not waited for here."
 
 test-live: build ## Approval paths against a live cluster (hack/live-approval-path.sh sets the environment)
 	$(GO) test -tags live -count=1 -v -timeout 900s ./test/live/...

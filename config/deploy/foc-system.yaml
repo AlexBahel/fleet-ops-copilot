@@ -1,7 +1,9 @@
-# foc-mcp (tool server) and foc-approvals (approval controller and executor)
-# in namespace foc-system. Apply after config/crd, config/rbac and
-# config/admission (make deploy-kind). The policy file comes from ConfigMap
-# fleetops-policy (created by make deploy-kind from policies/default.yaml).
+# foc-mcp (tool server), foc-approvals (approval controller and executor) and
+# foc-agent (model loop and web UI) in namespace foc-system. Apply after
+# config/crd, config/rbac and config/admission (make deploy-kind). The policy
+# file comes from ConfigMap fleetops-policy (created by make deploy-kind from
+# policies/default.yaml). foc-agent does not start until Secret
+# fleet-ops-copilot-claude (key ANTHROPIC_API_KEY) exists in foc-system.
 # Audit files are on emptyDir volumes: they do not survive a pod restart
 # (docs/KNOWN-LIMITS.md, "Audit storage").
 apiVersion: apps/v1
@@ -85,3 +87,49 @@ spec:
           configMap: {name: fleetops-policy}
         - name: audit
           emptyDir: {}
+---
+# foc-agent: Claude backend, MCP client of foc-mcp, web UI on :8090. Its
+# ServiceAccount may only get and list ApprovalRequests. No login: reach it
+# with kubectl port-forward svc/foc-agent 8090:8090.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: foc-agent
+  namespace: foc-system
+  labels: {app.kubernetes.io/name: foc-agent, app.kubernetes.io/part-of: fleet-ops-copilot}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: foc-agent}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: foc-agent, app.kubernetes.io/part-of: fleet-ops-copilot}
+    spec:
+      serviceAccountName: foc-agent
+      securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: foc-agent
+          image: fleet-ops-copilot:dev
+          imagePullPolicy: IfNotPresent
+          command: [/usr/local/bin/foc-agent]
+          args: [-backend=claude, -listen=:8090, -mcp-url=http://foc-mcp:8080/mcp, -namespaces=warehouse-a, -max-concurrent=4]
+          env:
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef: {name: fleet-ops-copilot-claude, key: ANTHROPIC_API_KEY}
+            - name: FOC_CLAUDE_MODEL
+              value: claude-sonnet-5-5
+          ports: [{name: http, containerPort: 8090}]
+          livenessProbe: {httpGet: {path: /healthz, port: http}, periodSeconds: 10}
+          readinessProbe: {httpGet: {path: /readyz, port: http}, periodSeconds: 10, timeoutSeconds: 5}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: foc-agent
+  namespace: foc-system
+  labels: {app.kubernetes.io/name: foc-agent, app.kubernetes.io/part-of: fleet-ops-copilot}
+spec:
+  selector: {app.kubernetes.io/name: foc-agent}
+  ports: [{name: http, port: 8090, targetPort: http}]

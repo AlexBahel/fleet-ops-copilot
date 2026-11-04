@@ -30,9 +30,8 @@ app.kubernetes.io/part-of: fleet-ops-copilot
 {{- end -}}
 
 {{/*
-Environment for the claude backend, for the foc-agent Deployment once
-cmd/foc-agent exists. Not used by any template on main. The key comes from an
-existing Secret; the chart never holds its value.
+Environment for foc-agent's claude backend (templates/foc-agent.yaml). The key
+comes from an existing Secret; the chart never holds its value.
 */}}
 {{- define "foc.claudeEnv" -}}
 - name: ANTHROPIC_API_KEY
