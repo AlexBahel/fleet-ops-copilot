@@ -392,9 +392,10 @@ policies/          default policy files
 | D18 | CI gate on scripted backend; model evals on demand | CI has no API key and no GPU; scripted runs still catch harness, tool, and policy regressions. |
 | D19 | Fixtures in envtest with Swarmada's CRDs | Real API-server validation of fixture objects without running Swarmada controllers. |
 | D20 | Web UI as embedded static files | No Node build in an air-gapped pipeline. |
-| D21 | Copilot API group `fleetops.alexbahel.github.io` | The copilot is not part of the Swarmada standard, so it does not use `swarmada.io`; the group is on a domain the copyright holder controls. |
+| D21 | Copilot API group `fleetops.alexbahel.github.io` (revised 2026-11-03) | No entity named for now. The copilot is not part of the Swarmada standard, so it does not use `swarmada.io`. |
 | D22 | Draft creation fails closed when Swarmada's `FleetTask` webhook is not served | RFC-0003 `#resources-tasktrigger`: without admission webhooks the draft flag is not an authorization boundary. |
 | D23 | Canonical remote `github.com/AlexBahel/fleet-ops-copilot` (private) | Owner's decision; a `swarmada` organisation repository is deferred until the project is public. |
+| D24 | Copyright line `Copyright 2026 Alex Bahel` in LICENSE and NOTICE (revised 2026-11-03) | No entity named for now. |
 
 ## 8. Resolved questions (2026-11-03)
 
