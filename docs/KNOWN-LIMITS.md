@@ -7,11 +7,17 @@ remove it.
 
 - The five agent roles (Router, Diagnose, Dispatch, Zone ops, Reporter) and their tool
   allow-lists. The tool-use loop (`internal/agent`) offers every tool.
-- `foc-agent`, the web chat UI, and the OIDC pass-through for approving in a browser.
-- `make foc-up` (only its preflight, `scripts/foc-up-preflight.sh`, exists) and OpenTelemetry
-  tracing. The air-gapped profile is not templated in the Helm chart; it is installed beside it
-  from `config/airgap` (`make deploy-airgap`). `make deploy-kind` installs the plain manifests
-  (`config/deploy`) on a kind cluster; the image is built from binaries compiled on the host.
+- A login for the web UI (DESIGN D56). Without one, requests filed from the page are never
+  approvable; `foc chat` is the client that files approvable requests.
+- Conversation memory: each chat message is an independent agent run (D55). No streaming of
+  answers: the page and `foc chat` wait for the whole run.
+- `make foc-up` (only its preflight, `scripts/foc-up-preflight.sh`, exists). The air-gapped
+  profile is not templated in the Helm chart; it is installed beside it from `config/airgap`
+  (`make deploy-airgap`), and neither it nor the chart runs foc-agent with `-backend llamacpp`.
+  `make deploy-kind` installs the plain manifests (`config/deploy`) on a kind cluster; the image
+  is built from binaries compiled on the host.
+- Tracing: no stdout exporter and no OTLP/HTTP exporter (OTLP/gRPC only), and no spans in
+  `foc-approvals` for approval and execution (D54).
 - More than one approver per request (`minApprovers`): one accepted decision approves.
 
 ## Not measured yet
@@ -27,7 +33,12 @@ remove it.
   single-node kind cluster (kind v0.33.0, CNI kindnet, Docker Desktop on arm64;
   `docs/evidence/airgap-2026-11-04/`), on no other CNI or node.
 - The Helm chart (`charts/fleet-ops-copilot`), its cloud-profile NetworkPolicy (off by default) and
-  `docs/RUNBOOK.md` (draft) have not been installed or run on a cluster. The chart is checked with `helm lint --strict`,
+  `docs/RUNBOOK.md` (draft) have not been installed or run on a cluster.
+- `foc-agent`, its web UI, `foc chat` and tracing have not run on a cluster, against a model, or
+  against a real OTLP collector; they are tested with the scripted backend, envtest and an
+  in-process OTLP receiver, and the page was checked once in a browser against a local test server.
+  Requester authentication (D57) has been tested only with envtest's static person tokens and
+  TokenRequest ServiceAccount tokens, not with OIDC tokens or exec-plugin credentials. The chart is checked with `helm lint --strict`,
   kubeconform and `make chart-parity` (its default render equals `config/`).
 - Claude sampling is at the API's defaults (D43): the Claude API rejects `temperature` on the
   models used, so repeated claude runs vary. Air-gapped measurements send the model publisher's
@@ -40,11 +51,21 @@ remove it.
 
 ## Not enforced, or enforced only partly
 
-- **Operator identity.** The operator and session id reach `foc-mcp` in MCP request `_meta`,
-  set by the calling process. `foc-mcp` does not authenticate it. A client that can reach
-  `foc-mcp` can name any operator as `requestedFor`, which weakens the rule that the requester
-  cannot approve their own change. The ServiceAccount, `requestedBy`, and approver-authority
-  checks do not depend on it.
+- **Web UI has no login (D56).** The name typed in the page is not verified; it is recorded as
+  `requestedFor: unverified:<name>` and every approval of such a request is refused
+  (`DENY_REQUESTER_UNVERIFIED`), so a page request can only be rejected or expire. Anyone who can
+  reach the foc-agent Service can still chat (spending model tokens under the site's API key),
+  file such unapprovable requests (counted against the per-session draft limit of the session id
+  they send), and read every ApprovalRequest in the bound namespaces (operator names, reasons).
+  The Service is ClusterIP only, the chart renders no Ingress (`make chart-parity` refuses one),
+  and the RUNBOOK uses `kubectl port-forward`; whether NetworkPolicy applies to port-forwarded
+  traffic depends on the CNI. The only rate limit is the per-pod cap on chats in flight.
+- **Requester tokens (D57).** A verified requester needs a bearer token: a kubeconfig user that
+  authenticates with a client certificate (kind's default admin) has none, so its requests are
+  unverified. The token reaches `foc-mcp` through `foc-agent` over plain HTTP inside the cluster,
+  and both processes briefly hold a credential that is valid against the API server; `foc-mcp`
+  uses it only for a `TokenReview` (default audiences) and keeps a SHA-256 of it for 30 seconds.
+  Session ids are still asserted by the client.
 - **Impersonation.** A person allowed to impersonate users can create a decision as another
   person; the admission policy sees the impersonated identity. This is how Kubernetes
   authentication works, not something the copilot can detect.
@@ -61,9 +82,11 @@ remove it.
 - **Activation is done by the approver, outside the copilot.** After approval the copilot gives
   the exact command (`status.instruction`) and watches for the task to leave `Draft`; it cannot
   tell who ran the command, and it waits without a deadline. swarmctl v0.4 has no activate
-  subcommand, so the command is a `kubectl patch`. The planned end state is FOC-4's web UI
-  performing the write with the approver's own credentials (OIDC, passed through for that one
-  call); until then the approver runs the command.
+  subcommand, so the command is a `kubectl patch`. The web UI does not perform it (D52).
+- **The write shown in the web UI** is the body `foc-approvals` sends (D53); fields the API server
+  defaults and anything Swarmada's mutating webhooks add are not shown.
+- **foc-agent readiness** depends on foc-mcp and on the API server; either being down removes the
+  web UI from its Service.
 - **Audit storage.** Each process writes its own JSONL file; there is no shared store, rotation
   or retention yet. In `config/deploy` the files are on `emptyDir` volumes and are lost when a
   pod is replaced. A failed Event write is recorded in the JSONL file only.
@@ -111,3 +134,5 @@ remove it.
 - The copilot is not an emergency-stop path; `request_zone_stop` waits for a person.
 - The copilot never ends a maintenance window, clears a stop, deletes, approves, or activates:
   a window it requested, or a draft nobody activates, stays until a person acts.
+- The web UI never approves, rejects or activates (D52), and a request filed from it is never
+  approved (D56).

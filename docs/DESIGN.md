@@ -140,7 +140,8 @@ Two layers:
 
 1. **Hard invariants compiled into the binary** and not overridable by YAML: the forbidden list
    in §3.1; a drafted task always has `spec.draft: true`; write tools can only produce
-   `require_approval` or `deny`; the requester can never be the approver.
+   `require_approval` or `deny`; the requester can never be the approver; a request whose
+   requester is unverified (`unverified:<name>`, §3.3) is never approved (D56).
 2. **YAML policy files** (`policies/*.yaml`, mounted from a ConfigMap) for site rules. Examples:
    allowed namespaces; allowed `FleetAction.spec.priority` values in a drafted task; allowed
    `ZoneMaintenance.spec.mode`; `autoResumeAfterMinutes` must be `0` (a non-zero value would
@@ -165,17 +166,22 @@ Two copilot-owned, namespaced CRDs in API group `fleetops.alexbahel.github.io` (
 `ApprovalRequest` and `ApprovalDecision`. They are not Swarmada resources and are installed by
 the copilot's Helm chart.
 
-1. `foc-mcp` creates an `ApprovalRequest`: type, parameters, policy decision, requesting user
-   (the operator in the chat session), copilot session id. `foc-approvals` sets
-   `status.state: Pending`.
+1. `foc-mcp` creates an `ApprovalRequest`: type, parameters, policy decision, requesting user,
+   copilot session id. The requesting user (`spec.requestedFor`) is the username of the caller's
+   own bearer token, which `foc-mcp` verifies with a `TokenReview`; the client sends it in the
+   `Authorization` header of its MCP requests (`foc chat` through `foc-agent`, the eval harness).
+   An operator name in MCP `_meta` is only asserted: without a verified token the requester is
+   `unverified:<asserted name or anonymous>` (D57). `foc-approvals` sets `status.state: Pending`.
 2. An approver runs `foc approve <id>` (or `foc reject <id>`) with their own kubeconfig. The CLI
    reads the caller's username with a `SelfSubjectReview` and creates an `ApprovalDecision`
    (`requestRef`, `decision`, `decidedBy`). A ValidatingAdmissionPolicy installed by the chart
    rejects the decision unless `decidedBy` equals the authenticated username, rejects any
    ServiceAccount, and rejects every update (a decision is immutable). RBAC grants `create` on
    `approvaldecisions` only to the approver Role bound to people.
-3. `foc-approvals` validates the decision: the decider is not the requesting user (unless the
-   policy file allows it on a dev cluster); a `SubjectAccessReview` shows the decider could
+3. `foc-approvals` validates the decision: an approval of a request whose requester is
+   unverified is refused (`DENY_REQUESTER_UNVERIFIED`, D56; a rejection is accepted); the decider
+   is not the requesting user (unless the policy file allows it on a dev cluster); a
+   `SubjectAccessReview` shows the decider could
    perform the underlying Swarmada operation themselves (`create` on `fleettasks`; `create` on
    `zonemaintenances`;
    `patch` and `estop-trigger` on that `fleetzone`; `activate` on that `fleettask`); the request
@@ -192,9 +198,10 @@ the copilot's Helm chart.
      `ActivationObserved` Event, and an `activation_observed` audit line (D28).
 5. Requests expire after the policy TTL. Rejected and expired requests are terminal.
 
-The Web UI shows requests and decisions. Approving from the browser requires the cluster to
-accept the person's OIDC token, which is passed through for that one call and never stored;
-without OIDC, approval is by `foc approve` only.
+The web UI shows requests and decisions and never decides (D52): for a pending request it
+shows the exact write (D53) and the `foc approve` / `foc reject` command for a person to run
+with their own kubeconfig. It has no login and sends no token, so a request filed from it is
+recorded `unverified:<name>` and can be rejected but never approved (D56).
 
 ### 3.4 Audit
 
@@ -240,14 +247,14 @@ allow-list of MCP tools; the policy engine applies regardless of role.
 
 | Subject | Rules |
 |---|---|
-| `foc-agent` (SA) | none on Swarmada; none on copilot resources |
-| `foc-mcp` (SA) | `get`,`list`,`watch` on `robots`, `fleettasks`, `fleetactions`, `fleetzones`, `zonemaintenances`, `discoveredrobots`, `fleetadapters`, `robotclasses`, `tasktriggers` (`swarmada.io`); `get`,`list`,`create` on `events`; `create`,`get`,`list`,`watch` on `approvalrequests`; cluster-scoped `get`,`list` on `validatingwebhookconfigurations`. No Swarmada write. |
+| `foc-agent` (SA) | `get`,`list` on `approvalrequests` (`fleetops.alexbahel.github.io`) in each Swarmada namespace (ClusterRole `fleetops:foc-agent`, RoleBinding `fleetops-foc-agent`), for the web UI's requests panel. Nothing else: no Swarmada access, no `watch`, no write of any kind, no `approvaldecisions`, no `approvalrequests/status` (D51). |
+| `foc-mcp` (SA) | `get`,`list`,`watch` on `robots`, `fleettasks`, `fleetactions`, `fleetzones`, `zonemaintenances`, `discoveredrobots`, `fleetadapters`, `robotclasses`, `tasktriggers` (`swarmada.io`); `get`,`list`,`create` on `events`; `create`,`get`,`list`,`watch` on `approvalrequests`; cluster-scoped `get`,`list` on `validatingwebhookconfigurations`; cluster-scoped `create` on `tokenreviews` (`authentication.k8s.io`), to verify the requester's bearer token (D57). No Swarmada write. |
 | `foc-approvals` (SA) | reads as above; `get`,`list`,`watch` on `approvalrequests`, `approvaldecisions`; `get`,`update`,`patch` on `approvalrequests/status`; `create` on `fleettasks` and `zonemaintenances`; `patch` + custom verb `estop-trigger` on `fleetzones`; `create` on `events`, `subjectaccessreviews`; cluster-scoped `get`,`list` on `validatingwebhookconfigurations` |
 | `foc-approver` (Role, bound to people) | `get`,`list`,`watch` on `approvalrequests`; `create` on `approvaldecisions` |
 
 No copilot ServiceAccount has `delete`, `update` on Swarmada kinds, `activate`, `cancel`,
 `append`, `estop-clear`, `admit`, `reject`, `rollout-resume`, `policy-reset`, or any
-`trigger-response-*` verb.
+`trigger-response-*` verb. foc-agent holds no write permission at all.
 
 RBAC cannot restrict a `create` by field or a `patch` to one annotation, so the chart installs
 ValidatingAdmissionPolicies (CEL, Kubernetes ≥ 1.30):
@@ -272,29 +279,38 @@ Default-deny ingress and egress in the copilot namespace, then:
 - `foc-agent` → `foc-mcp` (MCP port); `foc-agent` → `llama-server` (airgap only);
 - `foc-agent` → Claude API (cloud only). NetworkPolicy has no FQDN rules; the chart takes an
   egress `ipBlock` or an egress proxy address. The `airgap` values file sets neither;
-- `llama-server`: ingress from `foc-agent` (and the egress probe) only, no egress (D50).
+- `llama-server`: ingress from `foc-agent` (and the egress probe) only, no egress (D50);
+- `foc-agent`, `foc-mcp` → the OTLP collector, when tracing is on and peers are given;
+- no ingress rule for `foc-agent`'s web UI: its Service is ClusterIP only and the chart renders
+  no Ingress (D56); it is reached with `kubectl port-forward`.
 
 NetworkPolicy is enforced only by a CNI that implements it. Enforcement is verified by an egress
 probe Job (`make verify-egress`), not assumed.
 
 ### 3.8 Observability and secrets
 
-- OpenTelemetry traces: one root span per operator request, child spans per role step, LLM
-  call (with token counts from the response), MCP tool call (with the policy decision), and
-  approval/execution. OTLP exporter address from env; unset means traces are written to stdout
-  as JSON in dev and disabled in the cluster.
+- OpenTelemetry traces (D54): one trace per operator request, with a root span in `foc-agent`, a
+  span per model call (token counts and latency), a span per tool call on each side of MCP (the
+  trace context crosses in `_meta` as W3C `traceparent`), and a span per policy decision in
+  `foc-mcp`. No span carries prompt, answer, tool argument or tool result text, and a redacting
+  exporter masks secrets before export. OTLP/gRPC exporter (`-otlp-endpoint` or
+  `OTEL_EXPORTER_OTLP_ENDPOINT`); unset means tracing is off. Approval and execution spans in
+  `foc-approvals` are not built.
 - Secrets (`ANTHROPIC_API_KEY`, tokens) come only from environment variables populated from
   Kubernetes Secrets. A redaction step removes the values of every configured secret and known
   token patterns from span attributes, logs, audit lines, and Events. No copilot process
-  receives an approver's credential, except the OIDC pass-through in §3.3, which is used for one
-  call and never stored.
+  receives an approver's credential. `foc-agent` and `foc-mcp` receive the requester's own bearer
+  token for a chat that carries one; `foc-mcp` uses it only in a `TokenReview` and keeps only its
+  SHA-256 for 30 seconds as a cache key (D57).
 
 ### 3.9 Interfaces
 
-- `foc` CLI: `foc chat`, `foc requests`, `foc approve|reject <id>`, `foc audit verify`.
+- `foc` CLI: `foc chat` (sends the person's own bearer token to `foc-agent`, D57), `foc requests`,
+  `foc approve|reject <id>`, `foc audit verify`.
 - Web chat UI served by `foc-agent` (Go `net/http`, embedded static HTML/JS, no front-end build
-  step), with a requests panel showing each `ApprovalRequest`, its policy decision, and its
-  decision.
+  step), with a requests panel showing each `ApprovalRequest`, its policy decision, the exact
+  write it leads to and the commands to decide it; it never decides (D52, D53, D56). Each chat
+  message is one agent run with no history across messages (D55).
 
 ## 4. Evaluation plan
 
@@ -389,7 +405,7 @@ quickstart itself writes some status by hand (see "Honest notes — what's real 
 ```text
 cmd/foc            CLI
 cmd/foc-mcp        MCP server
-cmd/foc-agent      agent orchestrator + web UI
+cmd/foc-agent      agent process + web UI (built)
 cmd/foc-approvals  approval controller + executor
 test/envtest       API-server tests: RBAC, admission policies, approval path
 api/v1alpha1       ApprovalRequest, ApprovalDecision (fleetops.alexbahel.github.io)
@@ -402,6 +418,10 @@ internal/agent     tool-use loop over MCP
 internal/agents    Router, Diagnose, Dispatch, Zone ops, Reporter (later)
 internal/testenv   shared envtest environment for tests and evals
 internal/redact    secret redaction
+internal/authn     requester authentication (TokenReview of the caller's bearer token)
+internal/tracing   OpenTelemetry setup, redacting exporter, trace context over MCP _meta
+internal/webui     foc-agent's web chat and requests panel
+internal/requestview  an ApprovalRequest shown with the exact write it leads to
 evals/             harness, scenarios, fixtures, results
 charts/            Helm chart
 config/            CRDs, RBAC, ValidatingAdmissionPolicy manifests
@@ -463,6 +483,13 @@ policies/          default policy files
 | D48 | `go.mod` pins `github.com/swarmada/swarmada` at `558da47fdb44d65d720ce9cd6791e97f19d1eab1` (tag `rfc-0001-v0.4`); `go.work` is removed and the CI Go job enabled. Results produced before the tag on a source tree identical to this commit's are labelled with `558da47`; runs labelled smoke stay smoke | Owner's ruling R35, 2026-11-04. The tag's commit has tree `75bfa3beca20f57480d57b760944c1e7dcfe7c38`, the same tree the earlier results were produced from (checked by tree id), so the label names the source those results ran against. |
 | D49 | Air-gapped model measurements send Qwen2.5-7B-Instruct's published sampling settings: `temperature` 0.7, `top_p` 0.8, `top_k` 20, `repeat_penalty` 1.05, read from `generation_config.json` of `Qwen/Qwen2.5-7B-Instruct` at revision `a09a35458c702b33eeacc393d103063234e8bc28` (set with `FOC_LLAMACPP_TEMPERATURE`, `FOC_LLAMACPP_TOP_P`, `FOC_LLAMACPP_TOP_K`, `FOC_LLAMACPP_REPEAT_PENALTY`). Every other llama-server sampler stays at the server's default; the results record both (`backendSettings`, and the server's `/props`) | Owner's ruling R20, 2026-11-04: record and send what the model's publisher specifies. Two differences remain and are recorded, not corrected: transformers applies `repetition_penalty` to every token of the sequence, llama-server applies `repeat_penalty` to the last `repeat_last_n` tokens (server default 64); `generation_config.json` sets no `min_p`, llama-server applies its default 0.05. No `seed` is sent, so repeated runs sample independently. |
 | D50 | The air-gapped NetworkPolicy gives `llama-server` no egress at all and limits other pods in `foc-system` to cluster DNS; only `foc-mcp`, `foc-approvals` and `foc-agent` reach the API server, `foc-agent` and the egress probe reach `llama-server`, and `foc-agent` reaches `foc-mcp` (`config/airgap/networkpolicy.yaml`) | §3.7 says `llama-server` has no egress. The first version selected every pod in the namespace for in-namespace and DNS egress, `llama-server` included: measured on a kind cluster, `llama-server` reached `foc-mcp` and resolved external names. Measured with this version: `llama-server` opens no connection; the copilot pods reach only the API server and DNS (`docs/evidence/airgap-2026-11-04/`). |
+| D51 | foc-agent's ServiceAccount gets `get` and `list` on `approvalrequests` in each Swarmada namespace (ClusterRole `fleetops:foc-agent`, RoleBinding `fleetops-foc-agent`), for the web UI's requests panel; nothing else: no Swarmada access, no `watch`, no write of any kind | Owner's ruling R37, 2026-11-04. The UI must show requests; reading them through `foc-mcp` would add a tool the model sees or a second unauthenticated endpoint on the tool server. Evidence: `TestRBACMatrix` (foc-agent: 2 rows allowed, 19 refused, no list in `foc-system` or cluster-wide), `TestFocAgentCannotWrite`, `TestWebUIOutsideGrantedNamespace` (`test/envtest`). (Revises §3.6: before, foc-agent held nothing.) |
+| D52 | The web UI never approves or rejects. For each pending request it shows `foc approve` / `foc reject` for a person to run with their own kubeconfig, and for an activation the command the approver runs after approval | Owner's ruling R36, 2026-11-04. Replaces the OIDC pass-through planned in §3.3 and §3.8, and the end state in D28 ("FOC-4's web UI performing the write with the approver's own credentials"). The page has no approve route (`TestStaticPageAndHeaders`, `internal/webui`). |
+| D53 | The write a request leads to is shown from the executor's own builders (`approval.DraftTaskObject`, `MaintenanceObject`, `ZoneStopPatch`, `ActivationPatch`): it is the body `foc-approvals` sends. Fields the API server fills in from the CRD's defaults, and anything Swarmada's mutating webhooks add, are not shown; the page says so | `TestDraftViewIsTheExecutorObject` (`internal/requestview`) parses the shown body back and compares it with the executor's object; `TestWebUIShowsTheWriteThatIsExecuted` (`test/envtest`) finds every shown field in the FleetTask `foc-approvals` created after a person approved, and logs the fields the API server added (`completionPolicy`, `failurePolicy`, `desiredState`; per action `onFailure`, `desiredState`, `startCondition`, `trigger`). |
+| D54 | Tracing: one trace per operator request; spans `foc.request`, `llm.chat` (tokens, latency), `tool.call` and `mcp.tool` (trace context in tools/call `_meta` as W3C `traceparent`), `policy.decide` in `foc-mcp`; no prompt, answer, tool argument or result text in any span; a redacting exporter masks configured secrets and token patterns before export; OTLP/gRPC only, off when no endpoint is set; every linked OpenTelemetry module from one release (v1.43.0, `proto/otlp` v1.10.0) | Spans and attributes: `internal/tracing`, `internal/agent`, `internal/mcpserver`, `internal/tools`. Tests with an in-memory exporter (`TestLoopTraceAcrossMCPAndPolicy`) and an in-process OTLP collector (`TestSetupExportsOTLPToCollector`). Release set: owner's ruling on FOC-4b item 4, 2026-11-04. The §3.8 stdout exporter in dev is not built; spans per agent role are not built because the roles are not. |
+| D55 | foc-agent opens a new MCP session and a new backend for each chat request; each chat message is an independent agent run with no history across messages; the page's session id groups requests (per-session draft limit, request label) | A foc-mcp restart affects only requests in flight, and no backend state is shared between people. Conversation memory is in KNOWN-LIMITS. |
+| D56 | The web UI has no login. A requester that is not authenticated is recorded as `unverified:<name>`; `DecideApproval` refuses approval of any such request (`DENY_REQUESTER_UNVERIFIED`), as a hard invariant that no policy file setting lifts; a rejection is accepted. The `foc-agent` Service is ClusterIP only; the chart renders no Ingress and `make chart-parity` refuses an Ingress, Route or Gateway API object and any non-ClusterIP Service | Owner's ruling R38, 2026-11-04. Evidence: `TestDecideApproval`, `TestUnverifiedRequesterIsAHardInvariant` (`internal/policy`), `TestWebUIRequestCannotBeApproved` (`test/envtest`: a person with every needed permission approves a page request; refused, nothing written; the rejection is accepted). Without the check that approval executes the stop (FOC-4b negative control). |
+| D57 | `foc-mcp` authenticates its caller: the client sends the person's own bearer token in the `Authorization` header of its MCP requests; `foc-mcp` verifies it with a `TokenReview` (its ServiceAccount holds cluster-scoped `create` on `tokenreviews`) and records the authenticated username as `requestedFor`. An operator name in `_meta` is ignored except inside an unverified requester: no token, or a failed review, gives `unverified:<asserted name or anonymous>` (D56). `foc chat` sends the kubeconfig user's bearer token to `foc-agent`, which forwards it; the web page sends none. The eval harness serves `foc-mcp` over streamable HTTP on loopback and sends a TokenRequest token for ServiceAccount `foc-eval-operators/<operator>`; the judge meets an expected `requestedFor` of the scenario operator with that identity | Owner's ruling R39, 2026-11-04 (TokenRequest tokens for the harness and the judge mapping: owner's choice). Evidence: `internal/authn` unit tests; `TestRequesterFromBearerTokenNotMeta` (`internal/mcpserver`); `TestRequesterIsAuthenticated` (`test/envtest`: sam's token with a forged `dana` gives requester `sam`; sam's own approval is refused `DENY_SELF_APPROVAL`; dana's is accepted and executed; a forged name without a token is unverified and refused; a rejected token is unverified; a TokenRequest token authenticates as its ServiceAccount), `TestFocAgentForwardsTheCallersToken`; envtest people also hold static bearer tokens (`--token-auth-file`) for these tests. Fixture evals with the harness change: 75/75, every run's pass, verdict, tool calls and turns identical to the results before it. |
 
 ## 8. Resolved questions (2026-11-03)
 
