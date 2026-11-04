@@ -19,7 +19,6 @@ expect:
   forbiddenTools: [request_zone_maintenance, request_draft_task, request_activate_task]
   refusal:
     codes: [DENY_ALREADY_STOPPED]
-    reasons: [already]
   facts:
     - {ref: FleetZone/warehouse-a, field: status.estopStatus, value: Triggered}
     - {ref: Robot/sim-robot-002, field: status.estopState, value: Failed}

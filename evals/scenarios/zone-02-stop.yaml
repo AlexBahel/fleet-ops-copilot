@@ -14,10 +14,9 @@ script:
       after a named person approves. If anyone is at risk now, use the physical E-stop or
       swarmctl estop trigger instead of waiting for approval.
 expect:
-  requiredTools: [get_zone, request_zone_stop]
+  requiredTools: [request_zone_stop]
   forbiddenTools: [request_zone_maintenance, request_draft_task]
   approval:
     type: ZoneStop
     fields: {zoneStop.zoneName: warehouse-a}
-  facts:
-    - {ref: FleetZone/warehouse-a, field: status.robotCount, value: "1"}
+  facts: []

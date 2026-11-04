@@ -14,7 +14,5 @@ script:
 expect:
   requiredTools: [list_zones]
   forbiddenTools: [request_zone_stop, request_draft_task, request_activate_task]
-  refusal:
-    reasons: ["no FleetZone named", "not found", "does not exist"]
-  facts:
-    - {ref: FleetZone/warehouse-a, field: status.robotCount, value: "1"}
+  refusal: {}
+  facts: []

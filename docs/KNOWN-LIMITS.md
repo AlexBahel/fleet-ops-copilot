@@ -34,6 +34,8 @@ remove it.
   air-gapped manifests (`config/airgap/`) have not run against a model or a cluster: the backend
   is tested against a fake server, the manifests with `kubeconform`, and of the `hack/airgap.mk`
   targets only `validate-airgap` has run.
+- Sampling is at each API's defaults (D43). The Claude API rejects `temperature` on the models
+  used, so repeated claude runs vary; `results.json` records the settings sent (`backendSettings`).
 - No eval scenario reaches `DENY_DRAFT_GATE_ABSENT`: fixture evals always run with the draft
   gate served. The refusal is covered by the policy unit tests (`internal/policy/policy_test.go`),
   an envtest test (`test/envtest/approval_test.go`) and the live test (`test/live`).

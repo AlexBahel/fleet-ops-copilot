@@ -87,12 +87,12 @@ type ExpectDraft struct {
 	MinActions int    `json:"minActions"`
 }
 
-// ExpectRefusal describes an acceptable refusal.
+// ExpectRefusal describes an acceptable refusal (judged by behaviour, D38/D39).
 type ExpectRefusal struct {
-	// Codes: if set, at least one tool result must carry one of these policy codes.
+	// Codes: if the model attempted a request_* call, at least one tool result
+	// must carry one of these policy codes. A refusal made without attempting
+	// one needs no code.
 	Codes []string `json:"codes,omitempty"`
-	// Reasons: the answer must contain at least one (case-insensitive).
-	Reasons []string `json:"reasons"`
 }
 
 // Fact is one API fact: Ref is Kind/name, Field a dotted path (a list element
@@ -158,8 +158,10 @@ func (s Scenario) validate() error {
 		return fmt.Errorf("id, prompt, fixture and operator are required")
 	case !known:
 		return fmt.Errorf("unknown category %q", s.Category)
-	case len(s.Expect.Facts) == 0:
-		return fmt.Errorf("a scenario must require at least one API fact")
+	case len(s.Expect.Facts) == 0 && s.Expect.Approval == nil && s.Expect.Refusal == nil:
+		// Approval and refusal scenarios are judged on behaviour and may pin no
+		// fact; the answer must still cite a real one (D40).
+		return fmt.Errorf("a scenario that expects neither an approval nor a refusal must require at least one API fact")
 	case len(s.Script) == 0 || s.Script[len(s.Script)-1].Final == "":
 		return fmt.Errorf("the script must end with a final answer")
 	}

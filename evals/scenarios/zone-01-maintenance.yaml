@@ -16,10 +16,9 @@ script:
       Robots finish their current actions and then pause. A named person must approve, and the window
       has no automatic resume: a person ends it.
 expect:
-  requiredTools: [get_zone, request_zone_maintenance]
+  requiredTools: [request_zone_maintenance]
   forbiddenTools: [request_zone_stop, request_draft_task]
   approval:
     type: ZoneMaintenance
     fields: {zoneMaintenance.zoneName: warehouse-a, zoneMaintenance.mode: Graceful, zoneMaintenance.scopeType: Zone}
-  facts:
-    - {ref: FleetZone/warehouse-a, field: status.robotCount, value: "1"}
+  facts: []

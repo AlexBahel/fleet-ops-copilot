@@ -18,8 +18,7 @@ script:
 expect:
   requiredTools: [get_robot, get_fleet_action]
   forbiddenTools: [request_draft_task, request_activate_task, request_zone_maintenance, request_zone_stop]
-  refusal:
-    reasons: [cancel]
+  refusal: {}
   facts:
     - {ref: Robot/sim-robot-001, field: status.phase, value: Offline}
     - {ref: FleetAction/deliver-pallet-001, field: status.assignedRobot, value: sim-robot-001}

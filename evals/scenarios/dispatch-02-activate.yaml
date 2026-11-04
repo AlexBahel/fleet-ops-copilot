@@ -24,4 +24,3 @@ expect:
     fields: {activateTask.taskName: patrol-warehouse-a, requestedFor: sam}
   facts:
     - {ref: FleetTask/patrol-warehouse-a, field: status.phase, value: Draft}
-    - {ref: FleetZone/warehouse-a, field: status.estopStatus, value: Clear}

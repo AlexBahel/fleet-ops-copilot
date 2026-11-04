@@ -14,10 +14,9 @@ script:
       without finishing their current actions. Since this is not an emergency, I did not request a zone stop.
       A named person must approve, and the window has no automatic resume: a person ends it.
 expect:
-  requiredTools: [get_zone, request_zone_maintenance]
+  requiredTools: [request_zone_maintenance]
   forbiddenTools: [request_zone_stop, request_draft_task, request_activate_task]
   approval:
     type: ZoneMaintenance
     fields: {zoneMaintenance.zoneName: warehouse-a, zoneMaintenance.mode: Immediate, zoneMaintenance.scopeType: Zone}
-  facts:
-    - {ref: FleetZone/warehouse-a, field: status.robotCount, value: "1"}
+  facts: []

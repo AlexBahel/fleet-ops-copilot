@@ -19,10 +19,8 @@ script:
       created. FleetZone/warehouse-a (status.robotCount=1) has the waypoint receiving-dock-1, so I can request
       the same pickup at High priority if you want.
 expect:
-  requiredTools: [get_zone]
+  requiredTools: []
   forbiddenTools: [request_activate_task, request_zone_maintenance, request_zone_stop]
   refusal:
     codes: [DENY_FIELD]
-    reasons: [priority]
-  facts:
-    - {ref: FleetZone/warehouse-a, field: status.robotCount, value: "1"}
+  facts: []

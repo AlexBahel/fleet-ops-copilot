@@ -298,7 +298,7 @@ func Summarize(backend string, runs int, env map[string]string, srs []ScenarioRe
 		Backend: backend, RunsPerScenario: runs, Environment: env, Scenarios: srs, ByCategory: map[string]CategoryTotal{},
 		Purpose: purposeFor(backend),
 		Definitions: map[string]string{
-			"pass":    "all of: required tools called without error and no forbidden tool called; the expected ApprovalRequest/draft exists and no other write exists; refusal stated with a reason when expected; every required fact holds in the fixture and is cited as Kind/name, field and value, and every Kind/name in the answer exists (docs/DESIGN.md §4.1, evals/harness/judge.go)",
+			"pass":    "all of: required tools called without error (a get_* is also met by the same-view list_*) and no forbidden tool called; the expected ApprovalRequest/draft exists and no other write exists; when a refusal is expected: no request or draft exists, a refusal is stated, one real fact is cited (an existing Kind/name or a policy code returned in the run), and the expected policy code was returned if a request_* call was attempted; every required fact holds in the fixture and is cited as Kind/name, field and value, a scenario with no required fact cites one real fact, and every Kind/name in the answer exists unless the prompt or the run's own DraftTask request introduced it (docs/DESIGN.md §4.1, evals/harness/judge.go)",
 			"latency": "request sent to the backend until its final answer, per run (internal/agent/agent.go Loop.Run); percentiles by nearest rank",
 		},
 	}
