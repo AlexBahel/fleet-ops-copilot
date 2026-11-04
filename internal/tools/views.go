@@ -173,18 +173,22 @@ func taskView(t *swarmv1.FleetTask, createdByLabel string) FleetTaskView {
 
 // FleetActionView is a FleetAction.
 type FleetActionView struct {
-	Name          string          `json:"name"`
-	Namespace     string          `json:"namespace"`
-	Type          string          `json:"spec.type"`
-	Zone          string          `json:"spec.zone,omitempty"`
-	Priority      string          `json:"spec.priority,omitempty"`
-	Required      []string        `json:"spec.requiredCapabilities,omitempty"`
-	Phase         string          `json:"status.phase,omitempty"`
-	AssignedRobot string          `json:"status.assignedRobot,omitempty"`
-	FailureReason string          `json:"status.failureReason,omitempty"`
-	Message       string          `json:"status.message,omitempty"`
-	RetryCount    int32           `json:"status.retryCount,omitempty"`
-	Conditions    []ConditionView `json:"status.conditions,omitempty"`
+	Name      string   `json:"name"`
+	Namespace string   `json:"namespace"`
+	Type      string   `json:"spec.type"`
+	Zone      string   `json:"spec.zone,omitempty"`
+	Priority  string   `json:"spec.priority,omitempty"`
+	Required  []string `json:"spec.requiredCapabilities,omitempty"`
+	// MinBatteryPct is the battery floor a candidate robot must meet (nil: none set).
+	MinBatteryPct *int32 `json:"spec.minBatteryPct,omitempty"`
+	Phase         string `json:"status.phase,omitempty"`
+	AssignedRobot string `json:"status.assignedRobot,omitempty"`
+	FailureReason string `json:"status.failureReason,omitempty"`
+	Message       string `json:"status.message,omitempty"`
+	RetryCount    int32  `json:"status.retryCount,omitempty"`
+	// DisconnectedAt is when the assigned robot was lost (RFC 3339; empty when not set).
+	DisconnectedAt string          `json:"status.disconnectedAt,omitempty"`
+	Conditions     []ConditionView `json:"status.conditions,omitempty"`
 }
 
 func actionView(a *swarmv1.FleetAction) FleetActionView {
@@ -192,7 +196,8 @@ func actionView(a *swarmv1.FleetAction) FleetActionView {
 		Name: a.Name, Namespace: a.Namespace, Type: string(a.Spec.Type), Zone: a.Spec.Zone, Priority: string(a.Spec.Priority),
 		Required: a.Spec.RequiredCapabilities, Phase: string(a.Status.Phase), AssignedRobot: a.Status.AssignedRobot,
 		FailureReason: a.Status.FailureReason, Message: a.Status.Message, RetryCount: a.Status.RetryCount,
-		Conditions: conds(a.Status.Conditions),
+		Conditions: conds(a.Status.Conditions), MinBatteryPct: a.Spec.MinBatteryPct,
+		DisconnectedAt: ts(a.Status.DisconnectedAt),
 	}
 }
 
