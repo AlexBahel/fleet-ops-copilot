@@ -83,7 +83,7 @@ func (c *Claude) Chat(ctx context.Context, system string, history []Message, too
 		return Reply{}, err
 	}
 	resp, err := c.client.Messages.New(ctx, anthropic.MessageNewParams{
-		Model:        anthropic.Model(c.Model),
+		Model:        c.Model,
 		MaxTokens:    c.MaxTokens,
 		System:       []anthropic.TextBlockParam{{Text: system}},
 		Messages:     msgs,

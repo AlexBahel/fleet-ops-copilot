@@ -105,7 +105,7 @@ func run() error {
 			n++
 		}
 	}
-	if err := os.WriteFile(*out, buf.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(*out, buf.Bytes(), 0o600); err != nil {
 		return err
 	}
 	fmt.Printf("%s: %d objects from namespace %s\n", *out, n, *ns)
