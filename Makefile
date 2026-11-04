@@ -1,7 +1,9 @@
 # Fleet Ops Copilot. `make help` lists targets.
 
 ENVTEST_K8S_VERSION ?= 1.37.0
-SETUP_ENVTEST_VERSION ?= release-0.17
+# setup-envtest from the release-0.23 branch (needs go 1.25). The release-0.17
+# build used before downloads from a storage bucket that answered 401 (2026-11-04).
+SETUP_ENVTEST_VERSION ?= v0.0.0-20260305142021-f9589b9f2b9d
 GO ?= go
 BIN := bin
 

@@ -41,12 +41,13 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      # Installs golangci-lint on PATH; `make ci` runs it (target lint).
       - uses: golangci/golangci-lint-action@v8
         with:
           version: v2.14.0
-          args: --timeout=5m
-      - name: Install envtest binaries
-        run: go install sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.17
+          install-only: true
+      - name: Install setup-envtest (version pinned in the Makefile)
+        run: make envtest-assets
       - name: make ci
         run: make ci
       - uses: actions/upload-artifact@v4
