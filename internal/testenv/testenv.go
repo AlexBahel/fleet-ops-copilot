@@ -19,11 +19,18 @@ limitations under the License.
 // Swarmada's own RBAC roles loaded from the Swarmada module. It is shared by
 // the envtest suite and the fixture evaluations.
 //
-// Swarmada's controllers and webhooks do not run. A stand-in webhook applies
-// Swarmada's documented FleetTask activation rule (clearing spec.draft is
-// refused to every ServiceAccount and needs the activate verb;
-// internal/webhook/fleettask_webhook.go in Swarmada). It is a stand-in, not
-// Swarmada's code; it exists so the draft gate is present and fail-closed.
+// Swarmada's controllers and webhooks do not run: Swarmada's webhook code is in
+// its internal/webhook package, which another module cannot import. Two
+// stand-in webhooks reproduce the two Swarmada admission behaviours the
+// copilot depends on, from that code; they are stand-ins, not Swarmada's code:
+//
+//   - FleetTask activation (validating): clearing spec.draft is refused to every
+//     ServiceAccount and needs the activate verb (authorizeActivate,
+//     internal/webhook/fleettask_webhook.go).
+//   - FleetZone estop actor (mutating): on an estop-triggered transition the
+//     authenticated user is stamped into swarmada.io/estop-actor, and while
+//     triggered the swarmada.io/estop-in-force finalizer is added (stampEstopActor,
+//     internal/webhook/estop_actor_defaulter.go).
 package testenv
 
 import (
@@ -63,13 +70,17 @@ import (
 
 // Identities used throughout the tests and evaluations.
 const (
-	SwarmNS     = "warehouse-a"
-	FocNS       = "foc-system"
-	MCPUser     = "system:serviceaccount:foc-system:foc-mcp"
-	ApprovUser  = "system:serviceaccount:foc-system:foc-approvals"
-	AgentUser   = "system:serviceaccount:foc-system:foc-agent"
-	StandinName = "standin-swarmada-fleettask"
-	standinPath = "/validate-fleettask-standin"
+	SwarmNS          = "warehouse-a"
+	FocNS            = "foc-system"
+	MCPUser          = "system:serviceaccount:foc-system:foc-mcp"
+	ApprovUser       = "system:serviceaccount:foc-system:foc-approvals"
+	AgentUser        = "system:serviceaccount:foc-system:foc-agent"
+	StandinName      = "standin-swarmada-fleettask"
+	standinPath      = "/validate-fleettask-standin"
+	standinZoneName  = "standin-swarmada-fleetzone"
+	standinZonePath  = "/mutate-fleetzone-standin"
+	EstopActorAnn    = "swarmada.io/estop-actor"
+	EstopInForceFinz = "swarmada.io/estop-in-force"
 )
 
 // Person is an authenticated user (client certificate) with RoleBindings in SwarmNS.
@@ -130,12 +141,29 @@ func Start(repoRoot string, people []Person) (*Env, error) {
 		return nil, err
 	}
 	fail := admissionv1.Fail
+	ignore := admissionv1.Ignore
 	none := admissionv1.SideEffectClassNone
 	path := standinPath
+	zpath := standinZonePath
 	te := &envtest.Environment{
 		CRDDirectoryPaths:     []string{filepath.Join(repoRoot, "config", "crd"), filepath.Join(sw, "config", "crd", "bases")},
 		ErrorIfCRDPathMissing: true,
 		WebhookInstallOptions: envtest.WebhookInstallOptions{
+			MutatingWebhooks: []*admissionv1.MutatingWebhookConfiguration{{
+				ObjectMeta: metav1.ObjectMeta{Name: standinZoneName},
+				TypeMeta:   metav1.TypeMeta{Kind: "MutatingWebhookConfiguration", APIVersion: "admissionregistration.k8s.io/v1"},
+				Webhooks: []admissionv1.MutatingWebhook{{
+					Name:                    "mfleetzone.standin.test",
+					AdmissionReviewVersions: []string{"v1"},
+					SideEffects:             &none,
+					FailurePolicy:           &ignore, // as Swarmada's mfleetzone.swarmada.io
+					ClientConfig:            admissionv1.WebhookClientConfig{Service: &admissionv1.ServiceReference{Name: "standin", Namespace: "default", Path: &zpath}},
+					Rules: []admissionv1.RuleWithOperations{{
+						Operations: []admissionv1.OperationType{admissionv1.Create, admissionv1.Update},
+						Rule:       admissionv1.Rule{APIGroups: []string{"swarmada.io"}, APIVersions: []string{"v1"}, Resources: []string{"fleetzones"}},
+					}},
+				}},
+			}},
 			ValidatingWebhooks: []*admissionv1.ValidatingWebhookConfiguration{{
 				ObjectMeta: metav1.ObjectMeta{Name: StandinName},
 				TypeMeta:   metav1.TypeMeta{Kind: "ValidatingWebhookConfiguration", APIVersion: "admissionregistration.k8s.io/v1"},
@@ -324,6 +352,7 @@ func (e *Env) startStandin(ctx context.Context) error {
 	o := e.env.WebhookInstallOptions
 	srv := webhook.NewServer(webhook.Options{Host: o.LocalServingHost, Port: o.LocalServingPort, CertDir: o.LocalServingCertDir})
 	srv.Register(standinPath, &webhook.Admission{Handler: admission.HandlerFunc(e.standinActivate)})
+	srv.Register(standinZonePath, &webhook.Admission{Handler: admission.HandlerFunc(standinEstopActor)})
 	go func() { _ = srv.Start(ctx) }()
 	addr := fmt.Sprintf("https://%s:%d%s", o.LocalServingHost, o.LocalServingPort, standinPath)
 	hc := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}, Timeout: time.Second} //nolint:gosec // local readiness probe
@@ -363,4 +392,43 @@ func (e *Env) standinActivate(ctx context.Context, req admission.Request) admiss
 		return admission.Denied(fmt.Sprintf("user %q is not permitted to activate draft FleetTask %q (stand-in for Swarmada's rule)", u.Username, newT.Name))
 	}
 	return admission.Allowed("")
+}
+
+// standinEstopActor mirrors Swarmada's stampEstopActor: on a transition of
+// swarmada.io/estop-triggered it records the admission user in
+// swarmada.io/estop-actor, and while the annotation is present it holds the
+// swarmada.io/estop-in-force finalizer.
+func standinEstopActor(_ context.Context, req admission.Request) admission.Response {
+	var obj, old swarmv1.FleetZone
+	if err := json.Unmarshal(req.Object.Raw, &obj); err != nil {
+		return admission.Errored(http.StatusBadRequest, err)
+	}
+	if len(req.OldObject.Raw) > 0 {
+		if err := json.Unmarshal(req.OldObject.Raw, &old); err != nil {
+			return admission.Errored(http.StatusBadRequest, err)
+		}
+	}
+	oldVal, had := old.Annotations[fleet.EstopAnnotation]
+	newVal, has := obj.Annotations[fleet.EstopAnnotation]
+	if had == has && oldVal == newVal {
+		return admission.Allowed("")
+	}
+	if obj.Annotations == nil {
+		obj.Annotations = map[string]string{}
+	}
+	obj.Annotations[EstopActorAnn] = req.UserInfo.Username
+	if has {
+		held := false
+		for _, f := range obj.Finalizers {
+			held = held || f == EstopInForceFinz
+		}
+		if !held {
+			obj.Finalizers = append(obj.Finalizers, EstopInForceFinz)
+		}
+	}
+	b, err := json.Marshal(&obj)
+	if err != nil {
+		return admission.Errored(http.StatusInternalServerError, err)
+	}
+	return admission.PatchResponseFromRaw(req.Object.Raw, b)
 }

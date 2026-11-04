@@ -55,7 +55,22 @@ var resetKinds = []client.Object{
 }
 
 // Reset deletes every object a run could read or create in the namespace.
+// FleetZone finalizers (Swarmada's estop-in-force) are removed first so a
+// stopped zone can be deleted.
 func Reset(ctx context.Context, admin client.Client) error {
+	var zones swarmv1.FleetZoneList
+	if err := admin.List(ctx, &zones, client.InNamespace(testenv.SwarmNS)); err != nil {
+		return err
+	}
+	for i := range zones.Items {
+		z := &zones.Items[i]
+		if len(z.Finalizers) > 0 {
+			z.Finalizers = nil
+			if err := admin.Update(ctx, z); err != nil && !apierrors.IsNotFound(err) {
+				return err
+			}
+		}
+	}
 	for _, k := range resetKinds {
 		if err := admin.DeleteAllOf(ctx, k, client.InNamespace(testenv.SwarmNS)); err != nil && !apierrors.IsNotFound(err) {
 			return fmt.Errorf("clearing %T: %w", k, err)
