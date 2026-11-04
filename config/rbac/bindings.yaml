@@ -1,0 +1,35 @@
+# Bindings for one Swarmada namespace (warehouse-a, the quickstart namespace).
+# Repeat the two RoleBindings for every namespace the policy file lists.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: fleetops-foc-mcp
+  namespace: warehouse-a
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: "fleetops:foc-mcp"}
+subjects:
+  - {kind: ServiceAccount, name: foc-mcp, namespace: foc-system}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: fleetops-foc-approvals
+  namespace: warehouse-a
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: "fleetops:foc-approvals"}
+subjects:
+  - {kind: ServiceAccount, name: foc-approvals, namespace: foc-system}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: fleetops-foc-mcp-cluster
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: "fleetops:foc-mcp-cluster"}
+subjects:
+  - {kind: ServiceAccount, name: foc-mcp, namespace: foc-system}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: fleetops-foc-approvals-cluster
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: "fleetops:foc-approvals-cluster"}
+subjects:
+  - {kind: ServiceAccount, name: foc-approvals, namespace: foc-system}

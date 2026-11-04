@@ -1,0 +1,89 @@
+# ClusterRoles are templates; namespaced rules are granted per Swarmada
+# namespace with a RoleBinding (bindings.yaml), as Swarmada's own roles are.
+#
+# No rule below grants delete, update on a Swarmada kind, or the custom verbs
+# activate, cancel, append, estop-clear, admit, reject, rollout-resume,
+# policy-reset or trigger-response-*.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: fleetops:foc-mcp
+rules:
+  - apiGroups: ["swarmada.io"]
+    resources: [robots, fleettasks, fleetactions, fleetzones, zonemaintenances, discoveredrobots, fleetadapters, robotclasses, tasktriggers]
+    verbs: [get, list, watch]
+  # Draft FleetTasks only; the fleetops-foc-mcp-drafts-only admission policy
+  # refuses any create without spec.draft: true.
+  - apiGroups: ["swarmada.io"]
+    resources: [fleettasks]
+    verbs: [create]
+  - apiGroups: ["fleetops.alexbahel.github.io"]
+    resources: [approvalrequests]
+    verbs: [create, get, list, watch]
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [get, list, create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: fleetops:foc-mcp-cluster
+rules:
+  # Draft-gate check (docs/DESIGN.md §3.2).
+  - apiGroups: ["admissionregistration.k8s.io"]
+    resources: [validatingwebhookconfigurations]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: fleetops:foc-approvals
+rules:
+  - apiGroups: ["swarmada.io"]
+    resources: [robots, fleettasks, fleetactions, fleetzones, zonemaintenances]
+    verbs: [get, list, watch]
+  - apiGroups: ["swarmada.io"]
+    resources: [zonemaintenances]
+    verbs: [create]
+  # Zone stop: patch delivers the swarmada.io/estop-triggered annotation and
+  # estop-trigger authorizes it at Swarmada admission. The
+  # fleetops-foc-approvals-zone-stop-only admission policy narrows patch to
+  # adding that one annotation.
+  - apiGroups: ["swarmada.io"]
+    resources: [fleetzones]
+    verbs: [patch, estop-trigger]
+  - apiGroups: ["fleetops.alexbahel.github.io"]
+    resources: [approvalrequests, approvaldecisions]
+    verbs: [get, list, watch]
+  - apiGroups: ["fleetops.alexbahel.github.io"]
+    resources: [approvalrequests/status]
+    verbs: [get, update, patch]
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: fleetops:foc-approvals-cluster
+rules:
+  - apiGroups: ["authorization.k8s.io"]
+    resources: [subjectaccessreviews]
+    verbs: [create]
+  - apiGroups: ["admissionregistration.k8s.io"]
+    resources: [validatingwebhookconfigurations]
+    verbs: [get, list]
+---
+# Bound to people who may decide requests. Deciding also requires the
+# Swarmada permission for the underlying write (checked by foc-approvals).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: fleetops:approver
+rules:
+  - apiGroups: ["fleetops.alexbahel.github.io"]
+    resources: [approvalrequests]
+    verbs: [get, list, watch]
+  - apiGroups: ["fleetops.alexbahel.github.io"]
+    resources: [approvaldecisions]
+    verbs: [create, get, list, watch]
