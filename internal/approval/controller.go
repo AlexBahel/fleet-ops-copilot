@@ -327,7 +327,7 @@ func (r *Reconciler) freshDecision(ctx context.Context, req *focv1.ApprovalReque
 // draft. Swarmada v0.4's swarmctl has no activate subcommand; clearing
 // spec.draft with a patch is the interface (RFC-0003 #resources-tasktrigger).
 func ActivationCommand(ns, task string) string {
-	return fmt.Sprintf(`kubectl patch fleettask %s -n %s --type merge -p '{"spec":{"draft":false}}'`, task, ns)
+	return fmt.Sprintf(`kubectl patch fleettask %s -n %s --type merge -p '%s'`, task, ns, ActivationPatch)
 }
 
 func (r *Reconciler) observeActivation(ctx context.Context, req *focv1.ApprovalRequest) (reconcile.Result, error) {
@@ -395,17 +395,18 @@ func (r *Reconciler) execute(ctx context.Context, req *focv1.ApprovalRequest) (r
 	})
 }
 
-// createDraft creates the approved FleetTask held as a draft. Swarmada
-// generates no child action for it, and only a person holding activate can
-// clear spec.draft (internal/webhook/fleettask_webhook.go in Swarmada).
-func (r *Reconciler) createDraft(ctx context.Context, req *focv1.ApprovalRequest) (focv1.TargetRef, error) {
+// DraftTaskObject is the FleetTask foc-approvals creates for an approved
+// DraftTask request, held as a draft. approvedBy is recorded in an
+// annotation. The web UI shows this same object before approval.
+func DraftTaskObject(req *focv1.ApprovalRequest, approvedBy string) *swarmv1.FleetTask {
 	p := req.Spec.DraftTask
 	t := &swarmv1.FleetTask{
+		TypeMeta: metav1.TypeMeta{APIVersion: swarmv1.GroupVersion.String(), Kind: "FleetTask"},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: p.TaskName, Namespace: req.Namespace,
 			Labels: map[string]string{fleet.CreatedByLabel: "foc-approvals", fleet.RequestLabel: req.Name, fleet.SessionLabel: req.Spec.SessionID},
 			Annotations: map[string]string{
-				"fleetops.alexbahel.github.io/approved-by":   req.Status.DecidedBy,
+				"fleetops.alexbahel.github.io/approved-by":   approvedBy,
 				"fleetops.alexbahel.github.io/requested-for": req.Spec.RequestedFor,
 				"fleetops.alexbahel.github.io/purpose":       p.Purpose,
 			},
@@ -421,6 +422,14 @@ func (r *Reconciler) createDraft(ctx context.Context, req *focv1.ApprovalRequest
 			},
 		})
 	}
+	return t
+}
+
+// createDraft creates the approved FleetTask held as a draft. Swarmada
+// generates no child action for it, and only a person holding activate can
+// clear spec.draft (internal/webhook/fleettask_webhook.go in Swarmada).
+func (r *Reconciler) createDraft(ctx context.Context, req *focv1.ApprovalRequest) (focv1.TargetRef, error) {
+	t := DraftTaskObject(req, req.Status.DecidedBy)
 	ref := focv1.TargetRef{APIVersion: swarmv1.GroupVersion.String(), Kind: "FleetTask", Name: t.Name}
 	if err := r.C.Create(ctx, t); err != nil {
 		if apierrors.IsAlreadyExists(err) {
@@ -434,13 +443,16 @@ func (r *Reconciler) createDraft(ctx context.Context, req *focv1.ApprovalRequest
 	return ref, nil
 }
 
-func (r *Reconciler) createMaintenance(ctx context.Context, req *focv1.ApprovalRequest) (focv1.TargetRef, error) {
+// MaintenanceObject is the ZoneMaintenance foc-approvals creates for an
+// approved ZoneMaintenance request. autoResumeAfterMinutes is always 0.
+func MaintenanceObject(req *focv1.ApprovalRequest, approvedBy string) *swarmv1.ZoneMaintenance {
 	p := req.Spec.ZoneMaintenance
-	zm := &swarmv1.ZoneMaintenance{
+	return &swarmv1.ZoneMaintenance{
+		TypeMeta: metav1.TypeMeta{APIVersion: swarmv1.GroupVersion.String(), Kind: "ZoneMaintenance"},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: MaintenanceName(req), Namespace: req.Namespace,
 			Labels:      map[string]string{fleet.CreatedByLabel: "foc-approvals", fleet.RequestLabel: req.Name},
-			Annotations: map[string]string{"fleetops.alexbahel.github.io/approved-by": req.Status.DecidedBy},
+			Annotations: map[string]string{"fleetops.alexbahel.github.io/approved-by": approvedBy},
 		},
 		Spec: swarmv1.ZoneMaintenanceSpec{
 			Scope:                  swarmv1.ZoneMaintenanceScope{Type: swarmv1.MaintenanceScopeType(p.ScopeType), ZoneName: p.ZoneName},
@@ -450,6 +462,10 @@ func (r *Reconciler) createMaintenance(ctx context.Context, req *focv1.ApprovalR
 			AutoResumeAfterMinutes: 0,
 		},
 	}
+}
+
+func (r *Reconciler) createMaintenance(ctx context.Context, req *focv1.ApprovalRequest) (focv1.TargetRef, error) {
+	zm := MaintenanceObject(req, req.Status.DecidedBy)
 	ref := focv1.TargetRef{APIVersion: swarmv1.GroupVersion.String(), Kind: "ZoneMaintenance", Name: zm.Name}
 	if err := r.C.Create(ctx, zm); err != nil {
 		if apierrors.IsAlreadyExists(err) {
@@ -474,12 +490,24 @@ func (r *Reconciler) stopZone(ctx context.Context, req *focv1.ApprovalRequest) (
 		// Already stopped (by this request on a previous attempt, or by someone else).
 		return ref, nil
 	}
-	patch, err := json.Marshal(map[string]any{"metadata": map[string]any{"annotations": map[string]string{fleet.EstopAnnotation: p.Reason}}})
+	patch, err := ZoneStopPatch(req)
 	if err != nil {
 		return ref, err
 	}
 	return ref, r.C.Patch(ctx, &z, client.RawPatch(types.MergePatchType, patch))
 }
+
+// ZoneStopPatch is the JSON merge patch foc-approvals sends to the FleetZone
+// for an approved ZoneStop request: it sets only the
+// swarmada.io/estop-triggered annotation. The executor sends nothing when
+// the annotation is already present.
+func ZoneStopPatch(req *focv1.ApprovalRequest) ([]byte, error) {
+	return json.Marshal(map[string]any{"metadata": map[string]any{"annotations": map[string]string{fleet.EstopAnnotation: req.Spec.ZoneStop.Reason}}})
+}
+
+// ActivationPatch is the merge patch in ActivationCommand. The approver sends
+// it with their own credentials; the copilot never does.
+const ActivationPatch = `{"spec":{"draft":false}}`
 
 func (r *Reconciler) setStatus(ctx context.Context, req *focv1.ApprovalRequest, mutate func(*focv1.ApprovalRequestStatus)) error {
 	base := req.DeepCopy()
