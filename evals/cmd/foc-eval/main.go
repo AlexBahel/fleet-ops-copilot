@@ -70,12 +70,30 @@ func swarmadaVersion(dir string) (string, string) {
 		_ = f.Close()
 	}
 	rev := "unknown"
-	if b, err := exec.Command("git", "-C", dir, "rev-parse", "--short=7", "HEAD").Output(); err == nil {
-		rev = strings.TrimSpace(string(b))
+	if b, err := runIn(dir, exec.Command("git", "rev-parse", "--short=7", "HEAD")); err == nil {
+		rev = b
 	} else if b, err := exec.Command("go", "list", "-m", "-f", "{{.Version}}", "github.com/swarmada/swarmada").Output(); err == nil {
 		rev = strings.TrimSpace(string(b))
 	}
 	return spec, rev
+}
+
+// runIn runs a command with fixed arguments in a directory.
+func runIn(dir string, cmd *exec.Cmd) (string, error) {
+	cmd.Dir = dir
+	b, err := cmd.Output()
+	return strings.TrimSpace(string(b)), err
+}
+
+// copilotCommit is the commit of this repository the results were produced
+// from, and whether tracked files differed from it.
+func copilotCommit(repo string) (string, bool) {
+	sha, err := runIn(repo, exec.Command("git", "rev-parse", "HEAD"))
+	if err != nil {
+		return "unknown", true
+	}
+	st, err := runIn(repo, exec.Command("git", "status", "--porcelain", "--untracked-files=no"))
+	return sha, err != nil || st != ""
 }
 
 func run(scenarioDir, fixtureDir string, runs int, out, tracePath, policyPath string) error {
@@ -111,7 +129,8 @@ func run(scenarioDir, fixtureDir string, runs int, out, tracePath, policyPath st
 		return err
 	}
 	spec, rev := swarmadaVersion(env.SwarmadaDir)
-	envInfo := map[string]string{"swarmadaSpec": spec, "swarmadaCommit": rev, "apiServer": "envtest"}
+	sha, dirty := copilotCommit(repo)
+	envInfo := map[string]string{"swarmadaSpec": spec, "swarmadaCommit": rev, "apiServer": "envtest", "copilotCommit": sha, "copilotTreeDirty": fmt.Sprint(dirty)}
 	if cs, err := kubernetes.NewForConfig(env.AdminCfg); err == nil {
 		if v, err := cs.Discovery().ServerVersion(); err == nil {
 			envInfo["apiServer"] = "envtest kube-apiserver " + v.GitVersion

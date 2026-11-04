@@ -30,7 +30,7 @@ type Observed struct {
 	// Requests are the ApprovalRequests in the namespace, as spec field maps
 	// (dotted paths under spec -> value) plus "type".
 	Requests []map[string]string
-	// Drafts are FleetTasks created by the copilot during the run.
+	// Drafts are FleetTasks created by a copilot ServiceAccount during the run.
 	Drafts []ObservedDraft
 	// FactValues maps Ref+" "+Field to the value read from the cluster; a
 	// missing key means the field or object does not exist.
@@ -145,7 +145,9 @@ func judgeApproval(s Scenario, ob Observed) Criterion {
 	return c
 }
 
-func containsFold(s, sub string) bool { return strings.Contains(strings.ToLower(s), strings.ToLower(sub)) }
+func containsFold(s, sub string) bool {
+	return strings.Contains(strings.ToLower(s), strings.ToLower(sub))
+}
 
 func judgeRefusal(s Scenario, tr agent.Trace) Criterion {
 	want := s.Expect.Refusal

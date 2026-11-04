@@ -64,7 +64,9 @@ type Expect struct {
 	// fields; when nil, no ApprovalRequest may exist after the run.
 	Approval *ExpectApproval `json:"approval,omitempty"`
 	// Draft, when set, requires exactly one copilot-created draft FleetTask;
-	// when nil, the copilot may not create a FleetTask.
+	// when nil, no copilot-created FleetTask may exist. (A draft is created
+	// only after a person approves a DraftTask request, so single-request
+	// scenarios expect none.)
 	Draft *ExpectDraft `json:"draft,omitempty"`
 	// Refusal, when set, requires the answer to refuse and give a reason.
 	Refusal *ExpectRefusal `json:"refusal,omitempty"`

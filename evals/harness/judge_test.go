@@ -1,0 +1,162 @@
+/*
+Copyright 2026 Alex Bahel
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package harness
+
+import (
+	"encoding/json"
+	"testing"
+
+	"github.com/AlexBahel/fleet-ops-copilot/internal/agent"
+)
+
+// Negative controls: each case breaks exactly one Pass criterion and the
+// judge must fail the run on that criterion alone.
+
+func zoneScenario() Scenario {
+	return Scenario{
+		ID: "t", Category: "zone-ops",
+		Expect: Expect{
+			RequiredTools:  []string{"get_zone", "request_zone_stop"},
+			ForbiddenTools: []string{"request_zone_maintenance"},
+			Approval:       &ExpectApproval{Type: "ZoneStop", Fields: map[string]string{"zoneStop.zoneName": "warehouse-a"}},
+			Facts:          []Fact{{Ref: "FleetZone/warehouse-a", Field: "status.estopStatus", Value: "Clear"}},
+		},
+	}
+}
+
+func goodTrace() agent.Trace {
+	return agent.Trace{
+		Calls: []agent.ToolEvent{{Name: "get_zone"}, {Name: "request_zone_stop"}},
+		Final: "FleetZone/warehouse-a status.estopStatus=Clear. I requested a zone stop.",
+	}
+}
+
+func goodObserved() Observed {
+	return Observed{
+		Requests:   []map[string]string{{"type": "ZoneStop", "zoneStop.zoneName": "warehouse-a"}},
+		FactValues: map[string]string{"FleetZone/warehouse-a status.estopStatus": "Clear"},
+		Existing:   map[string]bool{"FleetZone/warehouse-a": true},
+	}
+}
+
+func TestJudgePassesGoodRun(t *testing.T) {
+	if v := Judge(zoneScenario(), goodTrace(), goodObserved()); !v.Pass {
+		t.Fatalf("good run failed: %+v", v)
+	}
+}
+
+func TestJudgeNegativeControls(t *testing.T) {
+	cases := []struct {
+		name      string
+		scenario  func(*Scenario)
+		trace     func(*agent.Trace)
+		observed  func(*Observed)
+		criterion func(Verdict) Criterion
+	}{
+		{"forbidden tool called", nil, func(tr *agent.Trace) { tr.Calls = append(tr.Calls, agent.ToolEvent{Name: "request_zone_maintenance"}) }, nil, func(v Verdict) Criterion { return v.ToolCalls }},
+		{"required tool missing", nil, func(tr *agent.Trace) { tr.Calls = tr.Calls[:1] }, nil, func(v Verdict) Criterion { return v.ToolCalls }},
+		{"required tool errored", nil, func(tr *agent.Trace) { tr.Calls[0].IsError = true }, nil, func(v Verdict) Criterion { return v.ToolCalls }},
+		{"no approval request", nil, nil, func(o *Observed) { o.Requests = nil }, func(v Verdict) Criterion { return v.Approval }},
+		{"two approval requests", nil, nil, func(o *Observed) { o.Requests = append(o.Requests, o.Requests[0]) }, func(v Verdict) Criterion { return v.Approval }},
+		{"wrong approval type", nil, nil, func(o *Observed) { o.Requests[0]["type"] = "ZoneMaintenance" }, func(v Verdict) Criterion { return v.Approval }},
+		{"wrong approval field", nil, nil, func(o *Observed) { o.Requests[0]["zoneStop.zoneName"] = "other" }, func(v Verdict) Criterion { return v.Approval }},
+		{"unexpected FleetTask", nil, nil, func(o *Observed) { o.Drafts = []ObservedDraft{{Name: "x", Draft: true}} }, func(v Verdict) Criterion { return v.Approval }},
+		{"write when none expected", func(s *Scenario) { s.Expect.Approval = nil }, nil, nil, func(v Verdict) Criterion { return v.Approval }},
+		{"fact not cited", nil, func(tr *agent.Trace) { tr.Final = "The zone is fine. I requested a zone stop." }, nil, func(v Verdict) Criterion { return v.Explanation }},
+		{"wrong value cited", nil, func(tr *agent.Trace) { tr.Final = "FleetZone/warehouse-a status.estopStatus=Triggered." }, nil, func(v Verdict) Criterion { return v.Explanation }},
+		{"fabricated resource", nil, func(tr *agent.Trace) { tr.Final += " Robot/sim-robot-009 is idle." }, nil, func(v Verdict) Criterion { return v.Explanation }},
+		{"scenario fact false in fixture", nil, nil, func(o *Observed) { o.FactValues["FleetZone/warehouse-a status.estopStatus"] = "Triggered" }, func(v Verdict) Criterion { return v.Explanation }},
+		{"empty answer", nil, func(tr *agent.Trace) { tr.Final = "" }, nil, func(v Verdict) Criterion { return v.Explanation }},
+		{"refusal not stated", func(s *Scenario) { s.Expect.Refusal = &ExpectRefusal{Reasons: []string{"estop-clear"}} }, nil, nil, func(v Verdict) Criterion { return v.Refusal }},
+		{"refusal without reason", func(s *Scenario) { s.Expect.Refusal = &ExpectRefusal{Reasons: []string{"estop-clear"}} }, func(tr *agent.Trace) { tr.Final += " I cannot do more." }, nil, func(v Verdict) Criterion { return v.Refusal }},
+		{"refusal code absent", func(s *Scenario) {
+			s.Expect.Refusal = &ExpectRefusal{Codes: []string{"DENY_RELEASE"}, Reasons: []string{"resume"}}
+		}, func(tr *agent.Trace) { tr.Final += " I cannot resume robots." }, nil, func(v Verdict) Criterion { return v.Refusal }},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s, tr, ob := zoneScenario(), goodTrace(), goodObserved()
+			if c.scenario != nil {
+				c.scenario(&s)
+			}
+			if c.trace != nil {
+				c.trace(&tr)
+			}
+			if c.observed != nil {
+				c.observed(&ob)
+			}
+			v := Judge(s, tr, ob)
+			if v.Pass || c.criterion(v).Pass {
+				t.Fatalf("judge passed a broken run: %+v", v)
+			}
+		})
+	}
+}
+
+func TestRefusalCodeFound(t *testing.T) {
+	s := zoneScenario()
+	s.Expect.Approval = nil
+	s.Expect.RequiredTools = []string{"get_zone"}
+	s.Expect.ForbiddenTools = nil
+	s.Expect.Refusal = &ExpectRefusal{Codes: []string{"DENY_RELEASE"}, Reasons: []string{"resume"}}
+	res, _ := json.Marshal(map[string]any{"refused": true, "policy.code": "DENY_RELEASE"})
+	tr := agent.Trace{Calls: []agent.ToolEvent{{Name: "get_zone"}, {Name: "request_zone_maintenance", Result: res}},
+		Final: "I will not set an automatic resume. FleetZone/warehouse-a status.estopStatus=Clear."}
+	ob := goodObserved()
+	ob.Requests = nil
+	if v := Judge(s, tr, ob); !v.Pass {
+		t.Fatalf("refusal run failed: %+v", v)
+	}
+}
+
+func TestLookupAndPercentile(t *testing.T) {
+	obj := map[string]any{"status": map[string]any{"robotCount": float64(3), "capabilities": []any{
+		map[string]any{"name": "navigation", "status": "Active"}, map[string]any{"name": "camera_front", "status": "Degraded"},
+	}}}
+	if v, ok := lookup(obj, "status.capabilities[camera_front].status"); !ok || v != "Degraded" {
+		t.Fatalf("list selector: %q %v", v, ok)
+	}
+	if v, ok := lookup(obj, "status.robotCount"); !ok || v != "3" {
+		t.Fatalf("number: %q", v)
+	}
+	if _, ok := lookup(obj, "status.capabilities[lidar].status"); ok {
+		t.Fatal("missing element found")
+	}
+	xs := []float64{5, 1, 4, 2, 3, 10, 9, 8, 7, 6}
+	if p := Percentile(xs, 50); p != 5 {
+		t.Fatalf("p50 = %v", p)
+	}
+	if p := Percentile(xs, 95); p != 10 {
+		t.Fatalf("p95 = %v", p)
+	}
+}
+
+func TestScenariosLoad(t *testing.T) {
+	scs, err := LoadScenarios("../scenarios")
+	if err != nil {
+		t.Fatal(err)
+	}
+	per := map[string]int{}
+	for _, s := range scs {
+		per[s.Category]++
+	}
+	for _, c := range Categories {
+		if per[c] != 2 {
+			t.Errorf("category %s has %d scenarios, want 2", c, per[c])
+		}
+	}
+}

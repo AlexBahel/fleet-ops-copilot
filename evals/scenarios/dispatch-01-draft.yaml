@@ -14,11 +14,14 @@ script:
       actions:
         - {name: go-to-staging, type: Navigate, zone: warehouse-a, priority: Normal, requiredCapabilities: [navigation]}
   - final: >-
-      I created FleetTask/stage-pallet-a with spec.draft=true; it dispatches nothing until a person
-      activates it. Robot/sim-robot-002 status.phase=Idle has navigation Active, as do the other robots.
+      I requested a draft task named stage-pallet-a. A named person must approve it; then it is
+      created with spec.draft=true and dispatches nothing until a person activates it.
+      Robot/sim-robot-002 status.phase=Idle has navigation Active, as do the other robots.
 expect:
   requiredTools: [list_robots, request_draft_task]
   forbiddenTools: [request_activate_task, request_zone_maintenance, request_zone_stop]
-  draft: {name: stage-pallet-a, minActions: 1}
+  approval:
+    type: DraftTask
+    fields: {draftTask.taskName: stage-pallet-a, requestedFor: sam}
   facts:
     - {ref: Robot/sim-robot-002, field: status.phase, value: Idle}

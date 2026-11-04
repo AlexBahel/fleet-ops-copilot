@@ -189,7 +189,7 @@ func Observe(ctx context.Context, admin client.Client, s Scenario, answer string
 		ob.Requests = append(ob.Requests, flat)
 	}
 	var tasks swarmv1.FleetTaskList
-	if err := admin.List(ctx, &tasks, client.InNamespace(testenv.SwarmNS), client.MatchingLabels{fleet.CreatedByLabel: "foc-mcp"}); err != nil {
+	if err := admin.List(ctx, &tasks, client.InNamespace(testenv.SwarmNS), client.HasLabels{fleet.CreatedByLabel}); err != nil {
 		return ob, err
 	}
 	for _, t := range tasks.Items {
