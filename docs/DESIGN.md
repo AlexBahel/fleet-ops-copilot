@@ -56,7 +56,7 @@ This gives two deployments of the same agent:
 
 | Deployment | Model | Runs where | Egress |
 |---|---|---|---|
-| `cloud` | Claude via the Claude API (default `claude-opus-5-5`, set by `FOC_CLAUDE_MODEL`) | copilot pods in the cluster, model hosted by Anthropic | HTTPS to the Claude API only |
+| `cloud` | Claude via the Claude API (default `claude-sonnet-5-5`, set by `FOC_CLAUDE_MODEL`; `claude-opus-5-5` measured as a comparison, D29) | copilot pods in the cluster, model hosted by Anthropic | HTTPS to the Claude API only |
 | `airgap` | Qwen2.5-7B-Instruct, GGUF, served by `llama-server` (llama.cpp) | in-cluster Deployment | none outside the namespace except the Kubernetes API and DNS |
 
 ## 3. Architecture
@@ -227,7 +227,11 @@ allow-list of MCP tools; the policy engine applies regardless of role.
 
 - `claude`: Anthropic Go SDK (`github.com/anthropics/anthropic-sdk-go/v2`), Messages API,
   manual tool-use loop (the same loop runs both backends, so policy checks and tracing sit in
-  one place). Model from `FOC_CLAUDE_MODEL`, effort set explicitly.
+  one place). Model from `FOC_CLAUDE_MODEL` (default `claude-sonnet-5-5`), effort set explicitly
+  (`medium` for both measured models, D30). Adaptive thinking; each assistant turn is sent back
+  as returned, thinking blocks included. Tools and system prompt are prompt-cached. No
+  server-side refusal fallback: a refusal is recorded as such, so a measurement always names the
+  model that answered (D30). Built: `internal/llm/claude.go`.
 - `llamacpp`: `llama-server`'s HTTP chat-completions endpoint with tool calling, called with
   `net/http` (no extra SDK). Model file Qwen2.5-7B-Instruct GGUF; quantisation set in Helm values
   and recorded in every measurement.
@@ -314,10 +318,13 @@ probe Job (`make verify-egress`), not assumed.
   per-token price, citing the pricing page URL and the date it was read
   (`https://platform.claude.com/docs/en/about-claude/pricing`). Air-gapped = the hardware the
   model ran on (CPU/GPU model, memory, quantisation, `llama-server` flags); no dollar figure.
+  One request is one scenario run: one operator request answered end to end, every model turn
+  included; cost per 100 requests is the total over all runs divided by the number of runs, × 100.
 
 ### 4.2 Scenarios
 
-25 scenarios, each run **N = 3** times per deployment.
+25 scenarios planned, each run **N = 3** times per deployment; 20 exist (8 on hand-written
+fixtures, 12 on live captures).
 
 | Category | Count | Fixture states (from the Swarmada quickstart scenarios, `docs/quickstart.md`) |
 |---|---|---|
@@ -327,7 +334,12 @@ probe Job (`make verify-egress`), not assumed.
 | Safety refusals | 6 | clear a stop, cancel/release, delete, self-approve, edit a running task, maintenance with auto-resume |
 
 Fixtures are YAML snapshots of Swarmada objects including `status`, loaded into an envtest API
-server that has the CRDs from the pinned Swarmada module (`config/crd/bases`). No Swarmada
+server that has the CRDs from the pinned Swarmada module (`config/crd/bases`). Two kinds exist:
+hand-written fixtures (`evals/fixtures/*.yaml`) and fixtures captured from live quickstart runs
+with `evals/cmd/foc-capture` (`evals/fixtures/live/*.yaml`, produced by
+`hack/capture-live-fixtures.sh`, D31). Scenarios on live fixtures are also run against the live
+quickstart state itself, through the deployed `foc-mcp` (`foc-eval -live-context`,
+`hack/live-scenarios.sh`). No Swarmada
 controller or webhook runs during fixture evals, so state is static and reproducible. The
 quickstart itself writes some status by hand (see "Honest notes — what's real vs. simulated" in
 `docs/quickstart.md`); fixtures copy those states and say so.
@@ -347,6 +359,9 @@ quickstart itself writes some status by hand (see "Honest notes — what's real 
 
 ## 5. Packaging
 
+- Until the Helm chart exists: `Dockerfile` (binaries built on the host, D2) and `make deploy-kind
+  KIND_CLUSTER=foc-<name>`, which installs `config/crd`, `config/rbac`, `config/admission` and
+  `config/deploy` (`foc-mcp`, `foc-approvals`) with an explicit `--context`.
 - Helm chart `charts/fleet-ops-copilot` with `values-cloud.yaml` and `values-airgap.yaml`.
 - `make foc-up`: creates a `kind` cluster named `foc-<suffix>`, runs the Swarmada quickstart from
   the pinned module, installs the chart. `make foc-down` deletes every `foc-*` cluster.
@@ -410,6 +425,10 @@ policies/          default policy files
 | D26 | Until the public Swarmada v0.4 pin, the CI workflow's Go jobs are disabled (`if: false`) and `make ci` runs locally | The Swarmada module cannot be resolved in CI before the release pin (D2). Disabling the jobs keeps the run from being red without hiding why; a repository-hygiene job still runs. Local `make ci` logs are kept outside the repository and marked pre-release. The Go jobs are enabled in the commit that pins `go.mod`. |
 | D27 | envtest and evals find Swarmada's CRDs and RBAC with `go list -m -f '{{.Dir}}' github.com/swarmada/swarmada`, overridable by `FOC_SWARMADA_DIR` | The same command resolves the go.mod pin after the release and the local workspace before it, so no local path is committed (`internal/testenv/testenv.go`). |
 | D28 | The copilot never activates a draft. After a named approval it records the approval with the exact command (`status.instruction`), the approver runs it with their own credentials, and `foc-approvals` watches for the phase change and writes the audit record. The other executor writes stay with the executor | Each executor write was checked against Swarmada v0.4's webhooks for a ServiceAccount rule. Activate: refused to every ServiceAccount (`authorizeActivate`, `internal/webhook/fleettask_webhook.go`), so it moves to the person. Zone estop trigger: allowed when the `estop-trigger` SubjectAccessReview for the requesting user passes, with no ServiceAccount exception (`authorizeEstopChange`/`authorizeEstopVerb`, `internal/webhook/fleetzone_webhook.go`). ZoneMaintenance create: the webhook only checks that the zone exists (`validate`, `internal/webhook/zonemaintenance_webhook.go`). Draft FleetTask create: `ValidateCreate` checks flow, bindings and producer contracts, no ServiceAccount rule (`internal/webhook/fleettask_webhook.go`, `fleettask_bindings.go`). swarmctl v0.4 has no activate subcommand, so the instruction is a `kubectl patch`. No `impersonate` permission anywhere. The later end state, FOC-4's web UI acting with the approver's own credentials, is in KNOWN-LIMITS. |
+| D29 | Cloud default model `claude-sonnet-5-5`; `claude-opus-5-5` is measured once as a comparison (N = 3) | Owner's brief for FOC-1, 2026-11-03. (Replaces: default `claude-opus-5-5`.) |
+| D30 | Model evals use effort `medium` for both models, adaptive thinking, prompt caching of tools and system prompt, and no server-side refusal fallback | Same settings for both models so the comparison differs only in the model; a fallback would let another model answer and the result would no longer name the model measured. A refusal is recorded (`stopReasons`) and judged like any other answer. |
+| D31 | Fixtures are also captured from live Swarmada quickstart runs (`evals/cmd/foc-capture`); the hand-written fixtures stay | Live captures show what Swarmada v0.4 actually writes. They differ from the hand-written ones in places (for example a FleetZone with no stop carries no `status.estopStatus` at all, where the hand fixture says `Clear`; robots of a zone stop the adapter cannot confirm reach `estopState: Failed`). Captures are taken after the quickstart script exits, which stops its simulated adapter, and say so in their header. |
+| D32 | The approval path is proven against a live Swarmada v0.4 control plane with its admission webhooks served (`test/live`, build tag `live`; `hack/live-approval-path.sh`) | envtest runs only stand-ins for Swarmada's webhooks. The quickstart's overlay (`config/overlays/quickstart-mtls`) serves no admission webhooks, so the live test first shows the copilot refusing drafts there (`DENY_DRAFT_GATE_ABSENT`, D22), then runs every path after Swarmada's own `config/overlays/demo-webhooks` is applied to the same cluster. The approver is a person with a client certificate (`hack/kind-person.sh`), never a ServiceAccount; ServiceAccount checks use real tokens from the TokenRequest API, not impersonation. |
 
 ## 8. Resolved questions (2026-11-03)
 
