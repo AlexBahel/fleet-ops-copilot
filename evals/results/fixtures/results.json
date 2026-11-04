@@ -1,13 +1,13 @@
 {
   "schema": "fleetops.alexbahel.github.io/eval-results/v1",
   "purpose": "harness self-test: the scripted backend replays fixed turns, so these results test the harness, tools, policy and approval path, not a model",
-  "generatedAt": "2026-11-04T02:29:52Z",
+  "generatedAt": "2026-11-04T02:31:24Z",
   "backend": "scripted",
   "runsPerScenario": 3,
   "environment": {
     "apiServer": "envtest kube-apiserver v1.37.0",
-    "copilotCommit": "b668b1223bb030a281dd267c5dfed3ece8b4d757",
-    "copilotTreeDirty": "true",
+    "copilotCommit": "d095e82aa94b17afc387759b80acb7f229c73dc8",
+    "copilotTreeDirty": "false",
     "goos/goarch": "darwin/arm64",
     "swarmadaCommit": "d7fecd6",
     "swarmadaSpec": "v0.4"
@@ -41,7 +41,7 @@
               "pass": true
             }
           },
-          "latencyMs": 4.023,
+          "latencyMs": 4.356,
           "toolCalls": [
             "get_robot",
             "get_zone"
@@ -69,7 +69,7 @@
               "pass": true
             }
           },
-          "latencyMs": 5.149,
+          "latencyMs": 5.37,
           "toolCalls": [
             "get_robot",
             "get_zone"
@@ -97,7 +97,7 @@
               "pass": true
             }
           },
-          "latencyMs": 6.326,
+          "latencyMs": 4.839,
           "toolCalls": [
             "get_robot",
             "get_zone"
@@ -134,7 +134,7 @@
               "pass": true
             }
           },
-          "latencyMs": 4.192,
+          "latencyMs": 3.929,
           "toolCalls": [
             "get_fleet_action",
             "get_robot"
@@ -162,7 +162,7 @@
               "pass": true
             }
           },
-          "latencyMs": 5.361,
+          "latencyMs": 4.745,
           "toolCalls": [
             "get_fleet_action",
             "get_robot"
@@ -190,7 +190,7 @@
               "pass": true
             }
           },
-          "latencyMs": 5.789,
+          "latencyMs": 4.698,
           "toolCalls": [
             "get_fleet_action",
             "get_robot"
@@ -227,7 +227,7 @@
               "pass": true
             }
           },
-          "latencyMs": 83.118,
+          "latencyMs": 86.101,
           "toolCalls": [
             "list_robots",
             "request_draft_task"
@@ -255,7 +255,7 @@
               "pass": true
             }
           },
-          "latencyMs": 77.463,
+          "latencyMs": 73.56,
           "toolCalls": [
             "list_robots",
             "request_draft_task"
@@ -283,7 +283,7 @@
               "pass": true
             }
           },
-          "latencyMs": 79.655,
+          "latencyMs": 74.456,
           "toolCalls": [
             "list_robots",
             "request_draft_task"
@@ -320,7 +320,7 @@
               "pass": true
             }
           },
-          "latencyMs": 10.724,
+          "latencyMs": 9.549,
           "toolCalls": [
             "list_fleet_tasks",
             "get_zone",
@@ -349,7 +349,7 @@
               "pass": true
             }
           },
-          "latencyMs": 9.686,
+          "latencyMs": 13.217,
           "toolCalls": [
             "list_fleet_tasks",
             "get_zone",
@@ -378,7 +378,7 @@
               "pass": true
             }
           },
-          "latencyMs": 8.591,
+          "latencyMs": 10.278,
           "toolCalls": [
             "list_fleet_tasks",
             "get_zone",
@@ -416,7 +416,7 @@
               "pass": true
             }
           },
-          "latencyMs": 5.694,
+          "latencyMs": 4.607,
           "toolCalls": [
             "get_zone"
           ],
@@ -443,7 +443,7 @@
               "pass": true
             }
           },
-          "latencyMs": 5.82,
+          "latencyMs": 4.972,
           "toolCalls": [
             "get_zone"
           ],
@@ -470,7 +470,7 @@
               "pass": true
             }
           },
-          "latencyMs": 5.161,
+          "latencyMs": 3.203,
           "toolCalls": [
             "get_zone"
           ],
@@ -506,7 +506,7 @@
               "pass": true
             }
           },
-          "latencyMs": 6.99,
+          "latencyMs": 6.324,
           "toolCalls": [
             "get_zone",
             "request_zone_maintenance"
@@ -534,7 +534,7 @@
               "pass": true
             }
           },
-          "latencyMs": 4.613,
+          "latencyMs": 4.514,
           "toolCalls": [
             "get_zone",
             "request_zone_maintenance"
@@ -562,7 +562,7 @@
               "pass": true
             }
           },
-          "latencyMs": 4.431,
+          "latencyMs": 4.434,
           "toolCalls": [
             "get_zone",
             "request_zone_maintenance"
@@ -599,7 +599,7 @@
               "pass": true
             }
           },
-          "latencyMs": 80.762,
+          "latencyMs": 81.875,
           "toolCalls": [
             "get_zone",
             "list_zone_maintenances",
@@ -628,7 +628,7 @@
               "pass": true
             }
           },
-          "latencyMs": 77.702,
+          "latencyMs": 83.734,
           "toolCalls": [
             "get_zone",
             "list_zone_maintenances",
@@ -657,7 +657,7 @@
               "pass": true
             }
           },
-          "latencyMs": 75.898,
+          "latencyMs": 62.273,
           "toolCalls": [
             "get_zone",
             "list_zone_maintenances",
@@ -695,7 +695,7 @@
               "pass": true
             }
           },
-          "latencyMs": 11.062,
+          "latencyMs": 10.496,
           "toolCalls": [
             "get_zone",
             "request_zone_stop"
@@ -723,7 +723,7 @@
               "pass": true
             }
           },
-          "latencyMs": 10.05,
+          "latencyMs": 8.637,
           "toolCalls": [
             "get_zone",
             "request_zone_stop"
@@ -751,7 +751,7 @@
               "pass": true
             }
           },
-          "latencyMs": 9.362,
+          "latencyMs": 7.734,
           "toolCalls": [
             "get_zone",
             "request_zone_stop"
@@ -795,7 +795,7 @@
   "latency": {
     "scope": "scripted backend: tool execution over in-process MCP against envtest; no model is called, so this is not a model latency",
     "n": 24,
-    "p50Ms": 6.99,
-    "p95Ms": 80.762
+    "p50Ms": 6.324,
+    "p95Ms": 83.734
   }
 }
