@@ -44,7 +44,6 @@ type Code string
 
 const (
 	CodeRead                   Code = "ALLOW_READ"
-	CodeDraftAllowed           Code = "ALLOW_DRAFT"
 	CodeApprovalRequired       Code = "REQUIRE_APPROVAL"
 	CodeForbiddenOperation     Code = "DENY_FORBIDDEN_OPERATION"
 	CodeNamespace              Code = "DENY_NAMESPACE"
@@ -321,7 +320,7 @@ func (e *Engine) decideDraft(r Request, s Snapshot) Decision {
 			return deny(CodeField, "action %q priority %q is not in the policy's allowed priorities %v", a.Name, prio, e.P.DraftTask.AllowedPriorities)
 		}
 	}
-	return allow(CodeDraftAllowed, "draft allowed: it is created with spec.draft true and dispatches nothing until a person activates it")
+	return needApproval("a named person approves creating the draft; foc-approvals then creates it with spec.draft: true, and it dispatches nothing until a person activates it")
 }
 
 func (e *Engine) decideActivate(r Request, s Snapshot) Decision {

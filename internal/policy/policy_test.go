@@ -66,7 +66,7 @@ func TestDecide(t *testing.T) {
 		{"namespace outside policy", Request{Op: OpZoneStop, Namespace: "other", ZoneStop: &ZoneStopParams{ZoneName: "z", Reason: "r"}}, served, Deny, CodeNamespace},
 
 		// Drafts.
-		{"draft allowed", Request{Op: OpDraftTask, Namespace: "warehouse-a", DraftTask: goodDraft()}, served, Allow, CodeDraftAllowed},
+		{"draft needs approval", Request{Op: OpDraftTask, Namespace: "warehouse-a", DraftTask: goodDraft()}, served, RequireApproval, CodeApprovalRequired},
 		{"non-draft task refused", Request{Op: OpDraftTask, Namespace: "warehouse-a", DraftTask: &DraftTaskParams{Name: "x", Draft: false, Actions: goodDraft().Actions}}, served, Deny, CodeField},
 		{"draft gate absent", Request{Op: OpDraftTask, Namespace: "warehouse-a", DraftTask: goodDraft()}, Snapshot{}, Deny, CodeDraftGateAbsent},
 		{"draft without actions", Request{Op: OpDraftTask, Namespace: "warehouse-a", DraftTask: &DraftTaskParams{Name: "x", Draft: true}}, served, Deny, CodeMalformed},
@@ -74,7 +74,7 @@ func TestDecide(t *testing.T) {
 		{"draft external executor", Request{Op: OpDraftTask, Namespace: "warehouse-a", DraftTask: &DraftTaskParams{Name: "x", Draft: true, Actions: []DraftAction{{Name: "a", Type: "External", Executor: true}}}}, served, Deny, CodeField},
 		{"draft type not allowed", Request{Op: OpDraftTask, Namespace: "warehouse-a", DraftTask: &DraftTaskParams{Name: "x", Draft: true, Actions: []DraftAction{{Name: "a", Type: "Custom"}}}}, served, Deny, CodeField},
 		{"draft session limit", Request{Op: OpDraftTask, Namespace: "warehouse-a", DraftTask: goodDraft()}, Snapshot{DraftGateServed: true, DraftsThisSession: 5}, Deny, CodeDraftLimit},
-		{"draft default priority is Normal", Request{Op: OpDraftTask, Namespace: "warehouse-a", DraftTask: &DraftTaskParams{Name: "x", Draft: true, Actions: []DraftAction{{Name: "a", Type: "Patrol"}}}}, served, Allow, CodeDraftAllowed},
+		{"draft default priority is Normal", Request{Op: OpDraftTask, Namespace: "warehouse-a", DraftTask: &DraftTaskParams{Name: "x", Draft: true, Actions: []DraftAction{{Name: "a", Type: "Patrol"}}}}, served, RequireApproval, CodeApprovalRequired},
 
 		// Activation.
 		{"activate draft needs approval", Request{Op: OpActivateTask, Namespace: "warehouse-a", ActivateTask: &ActivateTaskParams{TaskName: "t"}}, Snapshot{DraftGateServed: true, TaskExists: true, TaskDraft: true}, RequireApproval, CodeApprovalRequired},
