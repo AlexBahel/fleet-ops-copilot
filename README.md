@@ -39,7 +39,7 @@ Requires Go 1.25+ and the envtest binaries (`setup-envtest use 1.37.0`).
 make build
 make test           # unit tests
 make test-envtest   # API-server tests: RBAC, admission policies, approval path
-make eval-fixtures  # fixture evaluations with the scripted backend
+make eval-fixtures  # fixture evaluations with the scripted backend, held to evals/baseline.json
 ```
 
 Model evaluations call the Claude API and read `ANTHROPIC_API_KEY` from the environment:

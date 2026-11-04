@@ -20,6 +20,12 @@ make vet lint test test-envtest eval-fixtures
 
 All five must pass. `make help` lists every target.
 
+`make eval-fixtures` also holds the run to `evals/baseline.json` (per category: scenarios,
+runs, passing runs). It fails when a category passes fewer runs than recorded or when the
+scenario count or a category's counts change. A change that adds, removes or moves a scenario
+runs `make eval-baseline` and commits the rewritten `evals/baseline.json` in the same commit;
+the scenario count is 25 (`docs/DESIGN.md` §4.2, D58).
+
 ## Rules for changes
 
 - Read `docs/DESIGN.md` first. A change of course is recorded as a new row in its

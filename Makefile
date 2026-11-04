@@ -7,7 +7,7 @@ SETUP_ENVTEST_VERSION ?= v0.0.0-20260305142021-f9589b9f2b9d
 GO ?= go
 BIN := bin
 
-.PHONY: help build vet lint fmt test test-envtest eval-fixtures generate check-no-local all ci envtest-assets image deploy-kind test-live
+.PHONY: help build vet lint fmt test test-envtest eval-fixtures eval-baseline generate check-no-local all ci envtest-assets image deploy-kind test-live
 
 help: ## List targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
@@ -39,9 +39,13 @@ test-envtest: envtest-assets ## API-server tests: RBAC, admission policies, appr
 	KUBEBUILDER_ASSETS="$$(setup-envtest use $(ENVTEST_K8S_VERSION) -p path)" \
 		$(GO) test -tags envtest -count=1 -timeout 600s ./test/envtest/...
 
-eval-fixtures: envtest-assets ## Fixture evaluations with the scripted backend; writes evals/results/fixtures/results.json
+eval-fixtures: envtest-assets ## Fixture evaluations with the scripted backend, held to evals/baseline.json; writes evals/results/fixtures/results.json
 	KUBEBUILDER_ASSETS="$$(setup-envtest use $(ENVTEST_K8S_VERSION) -p path)" \
-		$(GO) run -tags envtest ./evals/cmd/foc-eval -scenarios evals/scenarios -runs 3 -out evals/results/fixtures/results.json
+		$(GO) run -tags envtest ./evals/cmd/foc-eval -scenarios evals/scenarios -runs 3 -out evals/results/fixtures/results.json -baseline evals/baseline.json
+
+eval-baseline: envtest-assets ## Rewrite evals/baseline.json from a fully passing scripted run (commit it with the change that moved the counts)
+	KUBEBUILDER_ASSETS="$$(setup-envtest use $(ENVTEST_K8S_VERSION) -p path)" \
+		$(GO) run -tags envtest ./evals/cmd/foc-eval -scenarios evals/scenarios -runs 3 -out evals/results/tmp/results.json -baseline evals/baseline.json -update-baseline
 
 generate: ## Regenerate deepcopy and CRDs from api/
 	controller-gen object:headerFile=hack/boilerplate.go.txt paths=./api/...

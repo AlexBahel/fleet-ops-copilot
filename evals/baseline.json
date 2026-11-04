@@ -1,0 +1,32 @@
+{
+  "schema": "fleetops.alexbahel.github.io/eval-baseline/v1",
+  "backend": "scripted",
+  "runsPerScenario": 3,
+  "byCategory": {
+    "diagnose": {
+      "scenarios": 7,
+      "runs": 21,
+      "pass": 21
+    },
+    "dispatch": {
+      "scenarios": 6,
+      "runs": 18,
+      "pass": 18
+    },
+    "safety": {
+      "scenarios": 6,
+      "runs": 18,
+      "pass": 18
+    },
+    "zone-ops": {
+      "scenarios": 6,
+      "runs": 18,
+      "pass": 18
+    }
+  },
+  "total": {
+    "scenarios": 25,
+    "runs": 75,
+    "pass": 75
+  }
+}

@@ -18,6 +18,10 @@ limitations under the License.
 // test API server and writes results.json plus one trace line per run.
 //
 // -backend scripted (the CI regression gate) exits non-zero if any run fails.
+// With -baseline it also compares the per-category pass counts with the
+// committed baseline (evals/baseline.json) and exits non-zero when a category
+// passes fewer runs than recorded or when the scenario or category counts
+// differ; -update-baseline rewrites that file from a fully passing run.
 // -backend claude calls the Claude API (ANTHROPIC_API_KEY from the
 // environment) with -model and -effort; it is a measurement, so failed runs
 // are recorded, not fatal. With the -price-* flags it adds the cost.
@@ -60,6 +64,8 @@ func main() {
 	model := flag.String("model", "", "claude: model id (default "+llm.DefaultClaudeModel+"); llamacpp: label for the served model (default "+llm.DefaultLlamaCppModel+")")
 	llamaURL := flag.String("llama-url", "", "llamacpp: base URL (default: $"+llm.EnvLlamaCppURL+")")
 	effort := flag.String("effort", llm.DefaultClaudeEffort, "claude: output_config.effort")
+	baselinePath := flag.String("baseline", "", "scripted: committed per-category baseline to hold (evals/baseline.json); the run fails below it or when the counts differ")
+	updateBaseline := flag.Bool("update-baseline", false, "scripted: rewrite the -baseline file from this run (every run must pass)")
 	only := flag.String("only", "", "comma-separated scenario ids to run (default: all)")
 	liveCtx := flag.String("live-context", "", "run against this kubeconfig context instead of envtest (state is not loaded; see harness.LiveTarget)")
 	liveMCP := flag.String("live-mcp-url", "", "with -live-context: foc-mcp streamable HTTP endpoint")
@@ -74,7 +80,7 @@ func main() {
 	if *traces == "" {
 		*traces = filepath.Join(filepath.Dir(*out), "traces.jsonl")
 	}
-	cfg := runConfig{scenarioDir: *scenarios, fixtureDir: *fixtures, runs: *runs, out: *out, tracePath: *traces, policyPath: *policyPath, only: *only, liveCtx: *liveCtx, liveMCP: *liveMCP}
+	cfg := runConfig{scenarioDir: *scenarios, fixtureDir: *fixtures, runs: *runs, out: *out, tracePath: *traces, policyPath: *policyPath, baseline: *baselinePath, updateBaseline: *updateBaseline, only: *only, liveCtx: *liveCtx, liveMCP: *liveMCP}
 	switch *backend {
 	case "scripted":
 		cfg.name, cfg.factory = "scripted", harness.ScriptedFactory
@@ -118,6 +124,12 @@ func main() {
 	default:
 		log.Fatalf("backend %q is not implemented; use scripted, claude or llamacpp", *backend)
 	}
+	if cfg.baseline != "" && (!cfg.gate || cfg.only != "" || cfg.liveCtx != "") {
+		log.Fatal("-baseline applies to the whole scripted run: not with another backend, -only or -live-context")
+	}
+	if cfg.updateBaseline && cfg.baseline == "" {
+		log.Fatal("-update-baseline needs -baseline")
+	}
 	if err := run(cfg); err != nil {
 		log.Fatal(err)
 	}
@@ -125,6 +137,8 @@ func main() {
 
 type runConfig struct {
 	scenarioDir, fixtureDir, out, tracePath, policyPath, only string
+	baseline                                                  string
+	updateBaseline                                            bool
 	liveCtx, liveMCP                                          string
 	runs                                                      int
 	name, latencyScope                                        string
@@ -311,6 +325,32 @@ func run(c runConfig) error {
 		}
 	}
 	fmt.Printf("results: %s\ntraces:  %s\n", out, tracePath)
+	if c.baseline != "" {
+		if c.updateBaseline {
+			nb, err := harness.BaselineFrom(res)
+			if err != nil {
+				return err
+			}
+			if err := nb.Write(c.baseline); err != nil {
+				return err
+			}
+			fmt.Printf("baseline: %s rewritten (%d scenarios, %d runs)\n", c.baseline, nb.Total.Scenarios, nb.Total.Runs)
+		} else {
+			base, err := harness.LoadBaseline(c.baseline)
+			if err != nil {
+				return err
+			}
+			if v := base.Check(res); len(v) > 0 {
+				for _, line := range v {
+					fmt.Printf("BASELINE %s\n", line)
+				}
+				fmt.Printf("baseline: %s NOT held\n", c.baseline)
+				fail = true
+			} else {
+				fmt.Printf("baseline: %s held (%d scenarios, %d/%d runs)\n", c.baseline, base.Total.Scenarios, res.Total.Pass, res.Total.Runs)
+			}
+		}
+	}
 	if fail && c.gate {
 		os.Exit(1)
 	}
