@@ -63,13 +63,16 @@ func TestRBACMatrix(t *testing.T) {
 		{agentUser, fo, "approvalrequests", "", "create", false},
 		{agentUser, sw, "fleettasks", "", "create", false},
 
-		// foc-mcp: reads, draft create, request create.
+		// foc-mcp: reads and request create; no Swarmada write.
 		{mcpUser, sw, "robots", "", "list", true},
 		{mcpUser, sw, "fleettasks", "", "watch", true},
 		{mcpUser, sw, "fleetzones", "", "get", true},
 		{mcpUser, sw, "zonemaintenances", "", "list", true},
 		{mcpUser, sw, "tasktriggers", "", "list", true},
-		{mcpUser, sw, "fleettasks", "", "create", true},
+		{mcpUser, sw, "fleettasks", "", "create", false},
+		{mcpUser, sw, "fleetzones", "", "create", false},
+		{mcpUser, sw, "zonemaintenances", "", "patch", false},
+		{mcpUser, sw, "robots", "", "update", false},
 		{mcpUser, fo, "approvalrequests", "", "create", true},
 		{mcpUser, core, "events", "", "list", true},
 		// foc-mcp never decides, edits, deletes, activates or stops.
@@ -89,7 +92,8 @@ func TestRBACMatrix(t *testing.T) {
 		{mcpUser, sw, "zonemaintenances", "", "create", false},
 		{mcpUser, sw, "robots", "", "patch", false},
 
-		// foc-approvals: the two approved writes and status of requests.
+		// foc-approvals: the three approved writes and status of requests.
+		{approvUser, sw, "fleettasks", "", "create", true},
 		{approvUser, sw, "zonemaintenances", "", "create", true},
 		{approvUser, sw, "fleetzones", "", "patch", true},
 		{approvUser, sw, "fleetzones", "", "estop-trigger", true},
@@ -104,7 +108,6 @@ func TestRBACMatrix(t *testing.T) {
 		{approvUser, sw, "zonemaintenances", "", "update", false},
 		{approvUser, sw, "fleetzones", "", "delete", false},
 		{approvUser, sw, "fleetzones", "", "update", false},
-		{approvUser, sw, "fleettasks", "", "create", false},
 		{approvUser, sw, "fleettasks", "", "patch", false},
 		{approvUser, sw, "fleettasks", "", "activate", false},
 		{approvUser, sw, "fleettasks", "", "cancel", false},
@@ -128,13 +131,13 @@ func TestRBACMatrix(t *testing.T) {
 	}
 }
 
-func draftTask(name string, draft bool, label bool) *swarmv1.FleetTask {
+func draftTask(name string, draft bool, label string) *swarmv1.FleetTask {
 	t := &swarmv1.FleetTask{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: swarmNS},
 		Spec:       swarmv1.FleetTaskSpec{Draft: draft, Actions: []swarmv1.FleetTaskAction{{Name: "go", Action: swarmv1.FleetActionSpec{Type: swarmv1.ActionTypeNavigate, Zone: swarmNS}}}},
 	}
-	if label {
-		t.Labels = map[string]string{fleet.CreatedByLabel: "foc-mcp"}
+	if label != "" {
+		t.Labels = map[string]string{fleet.CreatedByLabel: label}
 	}
 	return t
 }
@@ -155,29 +158,74 @@ func mergePatch(t *testing.T, c client.Client, obj client.Object, body map[strin
 	return c.Patch(context.Background(), obj, client.RawPatch(types.MergePatchType, b))
 }
 
-// TestAdmissionDraftsOnly: foc-mcp can create a labelled draft and nothing else.
-func TestAdmissionDraftsOnly(t *testing.T) {
+// TestToolServerCannotWriteSwarmada sends real write requests as foc-mcp, the
+// ServiceAccount the model-facing tools run as. Every one is refused.
+func TestToolServerCannotWriteSwarmada(t *testing.T) {
 	ctx := context.Background()
 	mcp := asSA(t, mcpUser)
-	if err := mcp.Create(ctx, draftTask("vap-draft-ok", true, true)); err != nil {
+	z := ensureZone(t, "mcp-zone")
+	existing := draftTask("mcp-existing", true, "foc-approvals")
+	if err := admin.Create(ctx, existing); err != nil {
+		t.Fatal(err)
+	}
+	cases := map[string]func() error{
+		"create draft FleetTask":     func() error { return mcp.Create(ctx, draftTask("mcp-draft", true, "foc-approvals")) },
+		"create non-draft FleetTask": func() error { return mcp.Create(ctx, draftTask("mcp-run", false, "")) },
+		"activate a draft": func() error {
+			return mergePatch(t, mcp, existing, map[string]any{"spec": map[string]any{"draft": false}})
+		},
+		"delete a FleetTask": func() error { return mcp.Delete(ctx, existing) },
+		"create ZoneMaintenance": func() error {
+			return mcp.Create(ctx, &swarmv1.ZoneMaintenance{ObjectMeta: metav1.ObjectMeta{Name: "mcp-zm", Namespace: swarmNS},
+				Spec: swarmv1.ZoneMaintenanceSpec{Scope: swarmv1.ZoneMaintenanceScope{Type: swarmv1.MaintenanceScopeZone, ZoneName: z.Name}, Reason: "x"}})
+		},
+		"trigger zone estop": func() error {
+			return mergePatch(t, mcp, z, map[string]any{"metadata": map[string]any{"annotations": map[string]any{fleet.EstopAnnotation: "x"}}})
+		},
+		"patch Robot": func() error {
+			r := &swarmv1.Robot{ObjectMeta: metav1.ObjectMeta{Name: "any", Namespace: swarmNS}}
+			return mergePatch(t, mcp, r, map[string]any{"metadata": map[string]any{"labels": map[string]any{"x": "y"}}})
+		},
+		"write ApprovalRequest status": func() error {
+			r := &focv1.ApprovalRequest{ObjectMeta: metav1.ObjectMeta{Name: "any", Namespace: swarmNS}}
+			b, _ := json.Marshal(map[string]any{"status": map[string]any{"state": "Approved"}})
+			return mcp.Status().Patch(ctx, r, client.RawPatch(types.MergePatchType, b))
+		},
+		"create ApprovalDecision": func() error { return mcp.Create(ctx, decision("any", mcpUser, saGroups())) },
+	}
+	for name, write := range cases {
+		t.Run(name, func(t *testing.T) {
+			if err := write(); !apierrors.IsForbidden(err) {
+				t.Fatalf("want Forbidden, got %v", err)
+			}
+		})
+	}
+}
+
+// TestAdmissionDraftsOnly: foc-approvals can create a labelled draft and
+// nothing else; RBAC refuses it any update or delete.
+func TestAdmissionDraftsOnly(t *testing.T) {
+	ctx := context.Background()
+	ap := asSA(t, approvUser)
+	if err := ap.Create(ctx, draftTask("vap-draft-ok", true, "foc-approvals")); err != nil {
 		t.Fatalf("labelled draft refused: %v", err)
 	}
 	for name, task := range map[string]*swarmv1.FleetTask{
-		"non-draft":  draftTask("vap-nondraft", false, true),
-		"unlabelled": draftTask("vap-unlabelled", true, false),
+		"non-draft":           draftTask("vap-nondraft", false, "foc-approvals"),
+		"unlabelled":          draftTask("vap-unlabelled", true, ""),
+		"labelled as foc-mcp": draftTask("vap-wronglabel", true, "foc-mcp"),
 	} {
-		err := mcp.Create(ctx, task)
+		err := ap.Create(ctx, task)
 		if err == nil || !apierrors.IsInvalid(err) && !apierrors.IsForbidden(err) {
 			t.Errorf("%s: want admission refusal, got %v", name, err)
 		}
 	}
-	// No update path either: RBAC refuses before admission.
-	err := mergePatch(t, mcp, draftTask("vap-draft-ok", true, true), map[string]any{"spec": map[string]any{"draft": false}})
+	err := mergePatch(t, ap, draftTask("vap-draft-ok", true, ""), map[string]any{"spec": map[string]any{"draft": false}})
 	if !apierrors.IsForbidden(err) {
-		t.Errorf("foc-mcp activation: want Forbidden, got %v", err)
+		t.Errorf("foc-approvals activation: want Forbidden, got %v", err)
 	}
-	if err := mcp.Delete(ctx, draftTask("vap-draft-ok", true, true)); !apierrors.IsForbidden(err) {
-		t.Errorf("foc-mcp delete: want Forbidden, got %v", err)
+	if err := ap.Delete(ctx, draftTask("vap-draft-ok", true, "")); !apierrors.IsForbidden(err) {
+		t.Errorf("foc-approvals delete: want Forbidden, got %v", err)
 	}
 }
 

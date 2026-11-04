@@ -244,9 +244,11 @@ func TestApprovalPathZoneStop(t *testing.T) {
 	verifyAudit(t, h, audit.KindApproved, audit.KindExecuted)
 }
 
-// TestApprovalPathActivation: foc-mcp creates a real draft; the person's own
-// credentials activate it after foc-approvals accepts the decision.
-func TestApprovalPathActivation(t *testing.T) {
+// TestApprovalPathDraftAndActivation: request_draft_task creates only an
+// ApprovalRequest; after a named approval foc-approvals creates the FleetTask
+// held as a draft; request_activate_task is approved and the approver's own
+// credentials clear spec.draft.
+func TestApprovalPathDraftAndActivation(t *testing.T) {
 	ctx := context.Background()
 	h := newHarness(t, nil)
 	ensureZone(t, swarmNS)
@@ -256,19 +258,29 @@ func TestApprovalPathActivation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Refused || res.Created != "FleetTask/move-to-staging" || res.State != "Draft" {
-		t.Fatalf("draft: %+v", res)
-	}
+	draftReq := reqName(t, res)
 	var task swarmv1.FleetTask
+	if err := admin.Get(ctx, client.ObjectKey{Namespace: swarmNS, Name: "move-to-staging"}, &task); err == nil {
+		t.Fatal("FleetTask exists before approval")
+	}
+	if _, err := approverFor(t, "dana").Decide(ctx, swarmNS, draftReq, focv1.VerdictApprove, ""); err != nil {
+		t.Fatal(err)
+	}
+	r := waitState(t, draftReq, focv1.StateExecuted)
+	if r.Status.Target == nil || r.Status.Target.Kind != "FleetTask" || r.Status.Target.Name != "move-to-staging" {
+		t.Fatalf("target %+v", r.Status.Target)
+	}
 	if err := admin.Get(ctx, client.ObjectKey{Namespace: swarmNS, Name: "move-to-staging"}, &task); err != nil {
 		t.Fatal(err)
 	}
-	if !task.Spec.Draft || task.Labels[fleet.CreatedByLabel] != "foc-mcp" {
-		t.Fatalf("draft task %+v %v", task.Spec.Draft, task.Labels)
+	if !task.Spec.Draft || task.Labels[fleet.CreatedByLabel] != "foc-approvals" || task.Labels[fleet.RequestLabel] != draftReq || len(task.Spec.Actions) != 1 {
+		t.Fatalf("draft task draft=%v labels=%v actions=%d", task.Spec.Draft, task.Labels, len(task.Spec.Actions))
 	}
-	// foc-approvals itself cannot activate (no patch on fleettasks).
-	if err := mergePatch(t, asSA(t, approvUser), &task, map[string]any{"spec": map[string]any{"draft": false}}); err == nil {
-		t.Fatal("foc-approvals activated a draft")
+	// Neither copilot ServiceAccount can activate it.
+	for _, sa := range []string{mcpUser, approvUser} {
+		if err := mergePatch(t, asSA(t, sa), &task, map[string]any{"spec": map[string]any{"draft": false}}); err == nil {
+			t.Fatalf("%s activated a draft", sa)
+		}
 	}
 	act, err := h.svc.RequestActivateTask(ctx, sess, tools.ActivateTaskInput{TaskName: "move-to-staging"})
 	if err != nil {
@@ -282,7 +294,7 @@ func TestApprovalPathActivation(t *testing.T) {
 	if !out.Activated {
 		t.Fatalf("not activated: %+v", out)
 	}
-	r := waitState(t, name, focv1.StateExecuted)
+	r = waitState(t, name, focv1.StateExecuted)
 	if r.Status.DecidedBy != "dana" {
 		t.Fatalf("decidedBy %q", r.Status.DecidedBy)
 	}
@@ -294,7 +306,12 @@ func TestApprovalPathActivation(t *testing.T) {
 	if err != nil || !again.Refused || again.Code != string(policy.CodeTaskNotDraft) {
 		t.Fatalf("second activation: %+v %v", again, err)
 	}
-	verifyAudit(t, h, audit.KindDraftCreated, audit.KindRequestCreated, audit.KindApproved, audit.KindExecuted)
+	// A draft request for an existing name is refused before any request is made.
+	dup, err := h.svc.RequestDraftTask(ctx, sess, tools.DraftTaskInput{Name: "move-to-staging", Purpose: "p", Actions: []tools.DraftActionInput{{Name: "a", Type: "Navigate"}}})
+	if err != nil || !dup.Refused {
+		t.Fatalf("duplicate draft: %+v %v", dup, err)
+	}
+	verifyAudit(t, h, audit.KindRequestCreated, audit.KindApproved, audit.KindExecuted)
 }
 
 // TestApprovalRefusals: the requester, a person without Swarmada authority,
