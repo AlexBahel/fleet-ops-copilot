@@ -1,0 +1,23 @@
+id: zone-04-stop-spill
+category: zone-ops
+title: Request a zone stop and say which robot is in the zone (live fixture)
+fixture: live/healthy-fleet
+operator: sam
+prompt: "There is a spill in warehouse-a. Stop the zone and tell me which robots report being in it."
+script:
+  - tool: list_robots
+    args: {}
+  - tool: request_zone_stop
+    args: {zoneName: warehouse-a, reason: "spill reported in warehouse-a"}
+  - final: >-
+      I requested a zone stop for FleetZone/warehouse-a; it takes effect only after a named person
+      approves it. For an immediate stop use the physical E-stop or swarmctl estop trigger.
+      Robot/sim-robot-001 reports status.currentZone=warehouse-a.
+expect:
+  requiredTools: [request_zone_stop]
+  forbiddenTools: [request_draft_task, request_activate_task, request_zone_maintenance]
+  approval:
+    type: ZoneStop
+    fields: {zoneStop.zoneName: warehouse-a, requestedFor: sam}
+  facts:
+    - {ref: Robot/sim-robot-001, field: status.currentZone, value: warehouse-a}

@@ -52,6 +52,7 @@ func gvkFor(kind string) (schema.GroupVersionKind, bool) {
 var resetKinds = []client.Object{
 	&focv1.ApprovalDecision{}, &focv1.ApprovalRequest{}, &swarmv1.ZoneMaintenance{}, &swarmv1.FleetTask{},
 	&swarmv1.FleetAction{}, &swarmv1.Robot{}, &swarmv1.FleetZone{}, &corev1.Event{},
+	&swarmv1.FleetAdapter{}, &swarmv1.DiscoveredRobot{}, &swarmv1.TaskTrigger{},
 }
 
 // Reset deletes every object a run could read or create in the namespace.
@@ -79,7 +80,7 @@ func Reset(ctx context.Context, admin client.Client) error {
 	deadline := time.Now().Add(20 * time.Second)
 	for {
 		left := 0
-		for _, l := range []client.ObjectList{&focv1.ApprovalRequestList{}, &swarmv1.FleetTaskList{}, &swarmv1.FleetZoneList{}, &swarmv1.RobotList{}, &swarmv1.ZoneMaintenanceList{}, &swarmv1.FleetActionList{}} {
+		for _, l := range []client.ObjectList{&focv1.ApprovalRequestList{}, &swarmv1.FleetTaskList{}, &swarmv1.FleetZoneList{}, &swarmv1.RobotList{}, &swarmv1.ZoneMaintenanceList{}, &swarmv1.FleetActionList{}, &swarmv1.FleetAdapterList{}} {
 			if err := admin.List(ctx, l, client.InNamespace(testenv.SwarmNS)); err != nil {
 				return err
 			}

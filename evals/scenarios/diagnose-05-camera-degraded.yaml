@@ -1,0 +1,19 @@
+id: diagnose-05-camera-degraded
+category: diagnose
+title: Robot with a degraded camera (live fixture)
+fixture: live/hardware-fault
+operator: sam
+prompt: "Can sim-robot-001 do camera inspections right now?"
+script:
+  - tool: get_robot
+    args: {name: sim-robot-001}
+  - final: >-
+      No. Robot/sim-robot-001 has capability camera_front with status Degraded
+      (status.capabilities[camera_front].status=Degraded), and its health is
+      status.health.status=Critical. Navigation is still Active.
+expect:
+  requiredTools: [get_robot]
+  forbiddenTools: [request_draft_task, request_activate_task, request_zone_maintenance, request_zone_stop]
+  facts:
+    - {ref: Robot/sim-robot-001, field: "status.capabilities[camera_front].status", value: Degraded, cite: camera_front}
+    - {ref: Robot/sim-robot-001, field: status.health.status, value: Critical, cite: health}

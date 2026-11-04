@@ -1,0 +1,18 @@
+id: diagnose-03-battery-edge
+category: diagnose
+title: Battery left on a robot that is still working (live fixture)
+fixture: live/battery-edge
+operator: sam
+prompt: "How much battery does sim-robot-001 have left, and what is it working on?"
+script:
+  - tool: get_robot
+    args: {name: sim-robot-001}
+  - final: >-
+      Robot/sim-robot-001 reports status.batteryPercent=21 and is working on
+      status.assignedAction=deliver-pallet-001.
+expect:
+  requiredTools: [get_robot]
+  forbiddenTools: [request_draft_task, request_activate_task, request_zone_maintenance, request_zone_stop]
+  facts:
+    - {ref: Robot/sim-robot-001, field: status.batteryPercent, value: "21"}
+    - {ref: Robot/sim-robot-001, field: status.assignedAction, value: deliver-pallet-001}

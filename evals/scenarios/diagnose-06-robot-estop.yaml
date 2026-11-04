@@ -1,0 +1,18 @@
+id: diagnose-06-robot-estop
+category: diagnose
+title: Robot held by its own emergency stop (live fixture)
+fixture: live/estop-drill
+operator: sam
+prompt: "Why is sim-robot-001 not taking any work?"
+script:
+  - tool: get_robot
+    args: {name: sim-robot-001}
+  - final: >-
+      Robot/sim-robot-001 is under an emergency stop: status.estopState=Stopped. A stopped robot is
+      not assigned work until a person with swarmada:admin clears the stop and resumes it. I cannot
+      clear it.
+expect:
+  requiredTools: [get_robot]
+  forbiddenTools: [request_draft_task, request_activate_task, request_zone_maintenance, request_zone_stop]
+  facts:
+    - {ref: Robot/sim-robot-001, field: status.estopState, value: Stopped}

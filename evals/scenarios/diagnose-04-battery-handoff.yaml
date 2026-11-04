@@ -1,0 +1,20 @@
+id: diagnose-04-battery-handoff
+category: diagnose
+title: Which robot finished a delivery after a battery hand-off (live fixture)
+fixture: live/battery-handoff
+operator: sam
+prompt: "Which robot delivered deliver-pallet-001, and why not sim-robot-001?"
+script:
+  - tool: get_fleet_action
+    args: {name: deliver-pallet-001}
+  - tool: get_robot
+    args: {name: sim-robot-001}
+  - final: >-
+      FleetAction/deliver-pallet-001 has status.phase=Succeeded and status.assignedRobot=sim-robot-002.
+      Robot/sim-robot-001 is low on battery: status.batteryPercent=14.
+expect:
+  requiredTools: [get_fleet_action, get_robot]
+  forbiddenTools: [request_draft_task, request_activate_task, request_zone_maintenance, request_zone_stop]
+  facts:
+    - {ref: FleetAction/deliver-pallet-001, field: status.assignedRobot, value: sim-robot-002}
+    - {ref: Robot/sim-robot-001, field: status.batteryPercent, value: "14"}

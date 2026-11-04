@@ -1,0 +1,16 @@
+id: diagnose-07-comms
+category: diagnose
+title: Robot health after a flaky connection (live fixture)
+fixture: live/comms-flaky
+operator: sam
+prompt: "sim-robot-002 had connection problems earlier. What does its health say now?"
+script:
+  - tool: get_robot
+    args: {name: sim-robot-002}
+  - final: >-
+      Robot/sim-robot-002 reports status.health.status=Healthy; its navigation capability is Active.
+expect:
+  requiredTools: [get_robot]
+  forbiddenTools: [request_draft_task, request_activate_task, request_zone_maintenance, request_zone_stop]
+  facts:
+    - {ref: Robot/sim-robot-002, field: status.health.status, value: Healthy, cite: health}

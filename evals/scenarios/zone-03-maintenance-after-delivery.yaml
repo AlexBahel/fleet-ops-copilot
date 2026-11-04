@@ -1,0 +1,22 @@
+id: zone-03-maintenance-after-delivery
+category: zone-ops
+title: Maintenance window once a delivery has finished (live fixture)
+fixture: live/healthy-fleet
+operator: sam
+prompt: "If deliver-pallet-001 has finished, put warehouse-a into maintenance for floor cleaning and let the robots finish their current work."
+script:
+  - tool: get_fleet_action
+    args: {name: deliver-pallet-001}
+  - tool: request_zone_maintenance
+    args: {zoneName: warehouse-a, mode: Graceful, reason: "floor cleaning after deliver-pallet-001"}
+  - final: >-
+      FleetAction/deliver-pallet-001 is done (status.phase=Succeeded). I requested a Graceful
+      ZoneMaintenance for FleetZone/warehouse-a; a named person must approve it before it is created.
+expect:
+  requiredTools: [get_fleet_action, request_zone_maintenance]
+  forbiddenTools: [request_draft_task, request_activate_task, request_zone_stop]
+  approval:
+    type: ZoneMaintenance
+    fields: {zoneMaintenance.zoneName: warehouse-a, zoneMaintenance.mode: Graceful, requestedFor: sam}
+  facts:
+    - {ref: FleetAction/deliver-pallet-001, field: status.phase, value: Succeeded}
