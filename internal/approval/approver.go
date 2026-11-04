@@ -1,0 +1,145 @@
+/*
+Copyright 2026 Alex Bahel
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package approval
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	authnv1 "k8s.io/api/authentication/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	swarmv1 "github.com/swarmada/swarmada/api/v1"
+
+	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
+)
+
+// Approver acts with a person's own credentials (their kubeconfig). It is
+// used by `foc approve` and `foc reject`; no copilot process holds these
+// credentials.
+type Approver struct {
+	C        client.Client
+	Identity func(ctx context.Context) (string, []string, error)
+	// Poll and Timeout bound the wait for an activation to be Approved.
+	Poll    time.Duration
+	Timeout time.Duration
+}
+
+// NewApprover builds an Approver from a person's rest.Config.
+func NewApprover(cfg *rest.Config) (*Approver, error) {
+	c, err := client.New(cfg, client.Options{Scheme: fleet.NewScheme()})
+	if err != nil {
+		return nil, err
+	}
+	cs, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return &Approver{C: c, Poll: time.Second, Timeout: 60 * time.Second, Identity: func(ctx context.Context) (string, []string, error) {
+		r, err := cs.AuthenticationV1().SelfSubjectReviews().Create(ctx, &authnv1.SelfSubjectReview{}, metav1.CreateOptions{})
+		if err != nil {
+			return "", nil, fmt.Errorf("SelfSubjectReview: %w", err)
+		}
+		return r.Status.UserInfo.Username, r.Status.UserInfo.Groups, nil
+	}}, nil
+}
+
+// Outcome reports what Decide did.
+type Outcome struct {
+	Decision  string
+	State     focv1.RequestState
+	Activated bool
+	Message   string
+}
+
+// Decide records the caller's verdict on a request. For an approved
+// activation it then waits for foc-approvals to accept the decision and
+// clears spec.draft on the FleetTask with the caller's own credentials.
+func (a *Approver) Decide(ctx context.Context, ns, request string, verdict focv1.Verdict, comment string) (Outcome, error) {
+	user, groups, err := a.Identity(ctx)
+	if err != nil {
+		return Outcome{}, err
+	}
+	var req focv1.ApprovalRequest
+	if err := a.C.Get(ctx, client.ObjectKey{Namespace: ns, Name: request}, &req); err != nil {
+		return Outcome{}, err
+	}
+	d := &focv1.ApprovalDecision{
+		ObjectMeta: metav1.ObjectMeta{GenerateName: request + "-", Namespace: ns, Labels: map[string]string{fleet.RequestLabel: request}},
+		Spec:       focv1.ApprovalDecisionSpec{RequestRef: request, Verdict: verdict, DecidedBy: user, DecidedByGroups: groups, Comment: comment},
+	}
+	if err := a.C.Create(ctx, d); err != nil {
+		return Outcome{}, fmt.Errorf("creating ApprovalDecision: %w", err)
+	}
+	out := Outcome{Decision: d.Name}
+	if verdict != focv1.VerdictApprove || req.Spec.Type != focv1.RequestActivateTask {
+		out.State, out.Message = req.Status.State, "decision recorded; foc-approvals will process it"
+		return out, nil
+	}
+	// Activation: wait until the copilot has accepted this decision.
+	deadline := time.Now().Add(a.Timeout)
+	for {
+		if err := a.C.Get(ctx, client.ObjectKey{Namespace: ns, Name: request}, &req); err != nil {
+			return out, err
+		}
+		st := req.Status.State
+		if st == focv1.StateApproved && req.Status.DecisionRef == d.Name {
+			break
+		}
+		if st.IsTerminal() || containsName(req.Status.RefusedDecisions, d.Name) {
+			out.State, out.Message = st, "not activated: "+req.Status.Message
+			return out, nil
+		}
+		if time.Now().After(deadline) {
+			out.State, out.Message = st, "timed out waiting for foc-approvals to accept the decision; nothing was activated"
+			return out, nil
+		}
+		select {
+		case <-ctx.Done():
+			return out, ctx.Err()
+		case <-time.After(a.Poll):
+		}
+	}
+	patch := []byte(`{"spec":{"draft":false}}`)
+	task := &metav1.PartialObjectMetadata{}
+	task.SetGroupVersionKind(fleetTaskGVK)
+	task.SetNamespace(ns)
+	task.SetName(req.Spec.ActivateTask.TaskName)
+	if err := a.C.Patch(ctx, task, client.RawPatch(types.MergePatchType, patch)); err != nil {
+		out.State, out.Message = focv1.StateApproved, "approved, but activation was refused: "+err.Error()
+		return out, nil
+	}
+	out.State, out.Activated, out.Message = focv1.StateApproved, true, "activated with your credentials; foc-approvals records it as Executed"
+	return out, nil
+}
+
+func containsName(list []string, n string) bool {
+	for _, x := range list {
+		if x == n {
+			return true
+		}
+	}
+	return false
+}
+
+var fleetTaskGVK = swarmv1.GroupVersion.WithKind("FleetTask")
