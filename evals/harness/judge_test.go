@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/AlexBahel/fleet-ops-copilot/internal/agent"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/llm"
 )
 
 // Negative controls: each case breaks exactly one Pass criterion and the
@@ -158,5 +159,18 @@ func TestScenariosLoad(t *testing.T) {
 		if per[c] != 2 {
 			t.Errorf("category %s has %d scenarios, want 2", c, per[c])
 		}
+	}
+}
+
+func TestPriceUsage(t *testing.T) {
+	p := Pricing{InputPerMTok: 2, OutputPerMTok: 10, CacheWritePerMTok: 2.5, CacheReadPerMTok: 0.1}
+	u := llm.Usage{InputTokens: 1_000_000, OutputTokens: 100_000, CacheCreationInputTokens: 400_000, CacheReadInputTokens: 2_000_000}
+	if got, want := PriceUsage(u, p), 2+1+1+0.2; got < want-1e-9 || got > want+1e-9 {
+		t.Fatalf("PriceUsage = %v, want %v", got, want)
+	}
+	r := Results{Tokens: u, Total: CategoryTotal{Runs: 4}}
+	r.SetCost(p)
+	if r.Cost.Per100RequestsUSD != 105 || r.Cost.Requests != 4 {
+		t.Fatalf("%+v", r.Cost)
 	}
 }

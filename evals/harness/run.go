@@ -56,14 +56,17 @@ type Runner struct {
 
 // RunResult is one run of one scenario.
 type RunResult struct {
-	Run       int         `json:"run"`
-	Pass      bool        `json:"pass"`
-	Verdict   Verdict     `json:"verdict"`
-	LatencyMs float64     `json:"latencyMs"`
-	ToolCalls []string    `json:"toolCalls"`
-	Usage     llm.Usage   `json:"usage"`
-	Error     string      `json:"error,omitempty"`
-	Trace     agent.Trace `json:"-"`
+	Run       int       `json:"run"`
+	Pass      bool      `json:"pass"`
+	Verdict   Verdict   `json:"verdict"`
+	LatencyMs float64   `json:"latencyMs"`
+	ToolCalls []string  `json:"toolCalls"`
+	Usage     llm.Usage `json:"usage"`
+	// StopReasons are the backend's per-turn stop reasons (claude only).
+	StopReasons []string    `json:"stopReasons,omitempty"`
+	Turns       int         `json:"turns"`
+	Error       string      `json:"error,omitempty"`
+	Trace       agent.Trace `json:"-"`
 }
 
 // ScenarioResult aggregates the runs of one scenario.
@@ -125,7 +128,7 @@ func (r *Runner) runOnce(ctx context.Context, s Scenario, n int) (RunResult, err
 	}
 	loop := &agent.Loop{Backend: be, Session: cs}
 	tr, runErr := loop.Run(ctx, s.Operator, fmt.Sprintf("eval-%s-%d", s.ID, n), s.Prompt)
-	rr := RunResult{Run: n, LatencyMs: tr.LatencyMs, ToolCalls: tr.ToolCalls(), Usage: tr.Usage, Trace: tr}
+	rr := RunResult{Run: n, LatencyMs: tr.LatencyMs, ToolCalls: tr.ToolCalls(), Usage: tr.Usage, StopReasons: tr.StopReasons, Turns: tr.Turns, Trace: tr}
 	if runErr != nil {
 		rr.Error = runErr.Error()
 	}
@@ -170,6 +173,46 @@ type Results struct {
 	ByCategory      map[string]CategoryTotal `json:"byCategory"`
 	Total           CategoryTotal            `json:"total"`
 	Latency         LatencySummary           `json:"latency"`
+	// Tokens sums the usage the backend reported over every run.
+	Tokens llm.Usage `json:"tokens"`
+	// Cost is set for priced backends (claude); see Pricing.
+	Cost *CostSummary `json:"cost,omitempty"`
+}
+
+// Pricing is the published per-million-token price used for Cost.
+type Pricing struct {
+	Model             string  `json:"model"`
+	InputPerMTok      float64 `json:"inputUSDPerMTok"`
+	OutputPerMTok     float64 `json:"outputUSDPerMTok"`
+	CacheWritePerMTok float64 `json:"cacheWriteUSDPerMTok"`
+	CacheReadPerMTok  float64 `json:"cacheReadUSDPerMTok"`
+	Source            string  `json:"source"`
+	ReadOn            string  `json:"readOn"`
+}
+
+// CostSummary is tokens x Pricing. One request is one scenario run (one
+// operator request answered end to end, all model turns included).
+type CostSummary struct {
+	Pricing           Pricing `json:"pricing"`
+	Requests          int     `json:"requests"`
+	TotalUSD          float64 `json:"totalUSD"`
+	Per100RequestsUSD float64 `json:"per100RequestsUSD"`
+}
+
+// PriceUsage returns the USD cost of u under p.
+func PriceUsage(u llm.Usage, p Pricing) float64 {
+	return (float64(u.InputTokens)*p.InputPerMTok + float64(u.OutputTokens)*p.OutputPerMTok +
+		float64(u.CacheCreationInputTokens)*p.CacheWritePerMTok + float64(u.CacheReadInputTokens)*p.CacheReadPerMTok) / 1e6
+}
+
+// SetCost prices the total tokens.
+func (r *Results) SetCost(p Pricing) {
+	total := PriceUsage(r.Tokens, p)
+	c := &CostSummary{Pricing: p, Requests: r.Total.Runs, TotalUSD: math.Round(total*1e6) / 1e6}
+	if r.Total.Runs > 0 {
+		c.Per100RequestsUSD = math.Round(total/float64(r.Total.Runs)*100*1e4) / 1e4
+	}
+	r.Cost = c
 }
 
 // CategoryTotal counts runs.
@@ -214,6 +257,7 @@ func Summarize(backend string, runs int, env map[string]string, srs []ScenarioRe
 				res.Total.Pass++
 			}
 			lat = append(lat, r.LatencyMs)
+			res.Tokens.Add(r.Usage)
 		}
 		res.ByCategory[sr.Category] = ct
 		res.Total.Scenarios++

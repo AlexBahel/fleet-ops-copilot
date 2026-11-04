@@ -15,8 +15,12 @@ limitations under the License.
 */
 
 // Command foc-eval runs the evaluation scenarios against fixture states in a
-// test API server and writes results.json plus one trace line per run. It
-// exits non-zero if any run fails (the CI regression gate).
+// test API server and writes results.json plus one trace line per run.
+//
+// -backend scripted (the CI regression gate) exits non-zero if any run fails.
+// -backend claude calls the Claude API (ANTHROPIC_API_KEY from the
+// environment) with -model and -effort; it is a measurement, so failed runs
+// are recorded, not fatal. With the -price-* flags it adds the cost.
 package main
 
 import (
@@ -34,6 +38,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/AlexBahel/fleet-ops-copilot/evals/harness"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/llm"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/policy"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/testenv"
 )
@@ -45,17 +50,53 @@ func main() {
 	out := flag.String("out", "evals/results/fixtures/results.json", "results file")
 	traces := flag.String("traces", "", "trace file (default: traces.jsonl next to -out)")
 	policyPath := flag.String("policy", "policies/default.yaml", "policy file")
-	backend := flag.String("backend", "scripted", "backend: scripted (claude and llamacpp arrive in a later track)")
+	backend := flag.String("backend", "scripted", "backend: scripted or claude (llamacpp is not built yet)")
+	model := flag.String("model", llm.DefaultClaudeModel, "claude: model id")
+	effort := flag.String("effort", llm.DefaultClaudeEffort, "claude: output_config.effort")
+	only := flag.String("only", "", "comma-separated scenario ids to run (default: all)")
+	var pr harness.Pricing
+	flag.Float64Var(&pr.InputPerMTok, "price-input", 0, "claude: USD per million input tokens")
+	flag.Float64Var(&pr.OutputPerMTok, "price-output", 0, "claude: USD per million output tokens")
+	flag.Float64Var(&pr.CacheWritePerMTok, "price-cache-write", 0, "claude: USD per million cache-write input tokens")
+	flag.Float64Var(&pr.CacheReadPerMTok, "price-cache-read", 0, "claude: USD per million cache-read input tokens")
+	flag.StringVar(&pr.Source, "pricing-source", "", "claude: pricing page URL")
+	flag.StringVar(&pr.ReadOn, "pricing-read-on", "", "claude: date the pricing page was read (YYYY-MM-DD)")
 	flag.Parse()
-	if *backend != "scripted" {
-		log.Fatalf("backend %q is not implemented yet; only scripted is available", *backend)
-	}
 	if *traces == "" {
 		*traces = filepath.Join(filepath.Dir(*out), "traces.jsonl")
 	}
-	if err := run(*scenarios, *fixtures, *runs, *out, *traces, *policyPath); err != nil {
+	cfg := runConfig{scenarioDir: *scenarios, fixtureDir: *fixtures, runs: *runs, out: *out, tracePath: *traces, policyPath: *policyPath, only: *only}
+	switch *backend {
+	case "scripted":
+		cfg.name, cfg.factory = "scripted", harness.ScriptedFactory
+		cfg.latencyScope = "scripted backend: tool execution over in-process MCP against envtest; no model is called, so this is not a model latency"
+		cfg.gate = true
+	case "claude":
+		if _, err := llm.NewClaude(*model, *effort); err != nil {
+			log.Fatal(err)
+		}
+		cfg.name = "claude:" + *model + " effort=" + *effort
+		cfg.factory = func(harness.Scenario) (llm.Backend, error) { return llm.NewClaude(*model, *effort) }
+		cfg.latencyScope = "Claude API (" + *model + ", effort " + *effort + ") from this machine, plus tool execution over in-process MCP against envtest; request sent until final answer"
+		if pr.Source != "" {
+			pr.Model = *model
+			cfg.pricing = &pr
+		}
+	default:
+		log.Fatalf("backend %q is not implemented; use scripted or claude", *backend)
+	}
+	if err := run(cfg); err != nil {
 		log.Fatal(err)
 	}
+}
+
+type runConfig struct {
+	scenarioDir, fixtureDir, out, tracePath, policyPath, only string
+	runs                                                      int
+	name, latencyScope                                        string
+	factory                                                   harness.BackendFactory
+	pricing                                                   *harness.Pricing
+	gate                                                      bool
 }
 
 func swarmadaVersion(dir string) (string, string) {
@@ -78,6 +119,16 @@ func swarmadaVersion(dir string) (string, string) {
 	return spec, rev
 }
 
+// swarmadaResolution says how the Swarmada module was resolved: through a
+// local go.work (before the public release pin, so results are pre-release)
+// or through the go.mod pin.
+func swarmadaResolution() string {
+	if b, err := exec.Command("go", "env", "GOWORK").Output(); err == nil && strings.TrimSpace(string(b)) != "" {
+		return "local go.work (pre-release)"
+	}
+	return "go.mod pin"
+}
+
 // runIn runs a command with fixed arguments in a directory.
 func runIn(dir string, cmd *exec.Cmd) (string, error) {
 	cmd.Dir = dir
@@ -96,7 +147,8 @@ func copilotCommit(repo string) (string, bool) {
 	return sha, err != nil || st != ""
 }
 
-func run(scenarioDir, fixtureDir string, runs int, out, tracePath, policyPath string) error {
+func run(c runConfig) error {
+	scenarioDir, fixtureDir, runs, out, tracePath, policyPath := c.scenarioDir, c.fixtureDir, c.runs, c.out, c.tracePath, c.policyPath
 	ctx := context.Background()
 	repo, err := os.Getwd()
 	if err != nil {
@@ -108,6 +160,19 @@ func run(scenarioDir, fixtureDir string, runs int, out, tracePath, policyPath st
 	scs, err := harness.LoadScenarios(scenarioDir)
 	if err != nil {
 		return err
+	}
+	if c.only != "" {
+		keep := map[string]bool{}
+		for _, id := range strings.Split(c.only, ",") {
+			keep[strings.TrimSpace(id)] = true
+		}
+		var sel []harness.Scenario
+		for _, s := range scs {
+			if keep[s.ID] {
+				sel = append(sel, s)
+			}
+		}
+		scs = sel
 	}
 	pol, err := policy.Load(policyPath)
 	if err != nil {
@@ -126,20 +191,22 @@ func run(scenarioDir, fixtureDir string, runs int, out, tracePath, policyPath st
 		return err
 	}
 	defer func() { _ = tf.Close() }()
-	r := &harness.Runner{Env: env, Policy: pol, FixtureDir: fixtureDir, Backend: harness.ScriptedFactory, Runs: runs, Traces: tf}
+	r := &harness.Runner{Env: env, Policy: pol, FixtureDir: fixtureDir, Backend: c.factory, Runs: runs, Traces: tf}
 	srs, err := r.Run(ctx, scs)
 	if err != nil {
 		return err
 	}
 	spec, rev := swarmadaVersion(env.SwarmadaDir)
-	envInfo := map[string]string{"swarmadaSpec": spec, "swarmadaCommit": rev, "apiServer": "envtest", "copilotCommit": sha, "copilotTreeDirty": fmt.Sprint(dirty)}
+	envInfo := map[string]string{"swarmadaSpec": spec, "swarmadaCommit": rev, "swarmadaResolution": swarmadaResolution(), "apiServer": "envtest", "copilotCommit": sha, "copilotTreeDirty": fmt.Sprint(dirty)}
 	if cs, err := kubernetes.NewForConfig(env.AdminCfg); err == nil {
 		if v, err := cs.Discovery().ServerVersion(); err == nil {
 			envInfo["apiServer"] = "envtest kube-apiserver " + v.GitVersion
 		}
 	}
-	res := harness.Summarize("scripted", runs, envInfo, srs,
-		"scripted backend: tool execution over in-process MCP against envtest; no model is called, so this is not a model latency")
+	res := harness.Summarize(c.name, runs, envInfo, srs, c.latencyScope)
+	if c.pricing != nil {
+		res.SetCost(*c.pricing)
+	}
 	b, err := json.MarshalIndent(res, "", "  ")
 	if err != nil {
 		return err
@@ -148,7 +215,11 @@ func run(scenarioDir, fixtureDir string, runs int, out, tracePath, policyPath st
 		return err
 	}
 	fmt.Printf("%d scenarios x %d runs: %d/%d runs passed; latency p50 %.3f ms, p95 %.3f ms (%s)\n",
-		res.Total.Scenarios, runs, res.Total.Pass, res.Total.Runs, res.Latency.P50Ms, res.Latency.P95Ms, "scripted")
+		res.Total.Scenarios, runs, res.Total.Pass, res.Total.Runs, res.Latency.P50Ms, res.Latency.P95Ms, c.name)
+	fmt.Printf("tokens: input %d, output %d, cache write %d, cache read %d\n", res.Tokens.InputTokens, res.Tokens.OutputTokens, res.Tokens.CacheCreationInputTokens, res.Tokens.CacheReadInputTokens)
+	if res.Cost != nil {
+		fmt.Printf("cost: %.4f USD total, %.4f USD per 100 requests (%s, read %s)\n", res.Cost.TotalUSD, res.Cost.Per100RequestsUSD, res.Cost.Pricing.Source, res.Cost.Pricing.ReadOn)
+	}
 	for _, c := range harness.Categories {
 		ct := res.ByCategory[c]
 		fmt.Printf("  %-9s %d scenarios, %d/%d runs passed\n", c, ct.Scenarios, ct.Pass, ct.Runs)
@@ -163,7 +234,7 @@ func run(scenarioDir, fixtureDir string, runs int, out, tracePath, policyPath st
 		}
 	}
 	fmt.Printf("results: %s\ntraces:  %s\n", out, tracePath)
-	if fail {
+	if fail && c.gate {
 		os.Exit(1)
 	}
 	return nil
