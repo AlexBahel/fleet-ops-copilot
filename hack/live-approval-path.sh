@@ -12,9 +12,15 @@
 #
 #   CLUSTER=foc-x KUBECONFIG=<file with context kind-foc-x> PHASE=webhooks|no-webhooks \
 #   WORK=<dir for the person's kubeconfig> [EVIDENCE_DIR=<dir>] hack/live-approval-path.sh
+#
+# Refuses before doing anything unless CLUSTER matches ^foc-[a-z0-9-]+$ and KUBECONFIG
+# names a dedicated file, never ~/.kube/config (hack/lib/foc-guard.sh; test:
+# test/scripts/guard_test.go).
 set -euo pipefail
-: "${CLUSTER:?}" "${KUBECONFIG:?}" "${PHASE:?}" "${WORK:?}"
-[[ "$CLUSTER" == foc-* ]] || { echo "CLUSTER must start with foc-" >&2; exit 1; }
+# shellcheck source=lib/foc-guard.sh
+source "$(dirname "$0")/lib/foc-guard.sh"
+foc_guard live-approval-path.sh
+: "${PHASE:?}" "${WORK:?}"
 ctx="kind-$CLUSTER"
 repo="$(cd "$(dirname "$0")/.." && pwd)"
 approver="dana@example-distribution.test"   # fictional person
