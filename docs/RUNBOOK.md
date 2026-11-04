@@ -2,7 +2,7 @@
 
 **Status: draft.** Written before the Helm chart has been installed on a cluster. Each command
 below follows the chart and the code on main; none of them has been run as a sequence. Items that
-depend on parts not built yet (`foc-agent`, the air-gapped profile in the chart) say so.
+depend on parts not built yet (the air-gapped profile in the chart) say so.
 
 Conventions: every `kubectl` and `helm` command names its context explicitly. The examples use a
 kind cluster `foc-<name>`, context `kind-foc-<name>`, a kubeconfig file that holds only that
@@ -44,6 +44,8 @@ kind load docker-image fleet-ops-copilot:dev --name foc-<name>
 helm --kube-context $CTX install foc charts/fleet-ops-copilot \
   --namespace foc-system --create-namespace
 kubectl --context $CTX -n foc-system rollout status deploy/foc-mcp deploy/foc-approvals --timeout=180s
+# foc-agent starts once the API key Secret exists (section 2):
+kubectl --context $CTX -n foc-system rollout status deploy/foc-agent --timeout=180s
 ```
 
 The release namespace must be `foc-system`: the admission policies name the copilot's
@@ -57,12 +59,26 @@ Values worth setting (see `charts/fleet-ops-copilot/values.yaml`):
 | `policy.content` | chart copy of `policies/default.yaml` | Site policy file (`--set-file policy.content=<file>`) |
 | `image.repository`, `image.tag` | `fleet-ops-copilot`, `dev` | Image |
 | `llm.cloud.apiKeySecretRef` | `fleet-ops-copilot-claude` / `ANTHROPIC_API_KEY` | Existing Secret holding the Claude API key (section 2) |
+| `agent.enabled` | `true` | foc-agent Deployment and Service (model loop and web UI) |
+| `tracing.otlpEndpoint` | empty (off) | OTLP/gRPC collector for foc-agent and foc-mcp traces |
 | `networkPolicy.enabled` | `false` | Cloud-profile NetworkPolicy; needs `networkPolicy.apiServer.cidrs` |
 
 A cluster on which `make deploy-kind` already installed the plain manifests has the same objects
 without Helm's ownership metadata; `helm install` refuses to take them over. Use a fresh cluster,
 or remove the objects `config/rbac`, `config/admission` and `config/deploy` created first
 (keep the CRDs: deleting a CRD deletes every ApprovalRequest and ApprovalDecision).
+
+### Open the web UI
+
+foc-agent serves a chat and a list of ApprovalRequests. It has no login and cannot approve: each
+pending request shows the exact object or patch it leads to and the `foc approve` / `foc reject`
+command to run with your own kubeconfig. The name typed in the page is recorded as the requester
+and is not verified, so expose the page only to people who may file requests.
+
+```bash
+kubectl --context $CTX -n foc-system port-forward svc/foc-agent 8090:8090
+# then open http://127.0.0.1:8090/
+```
 
 ### Grant approvers
 
@@ -98,8 +114,9 @@ policies. It leaves the CRDs and every ApprovalRequest and ApprovalDecision. The
 ## 2. Rotate the API key (cloud profile)
 
 The key lives only in a Kubernetes Secret that the operator creates; the chart holds a reference
-(`llm.cloud.apiKeySecretRef`), never the value. **On main no workload reads it yet**: `foc-agent`
-is not built. The model evaluations read `ANTHROPIC_API_KEY` from the shell environment instead.
+(`llm.cloud.apiKeySecretRef`), never the value. foc-agent receives it as the `ANTHROPIC_API_KEY`
+environment variable and does not start without it. The model evaluations read
+`ANTHROPIC_API_KEY` from the shell environment instead.
 
 Create or replace the Secret without putting the key on a command line or in shell history:
 
@@ -116,7 +133,7 @@ Rotation order:
 1. Create the new key in the Claude Console.
 2. Replace the Secret as above.
 3. Restart the process that reads it. Environment variables are read at start, so a running pod
-   keeps the old key: once foc-agent exists,
+   keeps the old key:
    `kubectl --context $CTX -n foc-system rollout restart deploy/foc-agent`.
 4. Confirm a request succeeds, then revoke the old key in the Console.
 
