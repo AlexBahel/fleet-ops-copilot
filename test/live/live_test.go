@@ -490,8 +490,21 @@ func TestLiveApprovalPaths(t *testing.T) {
 		if z.Annotations[fleet.EstopAnnotation] != stopReason {
 			t.Errorf("%s = %q", fleet.EstopAnnotation, z.Annotations[fleet.EstopAnnotation])
 		}
-		if z.Annotations["swarmada.io/estop-actor"] != execSA {
-			t.Errorf("swarmada.io/estop-actor = %q, want %q", z.Annotations["swarmada.io/estop-actor"], execSA)
+		// Swarmada's FleetZone mutator stamps swarmada.io/estop-actor at admission; its
+		// zone-estop controller seals the actor into the safety audit log and removes the
+		// annotation in the same patch that sets swarmada.io/estop-processed
+		// (consumeEstopActor, internal/controller/estop_actor.go). So the annotation is
+		// either still the executor (not yet processed) or gone once processed; the sealed
+		// actor is checked in TestLiveSwarmadaAuditActor.
+		actor, hasActor := z.Annotations["swarmada.io/estop-actor"]
+		processed := z.Annotations["swarmada.io/estop-processed"]
+		switch {
+		case hasActor && actor != execSA:
+			t.Errorf("swarmada.io/estop-actor = %q, want %q", actor, execSA)
+		case !hasActor && processed != stopReason:
+			t.Errorf("no swarmada.io/estop-actor and swarmada.io/estop-processed = %q: the stop was not processed", processed)
+		case !hasActor:
+			t.Logf("swarmada.io/estop-actor consumed by Swarmada's controller after sealing (estop-processed = trigger value)")
 		}
 		hasFin := false
 		for _, f := range z.Finalizers {
@@ -626,4 +639,64 @@ func TestLiveApprovalPaths(t *testing.T) {
 			}
 		}
 	})
+}
+
+// TestLiveSwarmadaAuditActor checks that Swarmada's own safety audit log
+// attributes every zone stop the executor performed to the executor's
+// ServiceAccount, with the approved reason. FOC_LIVE_SWARMADA_AUDIT_FILE is a
+// copy of the manager's audit log (hack/live-approval-path.sh fetches it after
+// TestLiveApprovalPaths).
+func TestLiveSwarmadaAuditActor(t *testing.T) {
+	path := mustEnv(t, "FOC_LIVE_SWARMADA_AUDIT_FILE")
+	e := setup(t, "webhooks")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	type entry struct {
+		EventType string `json:"event_type"`
+		Actor     struct {
+			Type, Identity string
+		} `json:"actor"`
+		Resource struct{ Kind, Name string } `json:"resource"`
+		Outcome  string                      `json:"outcome"`
+		Detail   map[string]string           `json:"detail"`
+	}
+	var entries []entry
+	for _, l := range bytes.Split(bytes.TrimSpace(b), []byte("\n")) {
+		var en entry
+		if err := json.Unmarshal(l, &en); err != nil {
+			t.Fatalf("Swarmada audit line %q: %v", l, err)
+		}
+		entries = append(entries, en)
+	}
+	var reqs focv1.ApprovalRequestList
+	if err := e.admin.List(context.Background(), &reqs, client.InNamespace(ns)); err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, r := range reqs.Items {
+		if r.Spec.Type != focv1.RequestZoneStop || r.Status.State != focv1.StateExecuted {
+			continue
+		}
+		n++
+		found := false
+		for _, en := range entries {
+			if en.EventType == "ESTOP_TRIGGERED" && en.Resource.Kind == "FleetZone" && en.Resource.Name == r.Spec.ZoneStop.ZoneName &&
+				en.Detail["reason"] == r.Spec.ZoneStop.Reason {
+				found = true
+				t.Logf("request %s (approved by %s) -> Swarmada ESTOP_TRIGGERED actor=%s/%s outcome=%s detail=%v",
+					r.Name, r.Status.DecidedBy, en.Actor.Type, en.Actor.Identity, en.Outcome, en.Detail)
+				if en.Actor.Identity != execSA {
+					t.Errorf("request %s: Swarmada recorded actor %q, want %q", r.Name, en.Actor.Identity, execSA)
+				}
+			}
+		}
+		if !found {
+			t.Errorf("request %s: no ESTOP_TRIGGERED entry for FleetZone/%s with reason %q", r.Name, r.Spec.ZoneStop.ZoneName, r.Spec.ZoneStop.Reason)
+		}
+	}
+	if n == 0 {
+		t.Fatal("no executed ZoneStop request to check")
+	}
 }
