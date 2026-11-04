@@ -1,0 +1,45 @@
+# Fleet Ops Copilot: approval flow for a draft FleetTask and its activation
+# (docs/DESIGN.md §3.3, D25, D28). Source for approval-flow.svg; render with
+# `d2 approval-flow.d2 approval-flow.svg` (see README.md in this directory).
+# Zone maintenance and zone stop follow steps 1-9 with a different write in
+# step 8. foc-agent is not built yet; foc-mcp is called by an MCP client.
+
+shape: sequence_diagram
+
+operator: Operator {shape: person}
+agent: "foc-agent\n(SA foc-agent, not built)" {style.stroke-dash: 5}
+mcp: "foc-mcp\n(SA foc-mcp)"
+api: "Kubernetes API server\n+ copilot admission policies"
+webhooks: "Swarmada webhooks\n(vfleettask)"
+approvals: "foc-approvals\n(SA foc-approvals)"
+approver: "Approver\n(named person)" {shape: person}
+
+request: "Request" {
+  operator -> agent: "1. 'draft a patrol of aisle B'"
+  agent -> mcp: "2. tool call request_draft_task"
+  mcp -> mcp: "3. policy engine: require_approval or deny;\ndraft gate: a fail-closed webhook covers UPDATE fleettasks?"
+  mcp -> api: "4. create ApprovalRequest (fleetops-requests: requestedBy = caller)"
+  approvals -> api: "5. status.state: Pending"
+}
+
+decide: "Decision (person)" {
+  approver -> api: "6. foc approve <id>: create ApprovalDecision with own credentials\n(fleetops-decisions: not a ServiceAccount, decidedBy = caller)"
+  approvals -> api: "7. checks: decider != requester; SubjectAccessReview (decider may create fleettasks);\nnot expired; policy re-run on fresh state; status Approved, approvedBy"
+}
+
+execute: "Execution (draft)" {
+  approvals -> api: "8. create FleetTask spec.draft: true, deterministic name\n(fleetops-foc-approvals-drafts-only)"
+  api -> webhooks: "8a. vfleettask ValidateCreate"
+  approvals -> api: "9. status Executed; Event; audit line"
+}
+
+activate: "Activation (person activates)" {
+  operator -> agent: "10. 'activate it'"
+  agent -> mcp: "11. request_activate_task"
+  mcp -> api: "12. create ApprovalRequest (ActivateTask)"
+  approver -> api: "13. foc approve <id>"
+  approvals -> api: "14. checks (SubjectAccessReview: activate on that FleetTask);\nstatus.instruction = exact kubectl patch command"
+  approver -> api: "15. approver runs the command with own credentials:\nkubectl patch fleettask <name> --type merge -p '{\"spec\":{\"draft\":false}}'"
+  api -> webhooks: "15a. vfleettask: requires the activate verb,\nrefused to every ServiceAccount"
+  approvals -> api: "16. watch: task left Draft -> status Executed,\nActivationObserved Event, activation_observed audit line"
+}
