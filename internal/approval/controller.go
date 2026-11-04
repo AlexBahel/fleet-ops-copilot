@@ -66,6 +66,8 @@ func (a SARAuthorizer) Allowed(ctx context.Context, user string, groups []string
 func RequiredAttributes(r *focv1.ApprovalRequest) []authzv1.ResourceAttributes {
 	ns := r.Namespace
 	switch r.Spec.Type {
+	case focv1.RequestDraftTask:
+		return []authzv1.ResourceAttributes{{Namespace: ns, Group: fleet.SwarmadaGroup, Resource: "fleettasks", Verb: "create"}}
 	case focv1.RequestZoneMaintenance:
 		return []authzv1.ResourceAttributes{{Namespace: ns, Group: fleet.SwarmadaGroup, Resource: "zonemaintenances", Verb: "create"}}
 	case focv1.RequestZoneStop:
@@ -268,6 +270,24 @@ func (r *Reconciler) consider(ctx context.Context, req *focv1.ApprovalRequest, d
 func (r *Reconciler) freshDecision(ctx context.Context, req *focv1.ApprovalRequest) (policy.Decision, error) {
 	ns := req.Namespace
 	switch req.Spec.Type {
+	case focv1.RequestDraftTask:
+		p := req.Spec.DraftTask
+		snap, err := fleet.TaskSnapshot(ctx, r.C, ns, p.TaskName)
+		if err != nil {
+			return policy.Decision{}, err
+		}
+		if snap.TaskExists {
+			return policy.Decision{Effect: policy.Deny, Code: policy.CodeMalformed, Message: fmt.Sprintf("a FleetTask named %q already exists", p.TaskName)}, nil
+		}
+		if snap.DraftGateServed, _, err = fleet.DraftGate(ctx, r.C); err != nil {
+			return policy.Decision{}, err
+		}
+		params := &policy.DraftTaskParams{Name: p.TaskName, Draft: true}
+		for _, a := range p.Actions {
+			params.Actions = append(params.Actions, policy.DraftAction{Name: a.Name, Type: a.Type, Priority: a.Priority, Zone: a.Zone})
+		}
+		// The per-session draft limit applies when requests are made, not here.
+		return r.Engine.Decide(policy.Request{Op: policy.OpDraftTask, Namespace: ns, DraftTask: params}, snap), nil
 	case focv1.RequestZoneMaintenance:
 		p := req.Spec.ZoneMaintenance
 		snap, err := fleet.ZoneSnapshot(ctx, r.C, ns, p.ZoneName)
@@ -306,6 +326,8 @@ func (r *Reconciler) execute(ctx context.Context, req *focv1.ApprovalRequest) (r
 	var target focv1.TargetRef
 	var err error
 	switch req.Spec.Type {
+	case focv1.RequestDraftTask:
+		target, err = r.createDraft(ctx, req)
 	case focv1.RequestZoneMaintenance:
 		target, err = r.createMaintenance(ctx, req)
 	case focv1.RequestZoneStop:
@@ -331,7 +353,7 @@ func (r *Reconciler) execute(ctx context.Context, req *focv1.ApprovalRequest) (r
 	if err != nil {
 		r.log(audit.Entry{Kind: audit.KindExecutionFailed, Namespace: req.Namespace, Object: obj, SessionID: req.Spec.SessionID, Message: err.Error()})
 		r.event(ctx, req, corev1.EventTypeWarning, "ExecutionFailed", err.Error())
-		if apierrors.IsForbidden(err) || apierrors.IsInvalid(err) {
+		if apierrors.IsForbidden(err) || apierrors.IsInvalid(err) || apierrors.IsAlreadyExists(err) {
 			return reconcile.Result{}, r.setStatus(ctx, req, func(s *focv1.ApprovalRequestStatus) {
 				s.State, s.Message = focv1.StateFailed, "execution refused by the API server: "+err.Error()
 			})
@@ -344,6 +366,45 @@ func (r *Reconciler) execute(ctx context.Context, req *focv1.ApprovalRequest) (r
 	return reconcile.Result{}, r.setStatus(ctx, req, func(s *focv1.ApprovalRequestStatus) {
 		s.State, s.ExecutedAt, s.Target, s.Message = focv1.StateExecuted, &now, &target, "executed"
 	})
+}
+
+// createDraft creates the approved FleetTask held as a draft. Swarmada
+// generates no child action for it, and only a person holding activate can
+// clear spec.draft (internal/webhook/fleettask_webhook.go in Swarmada).
+func (r *Reconciler) createDraft(ctx context.Context, req *focv1.ApprovalRequest) (focv1.TargetRef, error) {
+	p := req.Spec.DraftTask
+	t := &swarmv1.FleetTask{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: p.TaskName, Namespace: req.Namespace,
+			Labels: map[string]string{fleet.CreatedByLabel: "foc-approvals", fleet.RequestLabel: req.Name, fleet.SessionLabel: req.Spec.SessionID},
+			Annotations: map[string]string{
+				"fleetops.alexbahel.github.io/approved-by":   req.Status.DecidedBy,
+				"fleetops.alexbahel.github.io/requested-for": req.Spec.RequestedFor,
+				"fleetops.alexbahel.github.io/purpose":       p.Purpose,
+			},
+		},
+		Spec: swarmv1.FleetTaskSpec{Draft: true},
+	}
+	for _, a := range p.Actions {
+		t.Spec.Actions = append(t.Spec.Actions, swarmv1.FleetTaskAction{
+			Name: a.Name, DependsOn: a.DependsOn,
+			Action: swarmv1.FleetActionSpec{
+				Type: swarmv1.ActionType(a.Type), Zone: a.Zone, Priority: swarmv1.ActionPriority(a.Priority),
+				RequiredCapabilities: a.RequiredCapabilities, PreferredRobot: a.PreferredRobot,
+			},
+		})
+	}
+	ref := focv1.TargetRef{APIVersion: swarmv1.GroupVersion.String(), Kind: "FleetTask", Name: t.Name}
+	if err := r.C.Create(ctx, t); err != nil {
+		if apierrors.IsAlreadyExists(err) {
+			var existing swarmv1.FleetTask
+			if gerr := r.C.Get(ctx, client.ObjectKeyFromObject(t), &existing); gerr == nil && existing.Labels[fleet.RequestLabel] == req.Name {
+				return ref, nil
+			}
+		}
+		return ref, err
+	}
+	return ref, nil
 }
 
 func (r *Reconciler) createMaintenance(ctx context.Context, req *focv1.ApprovalRequest) (focv1.TargetRef, error) {
