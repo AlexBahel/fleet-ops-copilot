@@ -6,9 +6,8 @@ Kubernetes API, drafts work, and turns proposed changes into requests that a nam
 person approves. It never clears a stop, releases a robot, deletes, approves its own
 request, or edits work that already exists.
 
-**Status: early development (FOC-0).** What exists and what does not is listed in the
-latest report under [`track-reports/`](track-reports/). The design is in
-[`docs/DESIGN.md`](docs/DESIGN.md); current limits are in
+**Status: early development.** The design is in [`docs/DESIGN.md`](docs/DESIGN.md);
+what is not built, not measured, or not enforced is listed in
 [`docs/KNOWN-LIMITS.md`](docs/KNOWN-LIMITS.md).
 
 ## What is in the repository
