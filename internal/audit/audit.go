@@ -55,8 +55,11 @@ const (
 	KindRejected        Kind = "rejected"
 	KindDecisionRefused Kind = "decision_refused"
 	KindExecuted        Kind = "executed"
-	KindExecutionFailed Kind = "execution_failed"
-	KindExpired         Kind = "expired"
+	// KindActivationObserved records that a person activated an approved draft
+	// outside the copilot (Swarmada refuses activate to every ServiceAccount).
+	KindActivationObserved Kind = "activation_observed"
+	KindExecutionFailed    Kind = "execution_failed"
+	KindExpired            Kind = "expired"
 )
 
 // Entry is one audit line.

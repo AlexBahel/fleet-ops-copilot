@@ -23,12 +23,9 @@ import (
 
 	authnv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	swarmv1 "github.com/swarmada/swarmada/api/v1"
 
 	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
@@ -66,15 +63,17 @@ func NewApprover(cfg *rest.Config) (*Approver, error) {
 
 // Outcome reports what Decide did.
 type Outcome struct {
-	Decision  string
-	State     focv1.RequestState
-	Activated bool
-	Message   string
+	Decision string
+	State    focv1.RequestState
+	// Instruction is the command the approver must run themselves (activation).
+	Instruction string
+	Message     string
 }
 
-// Decide records the caller's verdict on a request. For an approved
-// activation it then waits for foc-approvals to accept the decision and
-// clears spec.draft on the FleetTask with the caller's own credentials.
+// Decide records the caller's verdict on a request. It never writes to
+// Swarmada. For an approved activation it waits for foc-approvals to accept
+// the decision and returns the exact command the approver runs with their own
+// credentials (Swarmada refuses activate to every ServiceAccount).
 func (a *Approver) Decide(ctx context.Context, ns, request string, verdict focv1.Verdict, comment string) (Outcome, error) {
 	user, groups, err := a.Identity(ctx)
 	if err != nil {
@@ -96,7 +95,6 @@ func (a *Approver) Decide(ctx context.Context, ns, request string, verdict focv1
 		out.State, out.Message = req.Status.State, "decision recorded; foc-approvals will process it"
 		return out, nil
 	}
-	// Activation: wait until the copilot has accepted this decision.
 	deadline := time.Now().Add(a.Timeout)
 	for {
 		if err := a.C.Get(ctx, client.ObjectKey{Namespace: ns, Name: request}, &req); err != nil {
@@ -104,14 +102,16 @@ func (a *Approver) Decide(ctx context.Context, ns, request string, verdict focv1
 		}
 		st := req.Status.State
 		if st == focv1.StateApproved && req.Status.DecisionRef == d.Name {
-			break
+			out.State, out.Instruction = st, req.Status.Instruction
+			out.Message = "approved. The copilot does not activate; run this with your own credentials: " + req.Status.Instruction
+			return out, nil
 		}
 		if st.IsTerminal() || containsName(req.Status.RefusedDecisions, d.Name) {
-			out.State, out.Message = st, "not activated: "+req.Status.Message
+			out.State, out.Message = st, "not approved: "+req.Status.Message
 			return out, nil
 		}
 		if time.Now().After(deadline) {
-			out.State, out.Message = st, "timed out waiting for foc-approvals to accept the decision; nothing was activated"
+			out.State, out.Message = st, "timed out waiting for foc-approvals to accept the decision"
 			return out, nil
 		}
 		select {
@@ -120,17 +120,6 @@ func (a *Approver) Decide(ctx context.Context, ns, request string, verdict focv1
 		case <-time.After(a.Poll):
 		}
 	}
-	patch := []byte(`{"spec":{"draft":false}}`)
-	task := &metav1.PartialObjectMetadata{}
-	task.SetGroupVersionKind(fleetTaskGVK)
-	task.SetNamespace(ns)
-	task.SetName(req.Spec.ActivateTask.TaskName)
-	if err := a.C.Patch(ctx, task, client.RawPatch(types.MergePatchType, patch)); err != nil {
-		out.State, out.Message = focv1.StateApproved, "approved, but activation was refused: "+err.Error()
-		return out, nil
-	}
-	out.State, out.Activated, out.Message = focv1.StateApproved, true, "activated with your credentials; foc-approvals records it as Executed"
-	return out, nil
 }
 
 func containsName(list []string, n string) bool {
@@ -141,5 +130,3 @@ func containsName(list []string, n string) bool {
 	}
 	return false
 }
-
-var fleetTaskGVK = swarmv1.GroupVersion.WithKind("FleetTask")

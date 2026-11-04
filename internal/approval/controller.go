@@ -260,10 +260,16 @@ func (r *Reconciler) consider(ctx context.Context, req *focv1.ApprovalRequest, d
 		})
 	}
 	// Record before effect.
-	r.log(audit.Entry{Kind: audit.KindApproved, Actor: d.Spec.DecidedBy, Namespace: req.Namespace, Object: obj, SessionID: req.Spec.SessionID, Detail: map[string]any{"decision": d.Name, "type": string(req.Spec.Type)}})
+	instruction := ""
+	msg := "approved"
+	if req.Spec.Type == focv1.RequestActivateTask {
+		instruction = ActivationCommand(req.Namespace, req.Spec.ActivateTask.TaskName)
+		msg = "approved; Swarmada refuses activate to every ServiceAccount, so " + d.Spec.DecidedBy + " runs: " + instruction
+	}
+	r.log(audit.Entry{Kind: audit.KindApproved, Actor: d.Spec.DecidedBy, Namespace: req.Namespace, Object: obj, SessionID: req.Spec.SessionID, Detail: map[string]any{"decision": d.Name, "type": string(req.Spec.Type), "instruction": instruction}})
 	r.event(ctx, req, corev1.EventTypeNormal, "Approved", "approved by "+d.Spec.DecidedBy)
 	return true, r.setStatus(ctx, req, func(s *focv1.ApprovalRequestStatus) {
-		s.State, s.DecidedBy, s.DecisionRef, s.DecidedAt, s.Message = focv1.StateApproved, d.Spec.DecidedBy, d.Name, &now, "approved"
+		s.State, s.DecidedBy, s.DecisionRef, s.DecidedAt, s.Message, s.Instruction = focv1.StateApproved, d.Spec.DecidedBy, d.Name, &now, msg, instruction
 	})
 }
 
@@ -317,6 +323,35 @@ func (r *Reconciler) freshDecision(ctx context.Context, req *focv1.ApprovalReque
 	return policy.Decision{Effect: policy.Deny, Code: policy.CodeMalformed, Message: "unknown request type"}, nil
 }
 
+// ActivationCommand is the exact command an approver runs to activate a
+// draft. Swarmada v0.4's swarmctl has no activate subcommand; clearing
+// spec.draft with a patch is the interface (RFC-0003 #resources-tasktrigger).
+func ActivationCommand(ns, task string) string {
+	return fmt.Sprintf(`kubectl patch fleettask %s -n %s --type merge -p '{"spec":{"draft":false}}'`, task, ns)
+}
+
+func (r *Reconciler) observeActivation(ctx context.Context, req *focv1.ApprovalRequest) (reconcile.Result, error) {
+	var t swarmv1.FleetTask
+	if err := r.C.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: req.Spec.ActivateTask.TaskName}, &t); err != nil {
+		return reconcile.Result{}, client.IgnoreNotFound(err)
+	}
+	if t.Spec.Draft {
+		period := r.ObservePeriod
+		if period == 0 {
+			period = 10 * time.Second
+		}
+		return reconcile.Result{RequeueAfter: period}, nil
+	}
+	now := metav1.NewTime(r.now())
+	target := focv1.TargetRef{APIVersion: swarmv1.GroupVersion.String(), Kind: "FleetTask", Name: t.Name}
+	r.log(audit.Entry{Kind: audit.KindActivationObserved, Actor: req.Status.DecidedBy, Namespace: req.Namespace, Object: "ApprovalRequest/" + req.Name, SessionID: req.Spec.SessionID,
+		Message: "spec.draft is false; activation was performed outside the copilot", Detail: map[string]any{"target": "FleetTask/" + t.Name, "phase": string(t.Status.Phase)}})
+	r.event(ctx, req, corev1.EventTypeNormal, "ActivationObserved", fmt.Sprintf("FleetTask/%s left Draft after approval by %s; the copilot did not perform the activation", t.Name, req.Status.DecidedBy))
+	return reconcile.Result{}, r.setStatus(ctx, req, func(s *focv1.ApprovalRequestStatus) {
+		s.State, s.ExecutedAt, s.Target, s.Message = focv1.StateExecuted, &now, &target, "activation observed (performed by a person, not by the copilot)"
+	})
+}
+
 // MaintenanceName is the deterministic ZoneMaintenance name for a request, so
 // a retried execution returns AlreadyExists instead of creating a second window.
 func MaintenanceName(req *focv1.ApprovalRequest) string { return "foc-" + req.Name }
@@ -333,20 +368,12 @@ func (r *Reconciler) execute(ctx context.Context, req *focv1.ApprovalRequest) (r
 	case focv1.RequestZoneStop:
 		target, err = r.stopZone(ctx, req)
 	case focv1.RequestActivateTask:
-		// Swarmada refuses activate to every ServiceAccount; the approver
-		// performs it. Observe the result.
-		var t swarmv1.FleetTask
-		if gerr := r.C.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: req.Spec.ActivateTask.TaskName}, &t); gerr != nil {
-			return reconcile.Result{}, client.IgnoreNotFound(gerr)
-		}
-		if t.Spec.Draft {
-			period := r.ObservePeriod
-			if period == 0 {
-				period = 10 * time.Second
-			}
-			return reconcile.Result{RequeueAfter: period}, nil
-		}
-		target = focv1.TargetRef{APIVersion: swarmv1.GroupVersion.String(), Kind: "FleetTask", Name: t.Name}
+		// The copilot never activates: Swarmada's FleetTask webhook refuses
+		// clearing spec.draft to every ServiceAccount (authorizeActivate,
+		// internal/webhook/fleettask_webhook.go). The approver runs
+		// status.instruction with their own credentials; this only observes
+		// the task leaving Draft and records it (DESIGN.md D28).
+		return r.observeActivation(ctx, req)
 	default:
 		err = fmt.Errorf("unknown request type %q", req.Spec.Type)
 	}

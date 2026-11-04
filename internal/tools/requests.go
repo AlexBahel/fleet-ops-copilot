@@ -166,7 +166,7 @@ func (s *Service) RequestActivateTask(ctx context.Context, sess Session, in Acti
 		return refused(d), nil
 	}
 	return s.createRequest(ctx, sess, ns, d, focv1.ApprovalRequestSpec{Type: focv1.RequestActivateTask, ActivateTask: &focv1.ActivateTaskParams{TaskName: in.TaskName}},
-		"a person with the activate verb runs: foc approve <request> (activation is done with their own credentials)")
+		"a person with patch and activate on this fleettask runs: foc approve <request>; once approved they run the printed command themselves. The copilot never activates; it records the activation when it sees it")
 }
 
 // ZoneMaintenanceInput is the input of request_zone_maintenance.

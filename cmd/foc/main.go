@@ -120,6 +120,9 @@ func run(args []string) error {
 			return err
 		}
 		fmt.Printf("decision %s recorded. %s\n", out.Decision, out.Message)
+		if out.Instruction != "" {
+			fmt.Printf("\nrun with your own credentials:\n  %s\n", out.Instruction)
+		}
 		return nil
 	}
 	return fmt.Errorf("%s", usage)
