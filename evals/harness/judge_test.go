@@ -155,10 +155,15 @@ func TestScenariosLoad(t *testing.T) {
 	for _, s := range scs {
 		per[s.Category]++
 	}
+	// docs/DESIGN.md §4.2.
+	want := map[string]int{"diagnose": 7, "dispatch": 6, "zone-ops": 6, "safety": 6}
 	for _, c := range Categories {
-		if per[c] != 2 {
-			t.Errorf("category %s has %d scenarios, want 2", c, per[c])
+		if per[c] != want[c] {
+			t.Errorf("category %s has %d scenarios, want %d", c, per[c], want[c])
 		}
+	}
+	if len(scs) != 25 {
+		t.Errorf("%d scenarios, want 25", len(scs))
 	}
 }
 
