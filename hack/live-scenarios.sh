@@ -17,9 +17,37 @@
 # Required: SWARMADA_DIR, CLUSTER (foc-*), KUBECONFIG, SWARMCTL, OUT (results dir).
 # Optional: BACKENDS (default "scripted"), RUNS (default 3), CLAUDE_MODEL, plus the
 # -price-* values as PRICE_INPUT PRICE_OUTPUT PRICE_CACHE_WRITE PRICE_CACHE_READ PRICING_SOURCE PRICING_READ_ON.
+#
+# Refuses to start unless CLUSTER matches ^foc-[a-z0-9-]+$ and KUBECONFIG names a
+# dedicated file: the Swarmada quickstart runs `kubectl config use-context`, which
+# changes the current context of the file KUBECONFIG names, so KUBECONFIG must be
+# set and no entry in it may resolve to ~/.kube/config.
+# Test: test/scripts/livescenarios_test.go.
 set -euo pipefail
-: "${SWARMADA_DIR:?}" "${CLUSTER:?}" "${KUBECONFIG:?}" "${SWARMCTL:?}" "${OUT:?}"
-[[ "$CLUSTER" == foc-* ]] || { echo "CLUSTER must start with foc-" >&2; exit 1; }
+
+refuse() { echo "live-scenarios.sh: refused: $*" >&2; exit 1; }
+[[ "${CLUSTER:-}" =~ ^foc-[a-z0-9-]+$ ]] || refuse "CLUSTER must match ^foc-[a-z0-9-]+\$ (got '${CLUSTER:-}')"
+[[ -n "${KUBECONFIG:-}" ]] || refuse "KUBECONFIG must be set to a dedicated kubeconfig file, not ~/.kube/config"
+default_kubeconfig="${HOME:?}/.kube/config"
+default_physical="$(cd "$HOME/.kube" 2>/dev/null && pwd -P)/config" || default_physical="$default_kubeconfig"
+IFS=: read -r -a kubeconfig_entries <<<"$KUBECONFIG"
+entries=0
+for k in "${kubeconfig_entries[@]}"; do
+  [[ -n "$k" ]] || continue
+  entries=$((entries + 1))
+  k="${k/#\~/$HOME}"
+  [[ "$k" == /* ]] || k="$PWD/$k"
+  physical="$(cd "$(dirname "$k")" 2>/dev/null && pwd -P)/$(basename "$k")" || physical="$k"
+  # -ef: same device and inode, so symlinks and hard links to the file are caught;
+  # the path comparisons catch the file when it does not exist yet.
+  if [[ "$k" -ef "$default_kubeconfig" || "$k" == "$default_kubeconfig" \
+    || "$physical" == "$default_kubeconfig" || "$physical" == "$default_physical" ]]; then
+    refuse "KUBECONFIG entry '$k' resolves to ~/.kube/config; use a dedicated file (e.g. kind get kubeconfig --name \"$CLUSTER\" > file)"
+  fi
+done
+((entries > 0)) || refuse "KUBECONFIG names no file"
+
+: "${SWARMADA_DIR:?}" "${SWARMCTL:?}" "${OUT:?}"
 ctx="kind-$CLUSTER"
 repo="$(cd "$(dirname "$0")/.." && pwd)"
 BACKENDS="${BACKENDS:-scripted}" RUNS="${RUNS:-3}"
@@ -30,9 +58,11 @@ pf=$!
 trap 'kill $pf 2>/dev/null || true' EXIT
 for _ in $(seq 30); do curl -sf http://127.0.0.1:18080/healthz >/dev/null && break; sleep 1; done
 
-scenarios_for() { # fixture -> comma-separated scenario ids, dispatch excluded
-  grep -l "^fixture: live/$1\$" "$repo"/evals/scenarios/*.yaml | xargs -n1 basename | sed 's/\.yaml$//' \
-    | grep -v '^dispatch-' | paste -sd, -
+scenarios_for() { # fixture -> comma-separated scenario ids, dispatch excluded; empty if none
+  # grep exits 1 on no match; under pipefail that would stop the whole script at a
+  # fixture no scenario uses (live/comms-flaky, live/estop-drill).
+  { grep -l "^fixture: live/$1\$" "$repo"/evals/scenarios/*.yaml || true; } | xargs -r -n1 basename | sed 's/\.yaml$//' \
+    | { grep -v '^dispatch-' || true; } | paste -sd, -
 }
 
 for f in $FIXTURES; do
