@@ -22,9 +22,11 @@ limitations under the License.
 // with their own kubeconfig. foc-agent holds no permission to decide or to
 // write anything (its ServiceAccount can only get and list ApprovalRequests).
 //
-// There is no login. The operator name typed in the page becomes the
-// request's requestedFor and is not verified (docs/KNOWN-LIMITS.md,
-// "Operator identity").
+// There is no login. The operator name typed in the page is recorded as
+// requestedFor "unverified:<name>" (policy.UnverifiedPrefix), and the policy
+// refuses to approve any request with an unverified requester (R38): a
+// request filed from the page can be rejected, or left to expire, but never
+// approved.
 package webui
 
 import (
@@ -47,6 +49,7 @@ import (
 
 	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/agent"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/policy"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/redact"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/requestview"
 )
@@ -180,7 +183,10 @@ type ToolCall struct {
 }
 
 type chatResponse struct {
-	SessionID string     `json:"sessionId"`
+	SessionID string `json:"sessionId"`
+	// Requester is what any request filed by this message records as
+	// requestedFor.
+	Requester string     `json:"requester,omitempty"`
 	Answer    string     `json:"answer,omitempty"`
 	Error     string     `json:"error,omitempty"`
 	Turns     int        `json:"turns"`
@@ -235,8 +241,11 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
-	tr, err := s.Runner.Run(ctx, in.Operator, in.SessionID, in.Message)
-	out := chatResponse{SessionID: in.SessionID, Answer: tr.Final, Turns: tr.Turns, LatencyMs: tr.LatencyMs, ToolCalls: toolCalls(tr)}
+	// The name is typed, not authenticated: mark it, so no request it files
+	// can be approved (policy.CodeRequesterUnverified).
+	requester := policy.UnverifiedPrefix + in.Operator
+	tr, err := s.Runner.Run(ctx, requester, in.SessionID, in.Message)
+	out := chatResponse{SessionID: in.SessionID, Requester: requester, Answer: tr.Final, Turns: tr.Turns, LatencyMs: tr.LatencyMs, ToolCalls: toolCalls(tr)}
 	s.logf("chat operator=%s session=%s turns=%d tools=%d latency_ms=%.0f err=%v", in.Operator, in.SessionID, tr.Turns, len(tr.Calls), tr.LatencyMs, err)
 	if err != nil {
 		out.Error = s.Redactor.String(err.Error())

@@ -37,6 +37,7 @@ import (
 	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/approval"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/policy"
 )
 
 // ApproverPlaceholder stands for the approver's username in an object shown
@@ -94,9 +95,12 @@ type View struct {
 	Instruction string `json:"instruction,omitempty"`
 	Change      Change `json:"change"`
 	// Approve and Reject are the commands for a pending request; empty once
-	// it is decided.
+	// it is decided. Approve is also empty when the requester is unverified.
 	Approve string `json:"approve,omitempty"`
 	Reject  string `json:"reject,omitempty"`
+	// Unapprovable explains why a pending request cannot be approved: its
+	// requester was typed into the web UI and not verified (R38).
+	Unapprovable string `json:"unapprovable,omitempty"`
 }
 
 // List reads the ApprovalRequests in each namespace and returns their views,
@@ -137,8 +141,12 @@ func Of(r *focv1.ApprovalRequest) View {
 		Change: ChangeOf(r),
 	}
 	if state == focv1.StatePending {
-		v.Approve = fmt.Sprintf("foc approve %s -n %s", r.Name, r.Namespace)
 		v.Reject = fmt.Sprintf("foc reject %s -n %s", r.Name, r.Namespace)
+		if policy.IsUnverified(r.Spec.RequestedFor) {
+			v.Unapprovable = "The requester was typed into the web UI and is not verified, so approval is refused (" + string(policy.CodeRequesterUnverified) + "). Reject it, or let it expire, and file the request again with an authenticated identity."
+		} else {
+			v.Approve = fmt.Sprintf("foc approve %s -n %s", r.Name, r.Namespace)
+		}
 	}
 	return v
 }

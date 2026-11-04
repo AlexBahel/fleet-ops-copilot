@@ -18,7 +18,7 @@
     <div class="who">
       <label for="operator">Your Kubernetes username</label>
       <input id="operator" autocomplete="username" spellcheck="false" placeholder="e.g. jane@example.com">
-      <span class="hint">Recorded as the requester of any approval request. Not verified: there is no login.</span>
+      <span class="hint" id="requester">Recorded as "unverified:&lt;name&gt;": there is no login, so requests filed from this page can be rejected but never approved.</span>
     </div>
     <ol class="log" id="log" aria-live="polite"></ol>
     <form id="ask" class="ask">

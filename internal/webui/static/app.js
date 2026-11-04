@@ -84,6 +84,7 @@ async function send(ev) {
     const out = await res.json();
     wait.remove();
     if (out.sessionId) { sessionId = out.sessionId; save("sessionStorage", "foc.session", sessionId); showSession(); }
+    if (out.requester) $("requester").textContent = "Requests from this page are recorded for " + out.requester + " and cannot be approved; a person can only reject them.";
     if (out.error) {
       const li = addMessage("error", out.error);
       if (out.toolCalls?.length) li.append(chips(out.toolCalls));
@@ -143,10 +144,11 @@ function card(r) {
     for (const n of c.notes) ul.append(el("li", { text: n }));
     parts.push(ul);
   }
+  if (r.unapprovable) parts.push(el("p", { class: "notice", text: r.unapprovable }));
   if (r.approve) parts.push(command("Approve (run it yourself)", r.approve));
   if (r.reject) parts.push(command("Reject (run it yourself)", r.reject));
   if (r.instruction) parts.push(command("After approval, the approver runs", r.instruction));
-  else if (c.command && r.state === "Pending") parts.push(command("After approval, the approver runs", c.command));
+  else if (c.command && r.state === "Pending" && r.approve) parts.push(command("After approval, the approver runs", c.command));
   return el("article", { class: "card" }, ...parts);
 }
 

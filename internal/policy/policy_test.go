@@ -171,6 +171,9 @@ func TestDecideApproval(t *testing.T) {
 		{"expired", func(c *ApprovalCheck) { c.Expired = true }, Deny, CodeRequestExpired},
 		{"already executed", func(c *ApprovalCheck) { c.State = "Executed" }, Deny, CodeRequestNotPending},
 		{"approver lacks the Swarmada verb", func(c *ApprovalCheck) { c.DeciderAuthorized = false }, Deny, CodeApproverNotAuthorized},
+		{"unverified requester: approve refused", func(c *ApprovalCheck) { c.RequestedFor = "unverified:sam" }, Deny, CodeRequesterUnverified},
+		{"unverified requester: reject accepted", func(c *ApprovalCheck) { c.RequestedFor = "unverified:sam"; c.Approve = false }, Allow, CodeApprovalAccepted},
+		{"unverified requester naming the approver", func(c *ApprovalCheck) { c.RequestedFor = "unverified:dana" }, Deny, CodeRequesterUnverified},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -181,6 +184,19 @@ func TestDecideApproval(t *testing.T) {
 				t.Fatalf("DecideApproval = %s/%s (%s), want %s/%s", got.Effect, got.Code, got.Message, tc.effect, tc.code)
 			}
 		})
+	}
+}
+
+// No policy file setting lets an unverified requester's request be approved.
+func TestUnverifiedRequesterIsAHardInvariant(t *testing.T) {
+	e := loadDefault(t)
+	e.P.Approval.AllowSelfApproval = true
+	c := ApprovalCheck{Decider: Principal{Username: "dana"}, DecidedBy: "dana", RequestedFor: UnverifiedPrefix + "dana", RequestedBy: "system:serviceaccount:foc-system:foc-mcp", State: "Pending", DeciderAuthorized: true, Approve: true}
+	if d := e.DecideApproval(c); d.Code != CodeRequesterUnverified {
+		t.Fatalf("with allowSelfApproval: %s %s", d.Code, d.Message)
+	}
+	if !IsUnverified("unverified:x") || IsUnverified("x") || IsUnverified("Unverified:x") {
+		t.Fatal("IsUnverified")
 	}
 }
 

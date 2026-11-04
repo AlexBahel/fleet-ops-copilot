@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -39,11 +40,14 @@ import (
 	swarmv1 "github.com/swarmada/swarmada/api/v1"
 
 	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/audit"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/llm"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/mcpserver"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/policy"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/redact"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/requestview"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/tools"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/webui"
 )
 
@@ -51,6 +55,7 @@ import (
 // (real RBAC), with its agent loop reaching the real tool server (as
 // foc-mcp) over MCP, and foc-approvals running as its own ServiceAccount.
 type uiFixture struct {
+	h    *harness
 	ts   *httptest.Server
 	mu   sync.Mutex
 	next []llm.Step
@@ -66,7 +71,7 @@ func newUIFixture(t *testing.T, namespaces []string) *uiFixture {
 	t.Helper()
 	h := newHarness(t, nil)
 	srv := mcpserver.New(h.svc)
-	f := &uiFixture{}
+	f := &uiFixture{h: h}
 	runner := &webui.AgentRunner{
 		BackendName: "scripted",
 		Transport: func() mcp.Transport {
@@ -158,28 +163,32 @@ func call(name string, args map[string]any) llm.ToolCall {
 	return llm.ToolCall{ID: "c-" + name, Name: name, Args: b}
 }
 
-// The web UI, as ServiceAccount foc-agent, lists the requests a chat filed,
-// with the exact write and the commands to decide them. After a person
-// approves with their own credentials (what `foc approve` runs), the object
-// foc-approvals wrote is the one the panel showed, and the panel shows the
-// decision.
+// The web UI, as ServiceAccount foc-agent, lists pending requests with the
+// exact write and the commands to decide them. After a person approves with
+// their own credentials (what `foc approve` runs), the object foc-approvals
+// wrote is the one the panel showed, and the panel shows the decision. The
+// requests are filed through the tool server as operator sam (not from the
+// page, whose requests cannot be approved; see TestWebUIRequestCannotBeApproved).
 func TestWebUIShowsTheWriteThatIsExecuted(t *testing.T) {
 	ctx := context.Background()
 	f := newUIFixture(t, []string{swarmNS})
+	h := f.h
 	zone := ensureZone(t, "ui-zone")
 	if code, body := f.get(t, "/readyz"); code != 200 {
 		t.Fatalf("readyz as foc-agent: %d %s", code, body)
 	}
-
-	draftName := f.chat(t, "sam", "draft a move to staging",
-		llm.Step{Calls: []llm.ToolCall{call("request_draft_task", map[string]any{
-			"name": "ui-draft-1", "purpose": "stage pallet from the UI",
-			"actions": []map[string]any{{"name": "go", "type": "Navigate", "zone": swarmNS, "priority": "Normal", "requiredCapabilities": []string{"navigation"}}},
-		})}},
-		llm.Step{Final: "Requested a draft FleetTask/ui-draft-1."})
-	stopName := f.chat(t, "sam", "stop ui-zone",
-		llm.Step{Calls: []llm.ToolCall{call("request_zone_stop", map[string]any{"zoneName": "ui-zone", "reason": "ui: spill in aisle 4"})}},
-		llm.Step{Final: "Requested a stop of FleetZone/ui-zone."})
+	res, err := h.svc.RequestDraftTask(ctx, sess, tools.DraftTaskInput{Name: "ui-draft-1", Purpose: "stage pallet", Actions: []tools.DraftActionInput{
+		{Name: "go", Type: "Navigate", Zone: swarmNS, Priority: "Normal", RequiredCapabilities: []string{"navigation"}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	draftName := reqName(t, res)
+	res, err = h.svc.RequestZoneStop(ctx, sess, tools.ZoneStopInput{ZoneName: "ui-zone", Reason: "ui: spill in aisle 4"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stopName := reqName(t, res)
 
 	before := f.views(t)
 	d, s := before[draftName], before[stopName]
@@ -245,6 +254,67 @@ func TestWebUIShowsTheWriteThatIsExecuted(t *testing.T) {
 	}
 	if !strings.Contains(after[draftName].Change.Body, "approved-by: dana") {
 		t.Fatalf("executed draft body %s", after[draftName].Change.Body)
+	}
+}
+
+// A request filed from the page records the typed name as an unverified
+// requester. foc-approvals refuses every approval of it (R38) and writes
+// nothing; a rejection is accepted. The panel offers only the reject command.
+func TestWebUIRequestCannotBeApproved(t *testing.T) {
+	ctx := context.Background()
+	f := newUIFixture(t, []string{swarmNS})
+	zone := ensureZone(t, "ui-zone-3")
+	name := f.chat(t, "sam", "stop ui-zone-3",
+		llm.Step{Calls: []llm.ToolCall{call("request_zone_stop", map[string]any{"zoneName": "ui-zone-3", "reason": "typed in the UI"})}},
+		llm.Step{Final: "Requested a stop of FleetZone/ui-zone-3."})
+	v := f.views(t)[name]
+	if v.RequestedFor != policy.UnverifiedPrefix+"sam" || v.Approve != "" || v.Reject != "foc reject "+name+" -n "+swarmNS ||
+		!strings.Contains(v.Unapprovable, string(policy.CodeRequesterUnverified)) {
+		t.Fatalf("panel view %+v", v)
+	}
+
+	// dana holds every permission the stop needs, is not the requester, and
+	// approves with their own credentials: refused.
+	out, err := approverFor(t, "dana").Decide(ctx, swarmNS, name, focv1.VerdictApprove, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(20 * time.Second)
+	var r focv1.ApprovalRequest
+	for {
+		if err := admin.Get(ctx, client.ObjectKey{Namespace: swarmNS, Name: name}, &r); err != nil {
+			t.Fatal(err)
+		}
+		if slices.Contains(r.Status.RefusedDecisions, out.Decision) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("decision %s not refused: state %q, message %q", out.Decision, r.Status.State, r.Status.Message)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if r.Status.State != focv1.StatePending || !strings.Contains(r.Status.Message, "never approved") {
+		t.Fatalf("after approve: state %q message %q", r.Status.State, r.Status.Message)
+	}
+	var z swarmv1.FleetZone
+	if err := admin.Get(ctx, client.ObjectKeyFromObject(zone), &z); err != nil {
+		t.Fatal(err)
+	}
+	if _, stopped := z.Annotations[fleet.EstopAnnotation]; stopped {
+		t.Fatal("zone stopped after a refused approval")
+	}
+	verifyAudit(t, f.h, audit.KindDecisionRefused)
+	if !strings.Contains(string(f.h.auditBuf.Bytes()), string(policy.CodeRequesterUnverified)) {
+		t.Fatal("audit trail has no DENY_REQUESTER_UNVERIFIED")
+	}
+
+	// A rejection of the same request is accepted.
+	if _, err := approverFor(t, "dana").Decide(ctx, swarmNS, name, focv1.VerdictReject, "filed from the UI"); err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, name, focv1.StateRejected)
+	if v := f.views(t)[name]; v.State != "Rejected" || v.DecidedBy != "dana" || v.Reject != "" || v.Unapprovable != "" {
+		t.Fatalf("rejected view %+v", v)
 	}
 }
 

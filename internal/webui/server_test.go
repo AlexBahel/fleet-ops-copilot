@@ -139,7 +139,8 @@ func TestChatAnswersAndReportsPolicy(t *testing.T) {
 	if code != 200 || out.Answer != "Requested." || out.Turns != 2 || !strings.HasPrefix(out.SessionID, "web-") {
 		t.Fatalf("%d %+v", code, out)
 	}
-	if r.got[0] != "jane@example.com|"+out.SessionID+"|stop aisle-b" {
+	// The typed name reaches the agent loop (and so requestedFor) marked unverified (R38).
+	if r.got[0] != "unverified:jane@example.com|"+out.SessionID+"|stop aisle-b" || out.Requester != "unverified:jane@example.com" {
 		t.Fatalf("runner got %q", r.got[0])
 	}
 	want := []ToolCall{{Name: "get_zone"}, {Name: "request_zone_stop", PolicyCode: "REQUIRE_APPROVAL", Created: "ApprovalRequest/areq-1"}, {Name: "request_zone_maintenance", Refused: true, PolicyCode: "DENY_RELEASE"}}
@@ -315,8 +316,10 @@ func TestChatFilesRequestThatPanelShows(t *testing.T) {
 	}
 	v := rr.Items[0]
 	name := strings.TrimPrefix(out.ToolCalls[0].Created, "ApprovalRequest/")
-	if v.Name != name || v.State != "Pending" || v.RequestedFor != "jane@example.com" || v.SessionID != out.SessionID ||
-		v.Approve != "foc approve "+name+" -n warehouse-a" || v.Reject != "foc reject "+name+" -n warehouse-a" {
+	// Filed from the page, so the requester is unverified: the panel offers
+	// only rejection and says why (R38).
+	if v.Name != name || v.State != "Pending" || v.RequestedFor != "unverified:jane@example.com" || v.SessionID != out.SessionID ||
+		v.Approve != "" || v.Reject != "foc reject "+name+" -n warehouse-a" || !strings.Contains(v.Unapprovable, "DENY_REQUESTER_UNVERIFIED") {
 		t.Fatalf("view %+v", v)
 	}
 	if v.Change.Body != `{"metadata":{"annotations":{"swarmada.io/estop-triggered":"spill in aisle B"}}}` || v.Change.Target != "FleetZone warehouse-a/aisle-b" {

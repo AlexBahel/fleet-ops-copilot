@@ -63,8 +63,18 @@ const (
 	CodeRequestExpired         Code = "DENY_EXPIRED"
 	CodeRequestNotPending      Code = "DENY_NOT_PENDING"
 	CodeApproverMismatch       Code = "DENY_DECIDER_MISMATCH"
+	CodeRequesterUnverified    Code = "DENY_REQUESTER_UNVERIFIED"
 	CodeApprovalAccepted       Code = "ALLOW_APPROVAL"
 )
+
+// UnverifiedPrefix marks a requester (spec.requestedFor) whose identity no
+// one authenticated, such as a name typed into foc-agent's web UI, which has
+// no login. Approval of such a request is always refused (R38); rejection is
+// allowed. A hard invariant: no policy file setting changes it.
+const UnverifiedPrefix = "unverified:"
+
+// IsUnverified reports whether a requester carries UnverifiedPrefix.
+func IsUnverified(requestedFor string) bool { return strings.HasPrefix(requestedFor, UnverifiedPrefix) }
 
 // Decision is the engine's answer.
 type Decision struct {
@@ -421,9 +431,10 @@ type ApprovalCheck struct {
 	Approve           bool
 }
 
-// DecideApproval accepts or refuses a person's decision. The service-account
-// and copilot-identity rules are hard invariants; self-approval by the
-// requesting operator can be allowed by the policy file (dev clusters only).
+// DecideApproval accepts or refuses a person's decision. The service-account,
+// copilot-identity and unverified-requester rules are hard invariants;
+// self-approval by the requesting operator can be allowed by the policy file
+// (dev clusters only).
 func (e *Engine) DecideApproval(c ApprovalCheck) Decision {
 	if c.Decider.Username == "" || c.Decider.Username != c.DecidedBy {
 		return deny(CodeApproverMismatch, "decision names %q but was made by %q", c.DecidedBy, c.Decider.Username)
@@ -442,6 +453,9 @@ func (e *Engine) DecideApproval(c ApprovalCheck) Decision {
 	}
 	if !c.Approve {
 		return allow(CodeApprovalAccepted, "rejection recorded")
+	}
+	if IsUnverified(c.RequestedFor) {
+		return deny(CodeRequesterUnverified, "the requester %q was not authenticated (typed into the web UI); such a request can be rejected but never approved", c.RequestedFor)
 	}
 	if c.Decider.Username == c.RequestedFor && !e.P.Approval.AllowSelfApproval {
 		return deny(CodeSelfApproval, "%q asked for this change and cannot also approve it", c.Decider.Username)

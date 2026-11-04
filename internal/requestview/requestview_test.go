@@ -98,6 +98,26 @@ func TestDecidedDraftShowsApproverAndNoCommands(t *testing.T) {
 	}
 }
 
+// A request whose requester was typed into the web UI offers no approve
+// command, only reject, and says why (R38).
+func TestUnverifiedRequesterHasNoApproveCommand(t *testing.T) {
+	r := draftReq()
+	r.Spec.RequestedFor = "unverified:sam"
+	v := Of(r)
+	if v.Approve != "" || v.Reject != "foc reject areq-draft -n warehouse-a" || !strings.Contains(v.Unapprovable, "DENY_REQUESTER_UNVERIFIED") {
+		t.Fatalf("view %+v", v)
+	}
+	r.Status.State = focv1.StateRejected
+	if v := Of(r); v.Unapprovable != "" || v.Reject != "" {
+		t.Fatalf("decided view %+v", v)
+	}
+	a := req("areq-act", t0, focv1.ApprovalRequestSpec{Type: focv1.RequestActivateTask, ActivateTask: &focv1.ActivateTaskParams{TaskName: "t"}})
+	a.Spec.RequestedFor = "unverified:sam"
+	if v := Of(a); v.Approve != "" || v.Unapprovable == "" {
+		t.Fatalf("activate view %+v", v)
+	}
+}
+
 func TestMaintenanceView(t *testing.T) {
 	r := req("areq-zm", t0, focv1.ApprovalRequestSpec{Type: focv1.RequestZoneMaintenance, ZoneMaintenance: &focv1.ZoneMaintenanceParams{ScopeType: "Zone", ZoneName: "aisle-b", Mode: "Graceful", Reason: "inspection"}})
 	c := Of(r).Change
