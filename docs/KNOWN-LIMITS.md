@@ -47,14 +47,31 @@ remove it.
   verify that it is Swarmada's webhook or that it is serving.
 - **ServiceAccount names** in the admission policies are fixed to namespace `foc-system`.
 - **Per-session draft limit** is applied when a request is made, not when it is approved.
+- **Estop attribution.** When `foc-approvals` triggers an approved zone stop, Swarmada records the
+  executor's ServiceAccount as `swarmada.io/estop-actor` (its mutating webhook stamps the
+  admission user). The approving person is recorded only in the copilot's `ApprovalRequest`,
+  Events and audit file.
+- **Activation is done by the approver, outside the copilot.** After approval the copilot gives
+  the exact command (`status.instruction`) and watches for the task to leave `Draft`; it cannot
+  tell who ran the command, and it waits without a deadline. swarmctl v0.4 has no activate
+  subcommand, so the command is a `kubectl patch`. The planned end state is FOC-4's web UI
+  performing the write with the approver's own credentials (OIDC, passed through for that one
+  call); until then the approver runs the command.
 - **Audit storage.** Each process writes its own JSONL file; there is no shared store, rotation
   or retention yet. A failed Event write is recorded in the JSONL file only.
 
 ## Test environment
 
-- envtest runs a real `kube-apiserver` with the Swarmada CRDs and Swarmada's own RBAC roles, but
-  no Swarmada controller or webhook. Swarmada's FleetTask activation rule is applied by a
-  stand-in webhook (`internal/testenv`); Swarmada's own webhook is not exercised.
+- **Swarmada's admission webhooks do not run in envtest**, so the approval-path tests do not show
+  what Swarmada v0.4 accepts. envtest runs a real `kube-apiserver` with the Swarmada CRDs and
+  Swarmada's own RBAC roles, but none of the webhooks in Swarmada's
+  `config/webhook/manifests.yaml`: its webhook code is in its `internal/webhook` package, which
+  another module cannot import. `internal/testenv` registers two stand-ins written from that code:
+  the FleetTask activation rule (validating) and the FleetZone estop-actor stamp (mutating).
+  Not exercised at all: the rest of `vfleettask` (flow, bindings, producer contracts),
+  `vfleetzone` (the `estop-trigger` SubjectAccessReview, composite-zone refusal),
+  `vzonemaintenance` (zone exists), and every other Swarmada webhook. Running the copilot's
+  approval path against a live Swarmada v0.4 control plane is FOC-1 work.
 - Fixtures under `evals/fixtures/` are hand-written snapshots modelled on the Swarmada quickstart
   scenarios, not captured from a live run. The quickstart itself writes some status by hand (see
   its "Honest notes" section), and so do the fixtures.
