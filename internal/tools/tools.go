@@ -106,15 +106,33 @@ type EventsInput struct {
 
 // Lists wrap slices so every tool output is a JSON object.
 type (
-	RobotList           struct{ Items []RobotView `json:"items"` }
-	FleetTaskList       struct{ Items []FleetTaskView `json:"items"` }
-	FleetActionList     struct{ Items []FleetActionView `json:"items"` }
-	ZoneList            struct{ Items []ZoneView `json:"items"` }
-	ZoneMaintenanceList struct{ Items []ZoneMaintenanceView `json:"items"` }
-	DiscoveredList      struct{ Items []DiscoveredRobotView `json:"items"` }
-	AdapterList         struct{ Items []FleetAdapterView `json:"items"` }
-	TriggerList         struct{ Items []TaskTriggerView `json:"items"` }
-	EventList           struct{ Items []EventView `json:"items"` }
+	RobotList struct {
+		Items []RobotView `json:"items"`
+	}
+	FleetTaskList struct {
+		Items []FleetTaskView `json:"items"`
+	}
+	FleetActionList struct {
+		Items []FleetActionView `json:"items"`
+	}
+	ZoneList struct {
+		Items []ZoneView `json:"items"`
+	}
+	ZoneMaintenanceList struct {
+		Items []ZoneMaintenanceView `json:"items"`
+	}
+	DiscoveredList struct {
+		Items []DiscoveredRobotView `json:"items"`
+	}
+	AdapterList struct {
+		Items []FleetAdapterView `json:"items"`
+	}
+	TriggerList struct {
+		Items []TaskTriggerView `json:"items"`
+	}
+	EventList struct {
+		Items []EventView `json:"items"`
+	}
 )
 
 func notFound(kind, ns, name string, err error) error {

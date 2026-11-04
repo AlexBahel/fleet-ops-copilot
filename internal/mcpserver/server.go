@@ -110,12 +110,12 @@ func Check(ctx context.Context, srv *mcp.Server) error {
 	if err != nil {
 		return err
 	}
-	defer ss.Close()
+	defer func() { _ = ss.Close() }()
 	cs, err := mcp.NewClient(&mcp.Implementation{Name: "check"}, nil).Connect(ctx, ct, nil)
 	if err != nil {
 		return err
 	}
-	defer cs.Close()
+	defer func() { _ = cs.Close() }()
 	res, err := cs.ListTools(ctx, nil)
 	if err != nil {
 		return err

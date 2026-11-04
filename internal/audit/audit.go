@@ -108,12 +108,12 @@ func Open(path string, red *redact.Redactor) (*Writer, error) {
 		return nil, err
 	}
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
-		f.Close()
+		_ = f.Close()
 		return nil, err
 	}
 	n, last, err := verify(f)
 	if err != nil {
-		f.Close()
+		_ = f.Close()
 		return nil, fmt.Errorf("existing audit file %s does not verify: %w", path, err)
 	}
 	w := &Writer{w: f, f: f, seq: n, prev: genesis, red: red, now: time.Now}
@@ -192,7 +192,7 @@ func verify(r io.Reader) (int64, string, error) {
 		dec := json.NewDecoder(bytes.NewReader(line))
 		dec.DisallowUnknownFields()
 		if err := dec.Decode(&e); err != nil {
-			return n, prev, fmt.Errorf("%w: line %d: %v", ErrChain, n+1, err)
+			return n, prev, fmt.Errorf("%w: line %d: %w", ErrChain, n+1, err)
 		}
 		if e.Seq != n+1 {
 			return n, prev, fmt.Errorf("%w: line %d has seq %d", ErrChain, n+1, e.Seq)

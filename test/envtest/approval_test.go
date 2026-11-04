@@ -50,8 +50,16 @@ type syncBuffer struct {
 	b  bytes.Buffer
 }
 
-func (s *syncBuffer) Write(p []byte) (int, error) { s.mu.Lock(); defer s.mu.Unlock(); return s.b.Write(p) }
-func (s *syncBuffer) Bytes() []byte               { s.mu.Lock(); defer s.mu.Unlock(); return append([]byte{}, s.b.Bytes()...) }
+func (s *syncBuffer) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.Write(p)
+}
+func (s *syncBuffer) Bytes() []byte {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]byte{}, s.b.Bytes()...)
+}
 
 type harness struct {
 	svc      *tools.Service

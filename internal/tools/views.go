@@ -71,19 +71,19 @@ type HardwareView struct {
 
 // RobotStatusView is the subset of Robot status the copilot surfaces.
 type RobotStatusView struct {
-	Phase              string           `json:"phase,omitempty"`
-	EstopState         string           `json:"estopState,omitempty"`
-	HealthStatus       string           `json:"health.status,omitempty"`
-	HealthMessage      string           `json:"health.message,omitempty"`
-	BatteryPercent     *int32           `json:"batteryPercent,omitempty"`
-	CurrentZone        string           `json:"currentZone,omitempty"`
-	AssignedAction     string           `json:"assignedAction,omitempty"`
-	LastSeenAt         string           `json:"connectivity.lastSeenAt,omitempty"`
-	OfflineSince       string           `json:"offlineSince,omitempty"`
-	FirmwareVersion    string           `json:"firmwareVersion,omitempty"`
-	Capabilities       []CapabilityView `json:"capabilities,omitempty"`
-	Hardware           []HardwareView   `json:"hardware,omitempty"`
-	Conditions         []ConditionView  `json:"conditions,omitempty"`
+	Phase           string           `json:"phase,omitempty"`
+	EstopState      string           `json:"estopState,omitempty"`
+	HealthStatus    string           `json:"health.status,omitempty"`
+	HealthMessage   string           `json:"health.message,omitempty"`
+	BatteryPercent  *int32           `json:"batteryPercent,omitempty"`
+	CurrentZone     string           `json:"currentZone,omitempty"`
+	AssignedAction  string           `json:"assignedAction,omitempty"`
+	LastSeenAt      string           `json:"connectivity.lastSeenAt,omitempty"`
+	OfflineSince    string           `json:"offlineSince,omitempty"`
+	FirmwareVersion string           `json:"firmwareVersion,omitempty"`
+	Capabilities    []CapabilityView `json:"capabilities,omitempty"`
+	Hardware        []HardwareView   `json:"hardware,omitempty"`
+	Conditions      []ConditionView  `json:"conditions,omitempty"`
 }
 
 // RobotView is a Robot.

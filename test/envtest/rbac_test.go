@@ -163,7 +163,7 @@ func TestAdmissionDraftsOnly(t *testing.T) {
 		t.Fatalf("labelled draft refused: %v", err)
 	}
 	for name, task := range map[string]*swarmv1.FleetTask{
-		"non-draft": draftTask("vap-nondraft", false, true),
+		"non-draft":  draftTask("vap-nondraft", false, true),
 		"unlabelled": draftTask("vap-unlabelled", true, false),
 	} {
 		err := mcp.Create(ctx, task)

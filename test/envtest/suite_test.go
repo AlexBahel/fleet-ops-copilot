@@ -32,6 +32,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -233,7 +234,7 @@ func applyFile(ctx context.Context, path string) error {
 	dec := utilyaml.NewYAMLReader(bufio.NewReader(bytes.NewReader(b)))
 	for {
 		doc, err := dec.Read()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			return nil
 		}
 		if err != nil {
@@ -293,7 +294,7 @@ func startStandinWebhook(ctx context.Context) error {
 	hc := &http.Client{Transport: &http.Transport{TLSClientConfig: insecureTLS()}, Timeout: time.Second}
 	for time.Now().Before(deadline) {
 		if resp, err := hc.Get(addr); err == nil {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			return nil
 		}
 		time.Sleep(100 * time.Millisecond)

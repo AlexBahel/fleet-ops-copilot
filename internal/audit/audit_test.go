@@ -85,7 +85,7 @@ func TestOpenContinuesChainAndRefusesBrokenFile(t *testing.T) {
 	if _, err := w.Append(Entry{Kind: KindRequestCreated}); err != nil {
 		t.Fatal(err)
 	}
-	w.Close()
+	_ = w.Close()
 	w, err = Open(path, redact.New())
 	if err != nil {
 		t.Fatal(err)
@@ -94,10 +94,10 @@ func TestOpenContinuesChainAndRefusesBrokenFile(t *testing.T) {
 	if err != nil || e.Seq != 2 {
 		t.Fatalf("continued seq = %d, %v", e.Seq, err)
 	}
-	w.Close()
+	_ = w.Close()
 	f, _ := os.Open(path)
 	n, err := Verify(f)
-	f.Close()
+	_ = f.Close()
 	if err != nil || n != 2 {
 		t.Fatalf("Verify after reopen = %d, %v", n, err)
 	}

@@ -96,7 +96,7 @@ type ApprovalRequestSpec struct {
 	// +optional
 	SessionID string `json:"sessionID,omitempty"`
 	// ExpiresAt is when the request stops being approvable.
-	ExpiresAt metav1.Time `json:"expiresAt"`
+	ExpiresAt metav1.Time  `json:"expiresAt"`
 	Policy    PolicyRecord `json:"policy"`
 	// +optional
 	ActivateTask *ActivateTaskParams `json:"activateTask,omitempty"`
@@ -197,7 +197,7 @@ const (
 type ApprovalDecisionSpec struct {
 	// RequestRef is the ApprovalRequest name in the same namespace.
 	// +kubebuilder:validation:MinLength=1
-	RequestRef string `json:"requestRef"`
+	RequestRef string  `json:"requestRef"`
 	Verdict    Verdict `json:"verdict"`
 	// DecidedBy must equal the creating user's authenticated username.
 	// +kubebuilder:validation:MinLength=1
