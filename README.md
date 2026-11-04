@@ -19,8 +19,10 @@ what is not built, not measured, or not enforced is listed in
 | `cmd/foc` | CLI: `requests`, `approve`, `reject`, `audit verify` |
 | `api/v1alpha1` | `ApprovalRequest`, `ApprovalDecision` (`fleetops.alexbahel.github.io`) |
 | `internal/policy` | Policy engine; default policy in `policies/default.yaml` |
-| `config/` | CRDs, RBAC, ValidatingAdmissionPolicies |
-| `evals/` | Evaluation harness, scenarios, fixtures |
+| `internal/llm` | Model backends: `claude` (Claude API) and `scripted` |
+| `config/` | CRDs, RBAC, ValidatingAdmissionPolicies, Deployments (`config/deploy`) |
+| `evals/` | Evaluation harness, scenarios, fixtures (hand-written and captured live), results |
+| `test/live` | Approval paths and guardrails against a live Swarmada control plane |
 
 ## Build and test
 
@@ -32,6 +34,17 @@ make test           # unit tests
 make test-envtest   # API-server tests: RBAC, admission policies, approval path
 make eval-fixtures  # fixture evaluations with the scripted backend
 ```
+
+Model evaluations call the Claude API and read `ANTHROPIC_API_KEY` from the environment:
+
+```bash
+go run -tags envtest ./evals/cmd/foc-eval -backend claude -model claude-sonnet-5-5 -runs 3 \
+  -out evals/results/<date>-cloud-claude-sonnet-5-5/results.json
+```
+
+On a kind cluster named `foc-<name>` that runs Swarmada (for example its quickstart),
+`make deploy-kind KIND_CLUSTER=foc-<name>` installs the copilot, and
+`hack/live-approval-path.sh` runs `test/live` against it.
 
 ## Fictional scenario
 
