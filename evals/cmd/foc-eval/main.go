@@ -36,8 +36,12 @@ import (
 	"strings"
 
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	"github.com/AlexBahel/fleet-ops-copilot/evals/harness"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/llm"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/policy"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/testenv"
@@ -54,6 +58,8 @@ func main() {
 	model := flag.String("model", llm.DefaultClaudeModel, "claude: model id")
 	effort := flag.String("effort", llm.DefaultClaudeEffort, "claude: output_config.effort")
 	only := flag.String("only", "", "comma-separated scenario ids to run (default: all)")
+	liveCtx := flag.String("live-context", "", "run against this kubeconfig context instead of envtest (state is not loaded; see harness.LiveTarget)")
+	liveMCP := flag.String("live-mcp-url", "", "with -live-context: foc-mcp streamable HTTP endpoint")
 	var pr harness.Pricing
 	flag.Float64Var(&pr.InputPerMTok, "price-input", 0, "claude: USD per million input tokens")
 	flag.Float64Var(&pr.OutputPerMTok, "price-output", 0, "claude: USD per million output tokens")
@@ -65,7 +71,7 @@ func main() {
 	if *traces == "" {
 		*traces = filepath.Join(filepath.Dir(*out), "traces.jsonl")
 	}
-	cfg := runConfig{scenarioDir: *scenarios, fixtureDir: *fixtures, runs: *runs, out: *out, tracePath: *traces, policyPath: *policyPath, only: *only}
+	cfg := runConfig{scenarioDir: *scenarios, fixtureDir: *fixtures, runs: *runs, out: *out, tracePath: *traces, policyPath: *policyPath, only: *only, liveCtx: *liveCtx, liveMCP: *liveMCP}
 	switch *backend {
 	case "scripted":
 		cfg.name, cfg.factory = "scripted", harness.ScriptedFactory
@@ -92,6 +98,7 @@ func main() {
 
 type runConfig struct {
 	scenarioDir, fixtureDir, out, tracePath, policyPath, only string
+	liveCtx, liveMCP                                          string
 	runs                                                      int
 	name, latencyScope                                        string
 	factory                                                   harness.BackendFactory
@@ -178,11 +185,28 @@ func run(c runConfig) error {
 	if err != nil {
 		return err
 	}
-	env, err := testenv.Start(repo, testenv.DefaultPeople)
-	if err != nil {
-		return err
+	var env *testenv.Env
+	var live *harness.LiveTarget
+	var adminCfg *rest.Config
+	if c.liveCtx != "" {
+		if c.liveMCP == "" {
+			return fmt.Errorf("-live-context needs -live-mcp-url")
+		}
+		if adminCfg, err = config.GetConfigWithContext(c.liveCtx); err != nil {
+			return err
+		}
+		admin, err := client.New(adminCfg, client.Options{Scheme: fleet.NewScheme()})
+		if err != nil {
+			return err
+		}
+		live = &harness.LiveTarget{Admin: admin, MCPURL: c.liveMCP}
+	} else {
+		if env, err = testenv.Start(repo, testenv.DefaultPeople); err != nil {
+			return err
+		}
+		defer env.Stop()
+		adminCfg = env.AdminCfg
 	}
-	defer env.Stop()
 	if err := os.MkdirAll(filepath.Dir(out), 0o750); err != nil {
 		return err
 	}
@@ -191,16 +215,22 @@ func run(c runConfig) error {
 		return err
 	}
 	defer func() { _ = tf.Close() }()
-	r := &harness.Runner{Env: env, Policy: pol, FixtureDir: fixtureDir, Backend: c.factory, Runs: runs, Traces: tf}
+	r := &harness.Runner{Env: env, Policy: pol, FixtureDir: fixtureDir, Backend: c.factory, Runs: runs, Live: live, Traces: tf}
 	srs, err := r.Run(ctx, scs)
 	if err != nil {
 		return err
 	}
-	spec, rev := swarmadaVersion(env.SwarmadaDir)
+	swDir, _ := testenv.SwarmadaDir(repo)
+	spec, rev := swarmadaVersion(swDir)
 	envInfo := map[string]string{"swarmadaSpec": spec, "swarmadaCommit": rev, "swarmadaResolution": swarmadaResolution(), "apiServer": "envtest", "copilotCommit": sha, "copilotTreeDirty": fmt.Sprint(dirty)}
-	if cs, err := kubernetes.NewForConfig(env.AdminCfg); err == nil {
+	kind := "envtest kube-apiserver "
+	if live != nil {
+		kind = "live cluster (Swarmada controllers and the deployed foc-mcp; state from the scenario's quickstart run, not loaded from the fixture) kube-apiserver "
+		envInfo["fixtures"] = "not loaded: the namespace's live state is used"
+	}
+	if cs, err := kubernetes.NewForConfig(adminCfg); err == nil {
 		if v, err := cs.Discovery().ServerVersion(); err == nil {
-			envInfo["apiServer"] = "envtest kube-apiserver " + v.GitVersion
+			envInfo["apiServer"] = kind + v.GitVersion
 		}
 	}
 	res := harness.Summarize(c.name, runs, envInfo, srs, c.latencyScope)

@@ -26,6 +26,11 @@ import (
 	"sort"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/agent"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/audit"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
@@ -52,6 +57,28 @@ type Runner struct {
 	Runs       int
 	// Traces, when set, receives one JSON line per run.
 	Traces io.Writer
+	// Live, when set, runs against a live cluster instead of Env (see LiveTarget).
+	Live *LiveTarget
+}
+
+// LiveTarget is a live cluster whose namespace already holds the scenario's
+// state (for example a Swarmada quickstart run with the matching SCENARIO),
+// with foc-mcp deployed. A live run loads no fixture and deletes no Swarmada
+// object: before and after each run it deletes only the copilot's own
+// ApprovalRequests and ApprovalDecisions in the namespace. Facts are checked
+// against the live objects at the end of the run.
+type LiveTarget struct {
+	Admin  client.Client
+	MCPURL string
+}
+
+func (l *LiveTarget) clearCopilotObjects(ctx context.Context) error {
+	for _, k := range []client.Object{&focv1.ApprovalDecision{}, &focv1.ApprovalRequest{}} {
+		if err := l.Admin.DeleteAllOf(ctx, k, client.InNamespace(testenv.SwarmNS)); err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+	}
+	return nil
 }
 
 // RunResult is one run of one scenario.
@@ -100,6 +127,9 @@ func (r *Runner) Run(ctx context.Context, scenarios []Scenario) ([]ScenarioResul
 }
 
 func (r *Runner) runOnce(ctx context.Context, s Scenario, n int) (RunResult, error) {
+	if r.Live != nil {
+		return r.runLive(ctx, s, n)
+	}
 	admin := r.Env.Admin
 	if err := Reset(ctx, admin); err != nil {
 		return RunResult{}, err
@@ -128,6 +158,33 @@ func (r *Runner) runOnce(ctx context.Context, s Scenario, n int) (RunResult, err
 	}
 	loop := &agent.Loop{Backend: be, Session: cs}
 	tr, runErr := loop.Run(ctx, s.Operator, fmt.Sprintf("eval-%s-%d", s.ID, n), s.Prompt)
+	return r.finish(ctx, admin, s, n, tr, runErr)
+}
+
+func (r *Runner) runLive(ctx context.Context, s Scenario, n int) (RunResult, error) {
+	if err := r.Live.clearCopilotObjects(ctx); err != nil {
+		return RunResult{}, err
+	}
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "foc-eval", Version: mcpserver.Version}, nil).
+		Connect(ctx, &mcp.StreamableClientTransport{Endpoint: r.Live.MCPURL}, nil)
+	if err != nil {
+		return RunResult{}, fmt.Errorf("connecting to %s: %w", r.Live.MCPURL, err)
+	}
+	defer func() { _ = cs.Close() }()
+	be, err := r.Backend(s)
+	if err != nil {
+		return RunResult{}, err
+	}
+	loop := &agent.Loop{Backend: be, Session: cs}
+	tr, runErr := loop.Run(ctx, s.Operator, fmt.Sprintf("eval-%s-%d", s.ID, n), s.Prompt)
+	rr, err := r.finish(ctx, r.Live.Admin, s, n, tr, runErr)
+	if err != nil {
+		return rr, err
+	}
+	return rr, r.Live.clearCopilotObjects(ctx)
+}
+
+func (r *Runner) finish(ctx context.Context, admin client.Client, s Scenario, n int, tr agent.Trace, runErr error) (RunResult, error) {
 	rr := RunResult{Run: n, LatencyMs: tr.LatencyMs, ToolCalls: tr.ToolCalls(), Usage: tr.Usage, StopReasons: tr.StopReasons, Turns: tr.Turns, Trace: tr}
 	if runErr != nil {
 		rr.Error = runErr.Error()
