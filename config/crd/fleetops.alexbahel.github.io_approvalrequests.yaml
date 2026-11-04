@@ -194,6 +194,13 @@ spec:
                 type: string
               message:
                 type: string
+              refusedDecisions:
+                description: RefusedDecisions lists ApprovalDecisions that were not
+                  accepted.
+                items:
+                  type: string
+                type: array
+                x-kubernetes-list-type: set
               state:
                 description: RequestState is the lifecycle state of an ApprovalRequest.
                 enum:

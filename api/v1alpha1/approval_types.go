@@ -151,6 +151,10 @@ type ApprovalRequestStatus struct {
 	Target *TargetRef `json:"target,omitempty"`
 	// +optional
 	Message string `json:"message,omitempty"`
+	// RefusedDecisions lists ApprovalDecisions that were not accepted.
+	// +optional
+	// +listType=set
+	RefusedDecisions []string `json:"refusedDecisions,omitempty"`
 }
 
 // ApprovalRequest is a proposed Swarmada write that a named person must approve.
@@ -198,6 +202,10 @@ type ApprovalDecisionSpec struct {
 	// DecidedBy must equal the creating user's authenticated username.
 	// +kubebuilder:validation:MinLength=1
 	DecidedBy string `json:"decidedBy"`
+	// DecidedByGroups must equal the creating user's authenticated groups, so
+	// the approver's authority can be checked with SubjectAccessReview.
+	// +optional
+	DecidedByGroups []string `json:"decidedByGroups,omitempty"`
 	// +optional
 	Comment string `json:"comment,omitempty"`
 }

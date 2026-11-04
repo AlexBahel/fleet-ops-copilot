@@ -65,6 +65,13 @@ spec:
                   username.
                 minLength: 1
                 type: string
+              decidedByGroups:
+                description: |-
+                  DecidedByGroups must equal the creating user's authenticated groups, so
+                  the approver's authority can be checked with SubjectAccessReview.
+                items:
+                  type: string
+                type: array
               requestRef:
                 description: RequestRef is the ApprovalRequest name in the same namespace.
                 minLength: 1
