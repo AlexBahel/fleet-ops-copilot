@@ -1,0 +1,32 @@
+# Model storage for llama-server: a read-only claim on a directory of the node
+# that already holds the GGUF files (docs/DESIGN.md §2, §3.5). Nothing is
+# pulled at runtime: the files get there by `make load-llama-model` (docker cp
+# into a kind node) or any other offline copy. Single-node clusters only: a
+# hostPath names a directory of whichever node the pod lands on.
+#
+# To use a dynamically provisioned volume instead, skip this file and create a
+# PVC named llama-models in foc-system yourself, then fill it offline.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: foc-llama-models
+  labels: {app.kubernetes.io/name: llama-server, app.kubernetes.io/part-of: fleet-ops-copilot}
+spec:
+  capacity: {storage: 8Gi}
+  accessModes: [ReadOnlyMany]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  claimRef: {namespace: foc-system, name: llama-models}
+  hostPath: {path: /models, type: Directory}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: llama-models
+  namespace: foc-system
+  labels: {app.kubernetes.io/name: llama-server, app.kubernetes.io/part-of: fleet-ops-copilot}
+spec:
+  accessModes: [ReadOnlyMany]
+  storageClassName: ""
+  volumeName: foc-llama-models
+  resources: {requests: {storage: 8Gi}}

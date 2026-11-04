@@ -1,0 +1,78 @@
+# Egress probe (docs/DESIGN.md §3.7). A Job that tries to reach hosts outside
+# the cluster. The Job SUCCEEDS when every attempt is blocked, and FAILS when
+# any is answered, so "Complete" is the evidence that egress is denied.
+#
+# Exit codes of the script:
+#   0  control target reachable (when CONTROL_URL is set) and every external
+#      target unreachable (curl exit 6 no DNS answer, 7 no connection, 28 timeout)
+#   1  an external target answered, or the connection got further than TCP
+#      (any other curl exit, e.g. 35 TLS failure, means the path is open)
+#   2  the control target was unreachable: the probe cannot tell "blocked" from
+#      "probe broken", so the result does not count
+#
+# The control is in-namespace traffic that the policy allows (llama-server
+# /health). It makes a pass mean "external blocked while internal works".
+# Run it again in a namespace without the policy and without CONTROL_URL
+# (make verify-egress-baseline): it must then fail with exit 1, which shows the
+# probe does detect open egress from this machine's network.
+#
+# No metadata.namespace on purpose: apply it with -n. The pod uses the
+# llama.cpp server image (the image contains curl) so that no further image
+# has to be loaded into an air-gapped cluster.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: foc-egress-probe
+  labels: {app.kubernetes.io/name: foc-egress-probe, app.kubernetes.io/part-of: fleet-ops-copilot}
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 180
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: foc-egress-probe, app.kubernetes.io/part-of: fleet-ops-copilot}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: probe
+          image: ghcr.io/ggml-org/llama.cpp:server-b12004
+          imagePullPolicy: IfNotPresent
+          env:
+            - {name: CONTROL_URL, value: "http://llama-server:8080/health"}
+            - {name: EXTERNAL_URLS, value: "https://1.1.1.1 https://8.8.8.8 https://example.com"}
+          command: [sh, -c]
+          args:
+            - |
+              echo "egress probe: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+              if [ -n "${CONTROL_URL:-}" ]; then
+                code=$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' "$CONTROL_URL")
+                rc=$?
+                if [ "$rc" -ne 0 ] || [ "$code" != 200 ]; then
+                  echo "CONTROL FAILED: $CONTROL_URL curl exit $rc http $code (is llama-server Ready?)"
+                  exit 2
+                fi
+                echo "control ok: $CONTROL_URL http $code"
+              else
+                echo "no control target (baseline run)"
+              fi
+              open=0
+              for u in $EXTERNAL_URLS; do
+                curl -sS --connect-timeout 5 --max-time 8 -o /dev/null "$u" 2>/tmp/err
+                rc=$?
+                case "$rc" in
+                  6|7|28) echo "blocked: $u (curl exit $rc)" ;;
+                  *) echo "OPEN: $u (curl exit $rc) $(cat /tmp/err)"; open=1 ;;
+                esac
+              done
+              if [ "$open" -ne 0 ]; then echo "RESULT: egress is NOT blocked"; exit 1; fi
+              echo "RESULT: all external targets blocked"
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {memory: 128Mi}
+      volumes:
+        - name: tmp
+          emptyDir: {}

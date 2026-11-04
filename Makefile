@@ -8,7 +8,7 @@ BIN := bin
 .PHONY: help build vet lint fmt test test-envtest eval-fixtures generate check-no-local all ci envtest-assets image deploy-kind test-live
 
 help: ## List targets
-	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
+	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
 
 all: ci
 
@@ -47,6 +47,9 @@ generate: ## Regenerate deepcopy and CRDs from api/
 
 check-no-local: ## Fail if anything under local/ or go.work is tracked
 	@tracked="$$(git ls-files -- local go.work go.work.sum)"; if [ -n "$$tracked" ]; then echo "tracked but must stay local: $$tracked"; exit 1; fi
+
+# Air-gapped profile (llama.cpp): load-llama-image, load-llama-model, deploy-airgap, verify-egress.
+include hack/airgap.mk
 
 # ---- Live cluster (kind, foc-* only) ----------------------------------------
 # Every kubectl and kind command names the cluster explicitly; the current
