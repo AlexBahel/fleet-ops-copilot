@@ -33,9 +33,9 @@ cluster: Kubernetes cluster {
     netpol: "NetworkPolicy (networkPolicy.enabled, off by default)\ndefault deny; DNS; API server ipBlock;\nfoc-agent -> foc-mcp; foc-agent -> Claude API ipBlock" {class: planned}
 
     airgap: "Air-gapped profile (config/airgap, not in chart)" {
-      class: planned
-      llama: "llama-server (llama.cpp)\nQwen2.5-7B-Instruct GGUF\n--offline, model from PVC" {class: planned}
-      egress: "Egress NetworkPolicy\nnamespace, DNS, API server only;\nllama-server: no egress" {class: planned}
+      class: built
+      llama: "llama-server (llama.cpp)\nQwen2.5-7B-Instruct GGUF\n--offline, model from PVC" {class: built}
+      egress: "Egress NetworkPolicy\nnamespace, DNS, API server only;\nllama-server: no egress" {class: built}
     }
 
     agent -> mcp: "MCP over HTTP"

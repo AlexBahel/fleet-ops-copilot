@@ -18,9 +18,10 @@ remove it.
 - The five agent roles (Router, Diagnose, Dispatch, Zone ops, Reporter) and their tool
   allow-lists. The tool-use loop (`internal/agent`) offers every tool.
 - `foc-agent`, the web chat UI, and the OIDC pass-through for approving in a browser.
-- Helm chart, `make foc-up`, NetworkPolicy, egress probe, OpenTelemetry tracing, `docs/RUNBOOK.md`.
-  Until the chart exists, `make deploy-kind` installs plain manifests (`config/deploy`) on a kind
-  cluster; the image is built from binaries compiled on the host.
+- `make foc-up` (only its preflight, `scripts/foc-up-preflight.sh`, exists) and OpenTelemetry
+  tracing. The air-gapped profile is not templated in the Helm chart; it is installed beside it
+  from `config/airgap` (`make deploy-airgap`). `make deploy-kind` installs the plain manifests
+  (`config/deploy`) on a kind cluster; the image is built from binaries compiled on the host.
 - More than one approver per request (`minApprovers`): one accepted decision approves.
 
 ## Not measured yet
@@ -34,6 +35,10 @@ remove it.
   air-gapped manifests (`config/airgap/`) have not run against a model or a cluster: the backend
   is tested against a fake server, the manifests with `kubeconform`, and of the `hack/airgap.mk`
   targets only `validate-airgap` has run.
+- The Helm chart (`charts/fleet-ops-copilot`), its cloud-profile NetworkPolicy (off by default), the
+  egress probe (`make verify-egress`, for the air-gapped policy) and `docs/RUNBOOK.md` (draft) have
+  not been installed or run on a cluster. The chart is checked with `helm lint --strict`,
+  kubeconform and `make chart-parity` (its default render equals `config/`).
 - Sampling is at each API's defaults (D43). The Claude API rejects `temperature` on the models
   used, so repeated claude runs vary; `results.json` records the settings sent (`backendSettings`).
 - No eval scenario reaches `DENY_DRAFT_GATE_ABSENT`: fixture evals always run with the draft

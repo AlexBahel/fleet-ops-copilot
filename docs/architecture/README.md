@@ -7,17 +7,17 @@
 
 Solid boxes are on main. Dashed boxes are designed in `docs/DESIGN.md` but not on main:
 `foc-agent` (only its ServiceAccount exists) and the NetworkPolicy (a chart value, off by default).
-The air-gapped profile is drawn dashed but is on main as plain manifests (`config/airgap/`,
-`make deploy-airgap`), not in the chart; its box style changes at the next re-render.
+The air-gapped profile is on main as plain manifests (`config/airgap/`, `make deploy-airgap`), not
+in the chart.
 
 The diagrams summarise `docs/DESIGN.md` §3; where they differ, the design document is correct.
 
 ## Rendering
 
-The SVGs were rendered with [D2](https://d2lang.com) v0.7.1:
+Rendered with [D2](https://d2lang.com): `components.svg` with v0.9.0, `approval-flow.svg` with
+v0.7.1 (each SVG records its version in `data-d2-version`):
 
 ```bash
-go install oss.terrastruct.com/d2@v0.7.1
 d2 --layout elk components.d2 components.svg
 d2 approval-flow.d2 approval-flow.svg
 ```
