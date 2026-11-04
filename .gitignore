@@ -1,0 +1,13 @@
+# Local Go workspace (pre-release dependency resolution); never committed.
+go.work
+go.work.sum
+
+/bin/
+/dist/
+*.test
+*.out
+coverage.*
+/evals/results/tmp/
+.DS_Store
+.idea/
+.vscode/

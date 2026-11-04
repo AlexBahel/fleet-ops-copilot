@@ -1,0 +1,9 @@
+Fleet Ops Copilot
+Copyright 2026 Alex Bahel
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+It is a client of Swarmada (https://github.com/swarmada/swarmada), which is
+licensed separately under the Apache License, Version 2.0. Swarmada's Go API
+types are used as a dependency and are not modified or redistributed in this
+repository.
