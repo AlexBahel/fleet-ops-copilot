@@ -21,6 +21,9 @@ what is not built, not measured, or not enforced is listed in
 | `internal/policy` | Policy engine; default policy in `policies/default.yaml` |
 | `internal/llm` | Model backends: `claude` (Claude API) and `scripted` |
 | `config/` | CRDs, RBAC, ValidatingAdmissionPolicies, Deployments (`config/deploy`) |
+| `charts/fleet-ops-copilot` | Helm chart: the objects in `config/` plus an optional NetworkPolicy; `make chart-check` |
+| `scripts/` | `foc-up-preflight.sh` (cluster and Swarmada webhook checks), `chart-parity` (chart vs `config/`) |
+| `docs/RUNBOOK.md`, `docs/architecture/` | Operations runbook (draft); architecture diagrams (D2 source and SVG) |
 | `evals/` | Evaluation harness, scenarios, fixtures (hand-written and captured live), results |
 | `test/live` | Approval paths and guardrails against a live Swarmada control plane |
 
@@ -45,6 +48,9 @@ go run -tags envtest ./evals/cmd/foc-eval -backend claude -model claude-sonnet-5
 On a kind cluster named `foc-<name>` that runs Swarmada (for example its quickstart),
 `make deploy-kind KIND_CLUSTER=foc-<name>` installs the copilot, and
 `hack/live-approval-path.sh` runs `test/live` against it.
+
+The Helm chart renders the same objects (checked by `make chart-parity`); it has not been
+installed on a cluster yet. See [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
 
 ## Fictional scenario
 
