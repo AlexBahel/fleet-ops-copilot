@@ -1,0 +1,21 @@
+version: "2"
+run:
+  build-tags: [envtest]
+linters:
+  default: standard
+  enable:
+    - gosec
+    - misspell
+    - bodyclose
+    - errorlint
+    - unconvert
+  exclusions:
+    rules:
+      # File paths come from operator flags (policy file, audit file) or test
+      # temp dirs; reading the file the operator names is the intent.
+      - linters: [gosec]
+        text: "G304|G703"
+formatters:
+  enable:
+    - gofmt
+    - goimports
