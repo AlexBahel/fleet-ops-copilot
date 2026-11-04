@@ -99,9 +99,21 @@ type Env struct {
 	cancel      context.CancelFunc
 }
 
-// SwarmadaDir returns the Swarmada module directory as resolved by the Go
-// toolchain (go.mod pin, or the local workspace before the public release).
+// SwarmadaDirEnv overrides where the Swarmada module (its config/crd/bases
+// and config/rbac) is read from.
+const SwarmadaDirEnv = "FOC_SWARMADA_DIR"
+
+// SwarmadaDir returns the Swarmada module directory: $FOC_SWARMADA_DIR if
+// set, else `go list -m -f '{{.Dir}}' github.com/swarmada/swarmada` (the
+// go.mod pin, or a local workspace before the public release). No path is
+// stored in the repository.
 func SwarmadaDir(repoRoot string) (string, error) {
+	if d := os.Getenv(SwarmadaDirEnv); d != "" {
+		if _, err := os.Stat(filepath.Join(d, "config", "crd", "bases")); err != nil {
+			return "", fmt.Errorf("%s=%s: %w", SwarmadaDirEnv, d, err)
+		}
+		return d, nil
+	}
 	cmd := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/swarmada/swarmada")
 	cmd.Dir = repoRoot
 	out, err := cmd.Output()
@@ -286,7 +298,7 @@ func (e *Env) SetStandinFailurePolicy(ctx context.Context, fp admissionv1.Failur
 // waitForPolicies blocks until the ValidatingAdmissionPolicies are enforced:
 // the API server compiles and binds them asynchronously.
 func (e *Env) waitForPolicies(ctx context.Context) error {
-	c, err := e.SAClient(MCPUser)
+	c, err := e.SAClient(ApprovUser)
 	if err != nil {
 		return err
 	}
