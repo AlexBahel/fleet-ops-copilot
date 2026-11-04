@@ -35,7 +35,10 @@ spec:
   validationActions: ["Deny"]
 ---
 # foc-approvals may only add swarmada.io/estop-triggered to a FleetZone that
-# lacks it; nothing else on the object may change.
+# lacks it. Swarmada's FleetZone mutating webhook (mfleetzone.swarmada.io,
+# stampEstopActor in internal/webhook/estop_actor_defaulter.go) runs before
+# this policy and adds swarmada.io/estop-actor and the swarmada.io/estop-in-force
+# finalizer on a trigger; those two additions are allowed. Nothing else changes.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
@@ -63,9 +66,9 @@ spec:
       message: "foc-approvals may only add swarmada.io/estop-triggered where it is absent; it never changes or removes it"
     - expression: >-
         request.operation != 'UPDATE' ||
-        (object.metadata.annotations.all(k, k == 'swarmada.io/estop-triggered' ||
+        (object.metadata.annotations.all(k, k == 'swarmada.io/estop-triggered' || k == 'swarmada.io/estop-actor' ||
            (has(oldObject.metadata.annotations) && k in oldObject.metadata.annotations && oldObject.metadata.annotations[k] == object.metadata.annotations[k])) &&
-         (!has(oldObject.metadata.annotations) || oldObject.metadata.annotations.all(k, k in object.metadata.annotations)))
+         (!has(oldObject.metadata.annotations) || oldObject.metadata.annotations.all(k, k == 'swarmada.io/estop-actor' || k in object.metadata.annotations)))
       message: "foc-approvals may not change any other annotation"
     - expression: >-
         request.operation != 'UPDATE' ||
@@ -73,8 +76,10 @@ spec:
       message: "foc-approvals may not change FleetZone labels"
     - expression: >-
         request.operation != 'UPDATE' ||
-        (has(oldObject.metadata.finalizers) ? (has(object.metadata.finalizers) && object.metadata.finalizers == oldObject.metadata.finalizers) : !has(object.metadata.finalizers))
-      message: "foc-approvals may not change FleetZone finalizers"
+        ((!has(object.metadata.finalizers) || object.metadata.finalizers.all(f, f == 'swarmada.io/estop-in-force' ||
+            (has(oldObject.metadata.finalizers) && f in oldObject.metadata.finalizers))) &&
+         (!has(oldObject.metadata.finalizers) || (has(object.metadata.finalizers) && oldObject.metadata.finalizers.all(f, f in object.metadata.finalizers))))
+      message: "foc-approvals may not change FleetZone finalizers, except the swarmada.io/estop-in-force finalizer Swarmada adds on a trigger"
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
