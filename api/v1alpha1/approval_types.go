@@ -21,10 +21,12 @@ import (
 )
 
 // RequestType names the single Swarmada write an approved request leads to.
-// +kubebuilder:validation:Enum=ActivateTask;ZoneMaintenance;ZoneStop
+// +kubebuilder:validation:Enum=DraftTask;ActivateTask;ZoneMaintenance;ZoneStop
 type RequestType string
 
 const (
+	// RequestDraftTask asks for a FleetTask to be created held as a draft (spec.draft: true).
+	RequestDraftTask RequestType = "DraftTask"
 	// RequestActivateTask asks a person to clear spec.draft on a draft FleetTask.
 	RequestActivateTask RequestType = "ActivateTask"
 	// RequestZoneMaintenance asks for a ZoneMaintenance to be created.
@@ -32,6 +34,39 @@ const (
 	// RequestZoneStop asks for the swarmada.io/estop-triggered annotation on a FleetZone.
 	RequestZoneStop RequestType = "ZoneStop"
 )
+
+// DraftAction is one member of a drafted FleetTask, limited to the
+// FleetActionSpec fields the copilot may set.
+type DraftAction struct {
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+	// Type is a Swarmada FleetAction spec.type.
+	// +kubebuilder:validation:MinLength=1
+	Type string `json:"type"`
+	// +optional
+	Zone string `json:"zone,omitempty"`
+	// +optional
+	Priority string `json:"priority,omitempty"`
+	// +optional
+	RequiredCapabilities []string `json:"requiredCapabilities,omitempty"`
+	// +optional
+	PreferredRobot string `json:"preferredRobot,omitempty"`
+	// +optional
+	DependsOn []string `json:"dependsOn,omitempty"`
+}
+
+// DraftTaskParams is the FleetTask foc-approvals creates, held as a draft,
+// after a named person approves.
+type DraftTaskParams struct {
+	// TaskName is the FleetTask name in the request's namespace.
+	// +kubebuilder:validation:MinLength=1
+	TaskName string `json:"taskName"`
+	// Purpose is shown to the person who reviews the draft.
+	// +optional
+	Purpose string `json:"purpose,omitempty"`
+	// +kubebuilder:validation:MinItems=1
+	Actions []DraftAction `json:"actions"`
+}
 
 // ActivateTaskParams names the draft FleetTask to activate.
 type ActivateTaskParams struct {
@@ -81,6 +116,7 @@ type PolicyRecord struct {
 
 // ApprovalRequestSpec is written once by foc-mcp and never changed.
 // +kubebuilder:validation:XValidation:rule="self == oldSelf",message="spec is immutable"
+// +kubebuilder:validation:XValidation:rule="(self.type == 'DraftTask') == has(self.draftTask)",message="draftTask is set exactly when type is DraftTask"
 // +kubebuilder:validation:XValidation:rule="(self.type == 'ActivateTask') == has(self.activateTask)",message="activateTask is set exactly when type is ActivateTask"
 // +kubebuilder:validation:XValidation:rule="(self.type == 'ZoneMaintenance') == has(self.zoneMaintenance)",message="zoneMaintenance is set exactly when type is ZoneMaintenance"
 // +kubebuilder:validation:XValidation:rule="(self.type == 'ZoneStop') == has(self.zoneStop)",message="zoneStop is set exactly when type is ZoneStop"
@@ -98,6 +134,8 @@ type ApprovalRequestSpec struct {
 	// ExpiresAt is when the request stops being approvable.
 	ExpiresAt metav1.Time  `json:"expiresAt"`
 	Policy    PolicyRecord `json:"policy"`
+	// +optional
+	DraftTask *DraftTaskParams `json:"draftTask,omitempty"`
 	// +optional
 	ActivateTask *ActivateTaskParams `json:"activateTask,omitempty"`
 	// +optional

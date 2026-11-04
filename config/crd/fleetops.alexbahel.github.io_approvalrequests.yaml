@@ -70,6 +70,55 @@ spec:
                 required:
                 - taskName
                 type: object
+              draftTask:
+                description: |-
+                  DraftTaskParams is the FleetTask foc-approvals creates, held as a draft,
+                  after a named person approves.
+                properties:
+                  actions:
+                    items:
+                      description: |-
+                        DraftAction is one member of a drafted FleetTask, limited to the
+                        FleetActionSpec fields the copilot may set.
+                      properties:
+                        dependsOn:
+                          items:
+                            type: string
+                          type: array
+                        name:
+                          minLength: 1
+                          type: string
+                        preferredRobot:
+                          type: string
+                        priority:
+                          type: string
+                        requiredCapabilities:
+                          items:
+                            type: string
+                          type: array
+                        type:
+                          description: Type is a Swarmada FleetAction spec.type.
+                          minLength: 1
+                          type: string
+                        zone:
+                          type: string
+                      required:
+                      - name
+                      - type
+                      type: object
+                    minItems: 1
+                    type: array
+                  purpose:
+                    description: Purpose is shown to the person who reviews the draft.
+                    type: string
+                  taskName:
+                    description: TaskName is the FleetTask name in the request's namespace.
+                    minLength: 1
+                    type: string
+                required:
+                - actions
+                - taskName
+                type: object
               expiresAt:
                 description: ExpiresAt is when the request stops being approvable.
                 format: date-time
@@ -108,6 +157,7 @@ spec:
                 description: RequestType names the single Swarmada write an approved
                   request leads to.
                 enum:
+                - DraftTask
                 - ActivateTask
                 - ZoneMaintenance
                 - ZoneStop
@@ -173,6 +223,8 @@ spec:
             x-kubernetes-validations:
             - message: spec is immutable
               rule: self == oldSelf
+            - message: draftTask is set exactly when type is DraftTask
+              rule: (self.type == 'DraftTask') == has(self.draftTask)
             - message: activateTask is set exactly when type is ActivateTask
               rule: (self.type == 'ActivateTask') == has(self.activateTask)
             - message: zoneMaintenance is set exactly when type is ZoneMaintenance
