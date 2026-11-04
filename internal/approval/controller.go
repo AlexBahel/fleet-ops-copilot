@@ -124,14 +124,19 @@ func (r *Reconciler) event(ctx context.Context, obj client.Object, typ, reason, 
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&focv1.ApprovalRequest{}).
-		Watches(&focv1.ApprovalDecision{}, handler.EnqueueRequestsFromMapFunc(func(_ context.Context, o client.Object) []reconcile.Request {
-			d, ok := o.(*focv1.ApprovalDecision)
-			if !ok {
-				return nil
-			}
-			return []reconcile.Request{{NamespacedName: types.NamespacedName{Namespace: d.Namespace, Name: d.Spec.RequestRef}}}
-		})).
+		Watches(&focv1.ApprovalDecision{}, DecisionToRequest()).
 		Complete(r)
+}
+
+// DecisionToRequest maps an ApprovalDecision event to the request it names.
+func DecisionToRequest() handler.EventHandler {
+	return handler.EnqueueRequestsFromMapFunc(func(_ context.Context, o client.Object) []reconcile.Request {
+		d, ok := o.(*focv1.ApprovalDecision)
+		if !ok {
+			return nil
+		}
+		return []reconcile.Request{{NamespacedName: types.NamespacedName{Namespace: d.Namespace, Name: d.Spec.RequestRef}}}
+	})
 }
 
 // Reconcile implements reconcile.Reconciler.
