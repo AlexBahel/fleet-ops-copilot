@@ -1,0 +1,185 @@
+/*
+Copyright 2026 Alex Bahel
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+// Package agent runs the tool-use loop: it offers the MCP server's tools to a
+// model backend, executes the calls the model makes over MCP, and records a
+// trace. The operator identity and session id travel in MCP _meta, set here
+// and never by the model.
+package agent
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/AlexBahel/fleet-ops-copilot/internal/llm"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/mcpserver"
+)
+
+// SystemPrompt is the instruction every backend receives.
+const SystemPrompt = `You are an operations assistant for a Swarmada robot fleet.
+Answer from tool results only. Cite every fact as Kind/name field=value, using the field paths the tools return (for example Robot/sim-robot-002 status.estopState=Stopped).
+You cannot clear an emergency stop, release or resume a robot, delete anything, approve a request, or change work that already exists. When asked to, say that you cannot, give the reason, and name who can.
+To propose work, use request_draft_task (it creates a draft that dispatches nothing) and request_activate_task. For zone maintenance or a zone stop, use the request_* tools; a named person approves. A tool result with "refused": true is a policy refusal: report its policy.code and reason.`
+
+// ToolEvent is one executed tool call.
+type ToolEvent struct {
+	Name       string          `json:"name"`
+	Args       json.RawMessage `json:"args"`
+	Result     json.RawMessage `json:"result,omitempty"`
+	ErrorText  string          `json:"error,omitempty"`
+	IsError    bool            `json:"isError"`
+	DurationMs float64         `json:"durationMs"`
+}
+
+// Trace is the record of one request.
+type Trace struct {
+	Prompt    string      `json:"prompt"`
+	Calls     []ToolEvent `json:"calls"`
+	Final     string      `json:"final"`
+	Turns     int         `json:"turns"`
+	Usage     llm.Usage   `json:"usage"`
+	Started   time.Time   `json:"started"`
+	Ended     time.Time   `json:"ended"`
+	LatencyMs float64     `json:"latencyMs"`
+}
+
+// Loop runs one backend against one MCP session.
+type Loop struct {
+	Backend  llm.Backend
+	Session  *mcp.ClientSession
+	MaxTurns int
+}
+
+// ErrMaxTurns means the model did not finish within the turn limit.
+var ErrMaxTurns = errors.New("turn limit reached without a final answer")
+
+// Run answers one operator request. Latency is measured from the request
+// being sent to the backend until the final answer.
+func (l *Loop) Run(ctx context.Context, operator, sessionID, prompt string) (tr Trace, err error) {
+	tr = Trace{Prompt: prompt, Started: time.Now()}
+	defer func() {
+		tr.Ended = time.Now()
+		tr.LatencyMs = float64(tr.Ended.Sub(tr.Started).Microseconds()) / 1000
+	}()
+	tl, err := l.Session.ListTools(ctx, nil)
+	if err != nil {
+		return tr, err
+	}
+	specs := make([]llm.ToolSpec, 0, len(tl.Tools))
+	for _, t := range tl.Tools {
+		schema, _ := json.Marshal(t.InputSchema)
+		specs = append(specs, llm.ToolSpec{Name: t.Name, Description: t.Description, InputSchema: schema})
+	}
+	max := l.MaxTurns
+	if max == 0 {
+		max = 12
+	}
+	history := []llm.Message{{Role: "user", Text: prompt}}
+	for tr.Turns < max {
+		tr.Turns++
+		reply, err := l.Backend.Chat(ctx, SystemPrompt, history, specs)
+		if err != nil {
+			return tr, err
+		}
+		tr.Usage.InputTokens += reply.Usage.InputTokens
+		tr.Usage.OutputTokens += reply.Usage.OutputTokens
+		history = append(history, llm.Message{Role: "assistant", Text: reply.Text, Calls: reply.Calls})
+		if len(reply.Calls) == 0 {
+			tr.Final = reply.Text
+			return tr, nil
+		}
+		var results []llm.ToolResult
+		for _, c := range reply.Calls {
+			ev, res := l.call(ctx, operator, sessionID, c)
+			tr.Calls = append(tr.Calls, ev)
+			results = append(results, res)
+		}
+		history = append(history, llm.Message{Role: "tool", Results: results})
+	}
+	return tr, ErrMaxTurns
+}
+
+func (l *Loop) call(ctx context.Context, operator, sessionID string, c llm.ToolCall) (ToolEvent, llm.ToolResult) {
+	ev := ToolEvent{Name: c.Name, Args: c.Args}
+	var args map[string]any
+	if len(c.Args) > 0 {
+		if err := json.Unmarshal(c.Args, &args); err != nil {
+			ev.IsError, ev.ErrorText = true, "invalid tool arguments: "+err.Error()
+			return ev, llm.ToolResult{CallID: c.ID, Content: ev.ErrorText, IsError: true}
+		}
+	}
+	start := time.Now()
+	res, err := l.Session.CallTool(ctx, &mcp.CallToolParams{
+		Meta:      mcp.Meta{mcpserver.MetaSession: sessionID, mcpserver.MetaOperator: operator},
+		Name:      c.Name,
+		Arguments: args,
+	})
+	ev.DurationMs = float64(time.Since(start).Microseconds()) / 1000
+	if err != nil {
+		ev.IsError, ev.ErrorText = true, err.Error()
+		return ev, llm.ToolResult{CallID: c.ID, Content: err.Error(), IsError: true}
+	}
+	var text []string
+	for _, ct := range res.Content {
+		if t, ok := ct.(*mcp.TextContent); ok {
+			text = append(text, t.Text)
+		}
+	}
+	content := strings.Join(text, "\n")
+	if res.StructuredContent != nil {
+		if b, err := json.Marshal(res.StructuredContent); err == nil {
+			ev.Result = b
+			content = string(b)
+		}
+	}
+	if res.IsError {
+		ev.IsError, ev.ErrorText = true, content
+	}
+	return ev, llm.ToolResult{CallID: c.ID, Content: content, IsError: res.IsError}
+}
+
+// Connect wires an in-process MCP server and client together.
+func Connect(ctx context.Context, srv *mcp.Server) (*mcp.ClientSession, func(), error) {
+	ct, st := mcp.NewInMemoryTransports()
+	ss, err := srv.Connect(ctx, st, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "foc-agent", Version: mcpserver.Version}, nil).Connect(ctx, ct, nil)
+	if err != nil {
+		_ = ss.Close()
+		return nil, nil, err
+	}
+	return cs, func() { _ = cs.Close(); _ = ss.Close() }, nil
+}
+
+// ToolCalls returns the names of the calls in a trace.
+func (t Trace) ToolCalls() []string {
+	out := make([]string, 0, len(t.Calls))
+	for _, c := range t.Calls {
+		out = append(out, c.Name)
+	}
+	return out
+}
+
+// String is a short description for logs.
+func (e ToolEvent) String() string { return fmt.Sprintf("%s(%s) error=%v", e.Name, e.Args, e.IsError) }
