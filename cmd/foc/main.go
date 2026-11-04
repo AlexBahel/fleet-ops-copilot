@@ -17,6 +17,7 @@ limitations under the License.
 // Command foc is the operator and approver CLI. It acts with the caller's own
 // kubeconfig credentials.
 //
+//	foc chat [-agent URL] [--context NAME] [-operator NAME] [-session ID] MESSAGE
 //	foc requests [-n NS] [--context NAME]
 //	foc approve REQUEST [-n NS] [--context NAME] [-comment TEXT]
 //	foc reject  REQUEST [-n NS] [--context NAME] [-comment TEXT]
@@ -46,6 +47,7 @@ import (
 )
 
 const usage = `usage:
+  foc chat [-agent URL] [--context NAME] [-operator NAME] [-session ID] MESSAGE
   foc requests [-n NAMESPACE] [--context NAME]
   foc approve REQUEST [-n NAMESPACE] [--context NAME] [-comment TEXT]
   foc reject  REQUEST [-n NAMESPACE] [--context NAME] [-comment TEXT]
@@ -64,6 +66,8 @@ func run(args []string) error {
 	}
 	ctx := context.Background()
 	switch args[0] {
+	case "chat":
+		return chat(ctx, args[1:], os.Stdout, os.Stderr)
 	case "audit":
 		if len(args) != 3 || args[1] != "verify" {
 			return fmt.Errorf("%s", usage)

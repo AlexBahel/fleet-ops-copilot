@@ -17,6 +17,13 @@ limitations under the License.
 package main
 
 import (
+	"bytes"
+	"context"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -44,4 +51,66 @@ func TestActivationBanner(t *testing.T) {
 			t.Errorf("banner:\n%s", got)
 		}
 	})
+}
+
+func writeKubeconfig(t *testing.T, user string) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "kubeconfig")
+	kc := `apiVersion: v1
+kind: Config
+clusters: [{name: c, cluster: {server: "https://127.0.0.1:6443"}}]
+users: [{name: u, user: ` + user + `}]
+contexts: [{name: kind-foc-test, context: {cluster: c, user: u}}]
+current-context: kind-foc-test
+`
+	if err := os.WriteFile(p, []byte(kc), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+// foc chat sends the kubeconfig user's bearer token to foc-agent (R39) and
+// warns when there is none.
+func TestChatSendsTheKubeconfigToken(t *testing.T) {
+	var gotAuth, gotBody string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		b, _ := io.ReadAll(r.Body)
+		gotBody = string(b)
+		_, _ = w.Write([]byte(`{"sessionId":"web-1234567890abcdef","answer":"Requested.","toolCalls":[{"name":"request_zone_stop","policyCode":"REQUIRE_APPROVAL","created":"ApprovalRequest/areq-1"}]}`))
+	}))
+	defer ts.Close()
+
+	t.Setenv("KUBECONFIG", writeKubeconfig(t, `{token: person-token-1}`))
+	var out, errOut bytes.Buffer
+	if err := chat(context.Background(), []string{"-agent", ts.URL, "stop", "aisle-b"}, &out, &errOut); err != nil {
+		t.Fatal(err)
+	}
+	if gotAuth != "Bearer person-token-1" || !strings.Contains(gotBody, `"message":"stop aisle-b"`) || errOut.Len() != 0 {
+		t.Fatalf("auth %q body %s stderr %q", gotAuth, gotBody, errOut.String())
+	}
+	if !strings.Contains(out.String(), "REQUIRE_APPROVAL -> ApprovalRequest/areq-1") || !strings.Contains(out.String(), "Requested.") {
+		t.Fatalf("output %q", out.String())
+	}
+
+	t.Setenv("KUBECONFIG", writeKubeconfig(t, `{username: u, password: p}`))
+	out.Reset()
+	if err := chat(context.Background(), []string{"-agent", ts.URL, "-operator", "sam", "hi"}, &out, &errOut); err != nil {
+		t.Fatal(err)
+	}
+	// A basic-auth user's password is not sent; no token means unverified.
+	if gotAuth != "" || !strings.Contains(errOut.String(), "no bearer token") {
+		t.Fatalf("auth %q stderr %q", gotAuth, errOut.String())
+	}
+}
+
+func TestChatRefusesToSendTheTokenInClearToRemoteHosts(t *testing.T) {
+	for raw, ok := range map[string]bool{
+		"http://127.0.0.1:8090": true, "http://localhost:8090": true, "http://[::1]:8090": true,
+		"https://foc.example": true, "http://foc-agent.foc-system:8090": false, "http://10.0.0.5:8090": false, "ftp://x": false,
+	} {
+		if err := tokenSafeURL(raw); (err == nil) != ok {
+			t.Errorf("%s: %v", raw, err)
+		}
+	}
 }
