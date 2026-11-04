@@ -52,14 +52,16 @@ type ToolEvent struct {
 
 // Trace is the record of one request.
 type Trace struct {
-	Prompt    string      `json:"prompt"`
-	Calls     []ToolEvent `json:"calls"`
-	Final     string      `json:"final"`
-	Turns     int         `json:"turns"`
-	Usage     llm.Usage   `json:"usage"`
-	Started   time.Time   `json:"started"`
-	Ended     time.Time   `json:"ended"`
-	LatencyMs float64     `json:"latencyMs"`
+	Prompt string      `json:"prompt"`
+	Calls  []ToolEvent `json:"calls"`
+	Final  string      `json:"final"`
+	Turns  int         `json:"turns"`
+	Usage  llm.Usage   `json:"usage"`
+	// StopReasons lists the backend stop reason of each model turn (claude only).
+	StopReasons []string  `json:"stopReasons,omitempty"`
+	Started     time.Time `json:"started"`
+	Ended       time.Time `json:"ended"`
+	LatencyMs   float64   `json:"latencyMs"`
 }
 
 // Loop runs one backend against one MCP session.
@@ -100,9 +102,11 @@ func (l *Loop) Run(ctx context.Context, operator, sessionID, prompt string) (tr 
 		if err != nil {
 			return tr, err
 		}
-		tr.Usage.InputTokens += reply.Usage.InputTokens
-		tr.Usage.OutputTokens += reply.Usage.OutputTokens
-		history = append(history, llm.Message{Role: "assistant", Text: reply.Text, Calls: reply.Calls})
+		tr.Usage.Add(reply.Usage)
+		if reply.StopReason != "" {
+			tr.StopReasons = append(tr.StopReasons, reply.StopReason)
+		}
+		history = append(history, llm.Message{Role: "assistant", Text: reply.Text, Calls: reply.Calls, Raw: reply.Raw})
 		if len(reply.Calls) == 0 {
 			tr.Final = reply.Text
 			return tr, nil

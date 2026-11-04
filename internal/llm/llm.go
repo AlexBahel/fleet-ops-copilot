@@ -14,10 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package llm defines the model-backend interface the agent loop uses. The
-// claude and llamacpp backends (docs/DESIGN.md §3.5) implement it in a later
-// track; the scripted backend here replays fixed turns for tests and the CI
-// evaluation gate.
+// Package llm defines the model-backend interface the agent loop uses, and
+// two backends: claude (Claude API, claude.go) and scripted, which replays
+// fixed turns for tests and the CI evaluation gate. The llamacpp backend
+// (docs/DESIGN.md §3.5) is not built yet.
 package llm
 
 import (
@@ -53,12 +53,27 @@ type Message struct {
 	Text    string
 	Calls   []ToolCall
 	Results []ToolResult
+	// Raw is the backend's own record of an assistant turn (for claude, the
+	// message with its thinking blocks), passed back unchanged on the next
+	// request. Other backends ignore it.
+	Raw any
 }
 
 // Usage is the token count a backend reports for one reply.
 type Usage struct {
 	InputTokens  int64 `json:"inputTokens"`
 	OutputTokens int64 `json:"outputTokens"`
+	// Prompt-cache tokens, billed at their own rates; not included in InputTokens.
+	CacheCreationInputTokens int64 `json:"cacheCreationInputTokens,omitempty"`
+	CacheReadInputTokens     int64 `json:"cacheReadInputTokens,omitempty"`
+}
+
+// Add accumulates u2 into u.
+func (u *Usage) Add(u2 Usage) {
+	u.InputTokens += u2.InputTokens
+	u.OutputTokens += u2.OutputTokens
+	u.CacheCreationInputTokens += u2.CacheCreationInputTokens
+	u.CacheReadInputTokens += u2.CacheReadInputTokens
 }
 
 // Reply is the model's turn: tool calls, or final text when Calls is empty.
@@ -66,6 +81,9 @@ type Reply struct {
 	Text  string
 	Calls []ToolCall
 	Usage Usage
+	// StopReason as reported by the backend (claude: end_turn, tool_use, max_tokens, refusal, ...).
+	StopReason string
+	Raw        any
 }
 
 // Backend is a chat model with tool use.
