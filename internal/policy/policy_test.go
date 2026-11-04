@@ -132,6 +132,15 @@ func TestPolicyFileCannotEnableForbidden(t *testing.T) {
 	}
 }
 
+func TestZoneStopDisabled(t *testing.T) {
+	e := loadDefault(t)
+	e.P.ZoneStop.Enabled = false
+	d := e.Decide(Request{Op: OpZoneStop, Namespace: "warehouse-a", ZoneStop: &ZoneStopParams{ZoneName: "warehouse-a", Reason: "spill"}}, Snapshot{ZoneExists: true})
+	if d.Effect != Deny || d.Code != CodeZoneStopDisabled {
+		t.Fatalf("Decide = %s/%s, want Deny/%s", d.Effect, d.Code, CodeZoneStopDisabled)
+	}
+}
+
 func TestDecideApproval(t *testing.T) {
 	e := loadDefault(t)
 	person := Principal{Username: "dana", Groups: []string{"system:authenticated", "fleet-ops"}}

@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -36,6 +37,7 @@ import (
 
 	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/testenv"
 )
 
 func sar(t *testing.T, user string, groups []string, ns, group, resource, sub, verb string) bool {
@@ -261,6 +263,10 @@ func TestAdmissionZoneStopOnly(t *testing.T) {
 	}
 	if got.Annotations[fleet.EstopAnnotation] != "spill reported" || got.Annotations["site/owner"] != "east-wing" || got.Spec.MaxConcurrentRobots != 0 {
 		t.Fatalf("zone changed beyond the annotation: %+v %+v", got.Annotations, got.Spec)
+	}
+	// Swarmada's estop-actor mutation (stand-in) ran before the policy and was admitted.
+	if got.Annotations[testenv.EstopActorAnn] != approvUser || !slices.Contains(got.Finalizers, testenv.EstopInForceFinz) {
+		t.Fatalf("estop actor/finalizer not stamped: %v %v", got.Annotations, got.Finalizers)
 	}
 }
 

@@ -21,6 +21,7 @@ package envtest
 import (
 	"bytes"
 	"context"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -40,6 +41,7 @@ import (
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/policy"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/redact"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/testenv"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/tools"
 )
 
@@ -236,6 +238,11 @@ func TestApprovalPathZoneStop(t *testing.T) {
 	if got.Annotations[fleet.EstopAnnotation] != "spill in aisle 3" || got.Annotations["site/owner"] != "east-wing" {
 		t.Fatalf("annotations %v", got.Annotations)
 	}
+	// With Swarmada's estop-actor mutation in place (stand-in), the stop is
+	// attributed to the executor's ServiceAccount; the approver is in the request.
+	if got.Annotations[testenv.EstopActorAnn] != approvUser || !slices.Contains(got.Finalizers, testenv.EstopInForceFinz) {
+		t.Fatalf("estop actor/finalizer: %v %v", got.Annotations, got.Finalizers)
+	}
 	// A second request for the same zone is refused: it is already stopped.
 	res2, err := h.svc.RequestZoneStop(ctx, sess, tools.ZoneStopInput{ZoneName: "stop-zone", Reason: "again"})
 	if err != nil || !res2.Refused || res2.Code != string(policy.CodeAlreadyStopped) {
@@ -291,15 +298,31 @@ func TestApprovalPathDraftAndActivation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !out.Activated {
-		t.Fatalf("not activated: %+v", out)
+	want := approval.ActivationCommand(swarmNS, "move-to-staging")
+	if out.State != focv1.StateApproved || out.Instruction != want {
+		t.Fatalf("outcome %+v, want instruction %q", out, want)
+	}
+	r = waitState(t, name, focv1.StateApproved)
+	if r.Status.Instruction != want {
+		t.Fatalf("status.instruction %q", r.Status.Instruction)
+	}
+	// The copilot does not activate: after approval the task is still a draft.
+	time.Sleep(600 * time.Millisecond)
+	if err := admin.Get(ctx, client.ObjectKey{Namespace: swarmNS, Name: "move-to-staging"}, &task); err != nil || !task.Spec.Draft {
+		t.Fatalf("task activated by the copilot: draft=%v %v", task.Spec.Draft, err)
+	}
+	waitState(t, name, focv1.StateApproved)
+	// A person without patch/activate cannot run the instruction.
+	if err := mergePatch(t, asPerson(t, "eve"), &task, map[string]any{"spec": map[string]any{"draft": false}}); err == nil {
+		t.Fatal("eve activated the draft")
+	}
+	// dana runs the instruction (the same merge patch) with her own credentials.
+	if err := mergePatch(t, asPerson(t, "dana"), &task, map[string]any{"spec": map[string]any{"draft": false}}); err != nil {
+		t.Fatalf("dana's activation refused: %v", err)
 	}
 	r = waitState(t, name, focv1.StateExecuted)
-	if r.Status.DecidedBy != "dana" {
-		t.Fatalf("decidedBy %q", r.Status.DecidedBy)
-	}
-	if err := admin.Get(ctx, client.ObjectKey{Namespace: swarmNS, Name: "move-to-staging"}, &task); err != nil || task.Spec.Draft {
-		t.Fatalf("task still draft: %v", err)
+	if r.Status.DecidedBy != "dana" || r.Status.Target == nil || r.Status.Target.Name != "move-to-staging" {
+		t.Fatalf("status %+v", r.Status)
 	}
 	// Activating again is refused: the task is no longer a draft.
 	again, err := h.svc.RequestActivateTask(ctx, sess, tools.ActivateTaskInput{TaskName: "move-to-staging"})
@@ -311,7 +334,7 @@ func TestApprovalPathDraftAndActivation(t *testing.T) {
 	if err != nil || !dup.Refused {
 		t.Fatalf("duplicate draft: %+v %v", dup, err)
 	}
-	verifyAudit(t, h, audit.KindRequestCreated, audit.KindApproved, audit.KindExecuted)
+	verifyAudit(t, h, audit.KindRequestCreated, audit.KindApproved, audit.KindExecuted, audit.KindActivationObserved)
 }
 
 // TestApprovalRefusals: the requester, a person without Swarmada authority,
