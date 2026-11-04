@@ -2,11 +2,11 @@
 # create by field or a patch to one annotation; these policies do
 # (docs/DESIGN.md §3.6). ServiceAccount names assume namespace foc-system.
 ---
-# foc-mcp may only CREATE FleetTasks, and only as drafts labelled as its own.
+# foc-approvals may only CREATE FleetTasks, and only as drafts labelled as its own.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
-  name: fleetops-foc-mcp-drafts-only
+  name: fleetops-foc-approvals-drafts-only
 spec:
   failurePolicy: Fail
   matchConstraints:
@@ -16,22 +16,22 @@ spec:
         operations: ["CREATE", "UPDATE", "DELETE"]
         resources: ["fleettasks"]
   matchConditions:
-    - name: is-foc-mcp
-      expression: "request.userInfo.username == 'system:serviceaccount:foc-system:foc-mcp'"
+    - name: is-foc-approvals
+      expression: "request.userInfo.username == 'system:serviceaccount:foc-system:foc-approvals'"
   validations:
     - expression: "request.operation == 'CREATE'"
-      message: "foc-mcp may only create FleetTasks; it never changes or deletes one"
+      message: "foc-approvals may only create FleetTasks; it never changes or deletes one"
     - expression: "request.operation != 'CREATE' || (has(object.spec.draft) && object.spec.draft == true)"
-      message: "foc-mcp may only create a FleetTask with spec.draft: true"
-    - expression: "request.operation != 'CREATE' || (has(object.metadata.labels) && 'fleetops.alexbahel.github.io/created-by' in object.metadata.labels && object.metadata.labels['fleetops.alexbahel.github.io/created-by'] == 'foc-mcp')"
-      message: "a FleetTask created by foc-mcp must carry fleetops.alexbahel.github.io/created-by: foc-mcp"
+      message: "foc-approvals may only create a FleetTask with spec.draft: true"
+    - expression: "request.operation != 'CREATE' || (has(object.metadata.labels) && 'fleetops.alexbahel.github.io/created-by' in object.metadata.labels && object.metadata.labels['fleetops.alexbahel.github.io/created-by'] == 'foc-approvals')"
+      message: "a FleetTask created by foc-approvals must carry fleetops.alexbahel.github.io/created-by: foc-approvals"
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
-  name: fleetops-foc-mcp-drafts-only
+  name: fleetops-foc-approvals-drafts-only
 spec:
-  policyName: fleetops-foc-mcp-drafts-only
+  policyName: fleetops-foc-approvals-drafts-only
   validationActions: ["Deny"]
 ---
 # foc-approvals may only add swarmada.io/estop-triggered to a FleetZone that

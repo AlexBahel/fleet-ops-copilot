@@ -12,11 +12,7 @@ rules:
   - apiGroups: ["swarmada.io"]
     resources: [robots, fleettasks, fleetactions, fleetzones, zonemaintenances, discoveredrobots, fleetadapters, robotclasses, tasktriggers]
     verbs: [get, list, watch]
-  # Draft FleetTasks only; the fleetops-foc-mcp-drafts-only admission policy
-  # refuses any create without spec.draft: true.
-  - apiGroups: ["swarmada.io"]
-    resources: [fleettasks]
-    verbs: [create]
+  # No Swarmada write of any kind: every change is an ApprovalRequest.
   - apiGroups: ["fleetops.alexbahel.github.io"]
     resources: [approvalrequests]
     verbs: [create, get, list, watch]
@@ -29,7 +25,7 @@ kind: ClusterRole
 metadata:
   name: fleetops:foc-mcp-cluster
 rules:
-  # Draft-gate check (docs/DESIGN.md §3.2).
+  # Draft-gate check before a DraftTask or ActivateTask request (docs/DESIGN.md §3.2).
   - apiGroups: ["admissionregistration.k8s.io"]
     resources: [validatingwebhookconfigurations]
     verbs: [get, list]
@@ -44,6 +40,11 @@ rules:
     verbs: [get, list, watch]
   - apiGroups: ["swarmada.io"]
     resources: [zonemaintenances]
+    verbs: [create]
+  # Approved drafts only; the fleetops-foc-approvals-drafts-only admission
+  # policy refuses any FleetTask create without spec.draft: true.
+  - apiGroups: ["swarmada.io"]
+    resources: [fleettasks]
     verbs: [create]
   # Zone stop: patch delivers the swarmada.io/estop-triggered annotation and
   # estop-trigger authorizes it at Swarmada admission. The
