@@ -21,6 +21,8 @@ limitations under the License.
 // -backend claude calls the Claude API (ANTHROPIC_API_KEY from the
 // environment) with -model and -effort; it is a measurement, so failed runs
 // are recorded, not fatal. With the -price-* flags it adds the cost.
+// -backend llamacpp calls llama-server at -llama-url (default
+// $FOC_LLAMACPP_URL); also a measurement, with no dollar cost.
 package main
 
 import (
@@ -54,8 +56,9 @@ func main() {
 	out := flag.String("out", "evals/results/fixtures/results.json", "results file")
 	traces := flag.String("traces", "", "trace file (default: traces.jsonl next to -out)")
 	policyPath := flag.String("policy", "policies/default.yaml", "policy file")
-	backend := flag.String("backend", "scripted", "backend: scripted or claude (llamacpp is not built yet)")
-	model := flag.String("model", llm.DefaultClaudeModel, "claude: model id")
+	backend := flag.String("backend", "scripted", "backend: scripted, claude or llamacpp")
+	model := flag.String("model", "", "claude: model id (default "+llm.DefaultClaudeModel+"); llamacpp: label for the served model (default "+llm.DefaultLlamaCppModel+")")
+	llamaURL := flag.String("llama-url", "", "llamacpp: base URL (default: $"+llm.EnvLlamaCppURL+")")
 	effort := flag.String("effort", llm.DefaultClaudeEffort, "claude: output_config.effort")
 	only := flag.String("only", "", "comma-separated scenario ids to run (default: all)")
 	liveCtx := flag.String("live-context", "", "run against this kubeconfig context instead of envtest (state is not loaded; see harness.LiveTarget)")
@@ -78,6 +81,9 @@ func main() {
 		cfg.latencyScope = "scripted backend: tool execution over in-process MCP against envtest; no model is called, so this is not a model latency"
 		cfg.gate = true
 	case "claude":
+		if *model == "" {
+			*model = llm.DefaultClaudeModel
+		}
 		if _, err := llm.NewClaude(*model, *effort); err != nil {
 			log.Fatal(err)
 		}
@@ -88,8 +94,17 @@ func main() {
 			pr.Model = *model
 			cfg.pricing = &pr
 		}
+	case "llamacpp":
+		l, err := llm.NewLlamaCpp(*llamaURL, *model)
+		if err != nil {
+			log.Fatal(err)
+		}
+		*model = l.Model
+		cfg.name = fmt.Sprintf("llamacpp:%s temperature=%g", l.Model, l.Temperature)
+		cfg.factory = func(harness.Scenario) (llm.Backend, error) { return llm.NewLlamaCpp(*llamaURL, *model) }
+		cfg.latencyScope = "llama-server at " + l.BaseURL + " from this machine, plus tool execution over in-process MCP against envtest; request sent until final answer"
 	default:
-		log.Fatalf("backend %q is not implemented; use scripted or claude", *backend)
+		log.Fatalf("backend %q is not implemented; use scripted, claude or llamacpp", *backend)
 	}
 	if err := run(cfg); err != nil {
 		log.Fatal(err)
