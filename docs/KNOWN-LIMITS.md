@@ -55,6 +55,15 @@ remove it.
 
 ## Not enforced, or enforced only partly
 
+- **The eval baseline is a file in the same repository (D58).** The gate compares each run with
+  `evals/baseline.json` at the same commit, so a commit can lower the baseline and the gate then
+  passes; the lowered numbers show in that file's diff and are not blocked. Nothing compares the
+  baseline with the one on the base branch. The gate covers the scripted backend only (a harness
+  self-test, not a model), and only the counts of scenarios and runs per category: a scenario
+  replaced by another in the same category, or one edited to expect less, keeps the counts and
+  passes. Branch protection that makes the `go` job a required check is a repository setting and
+  is not in these files.
+
 - **Web UI has no login (D56).** The name typed in the page is not verified; it is recorded as
   `requestedFor: unverified:<name>` and every approval of such a request is refused
   (`DENY_REQUESTER_UNVERIFIED`), so a page request can only be rejected or expire. Anyone who can
