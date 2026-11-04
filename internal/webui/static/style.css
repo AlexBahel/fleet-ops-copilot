@@ -47,8 +47,9 @@ button:disabled { opacity: .5; cursor: default; }
 .toggle { font-size: 13px; color: var(--muted); }
 .toggle input { width: auto; }
 .notice { background: var(--warn-bg); color: var(--warn); border-radius: 6px; padding: 8px 10px; font-size: 13px; margin: 10px 0 6px; }
-#requests { overflow-y: auto; flex: 1; display: grid; gap: 12px; align-content: start; }
-.card { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: grid; gap: 8px; }
+#requests { overflow-y: auto; flex: 1; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-content: start; }
+.card { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; min-width: 0; }
+.card .hint { overflow-wrap: anywhere; }
 .card h3 { margin: 0; font-size: 14px; font-family: var(--mono); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .badge { font-family: system-ui, sans-serif; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 10px; background: var(--code-bg); }
 .badge.Pending { background: var(--warn-bg); color: var(--warn); }

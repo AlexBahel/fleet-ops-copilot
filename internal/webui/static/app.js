@@ -133,7 +133,7 @@ function card(r) {
     el("h3", {}, r.name, el("span", { class: "badge", text: r.type }), el("span", { class: "badge " + r.state, text: r.state })),
     meta,
     el("div", {},
-      el("div", { class: "label", text: "Change if approved" }),
+      el("div", { class: "label", text: r.state === "Pending" ? "Change if approved" : "Change" }),
       el("div", { class: "hint", text: `${c.operation || ""} ${c.target || ""} — by ${c.writer || ""}` })),
     c.diff?.length ? diff : null,
     c.body ? el("details", {}, el("summary", { text: "request body" }), el("pre", { text: c.body })) : null,
@@ -151,6 +151,7 @@ function card(r) {
 }
 
 let refreshing = false;
+let shown = "";
 async function refresh() {
   if (refreshing) return;
   refreshing = true;
@@ -160,10 +161,15 @@ async function refresh() {
     if (out.error) { $("requests-status").textContent = "Cannot read ApprovalRequests: " + out.error; return; }
     const showAll = $("show-decided").checked;
     const items = (out.items || []).filter((r) => showAll || r.state === "Pending");
-    const box = $("requests");
-    box.replaceChildren(...items.map(card));
     const pending = (out.items || []).filter((r) => r.state === "Pending").length;
     $("requests-status").textContent = `${pending} pending in ${(out.namespaces || []).join(", ")} · updated ${new Date().toLocaleTimeString()}`;
+    // Rebuild the cards only when something changed, so an open request
+    // body or a selection survives the poll.
+    const key = JSON.stringify([showAll, items]);
+    if (key === shown) return;
+    shown = key;
+    const box = $("requests");
+    box.replaceChildren(...items.map(card));
     if (!items.length) box.append(el("p", { class: "hint", text: showAll ? "No requests." : "No pending requests." }));
   } catch (e) {
     $("requests-status").textContent = "Cannot reach foc-agent: " + e;
