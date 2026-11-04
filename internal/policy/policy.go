@@ -257,6 +257,10 @@ type Engine struct{ P *File }
 // New returns an engine for a parsed policy.
 func New(p *File) *Engine { return &Engine{P: p} }
 
+// NamespaceAllowed reports whether the policy covers a namespace. Callers
+// check it before reading cluster state for a request.
+func (e *Engine) NamespaceAllowed(ns string) bool { return slices.Contains(e.P.Namespaces, ns) }
+
 // Decide evaluates one request. Hard invariants are checked before the
 // policy file is consulted, so no policy file can enable a forbidden operation.
 func (e *Engine) Decide(r Request, s Snapshot) Decision {

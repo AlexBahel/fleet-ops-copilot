@@ -58,6 +58,16 @@ func (s *Service) decide(sess Session, tool string, r policy.Request, snap polic
 	return d
 }
 
+// outOfScope refuses a request for a namespace the policy does not cover,
+// before any cluster state is read for it.
+func (s *Service) outOfScope(sess Session, tool string, r policy.Request) *policy.Decision {
+	if s.Engine.NamespaceAllowed(r.Namespace) {
+		return nil
+	}
+	d := s.decide(sess, tool, r, policy.Snapshot{})
+	return &d
+}
+
 func needSession(sess Session) *policy.Decision {
 	if sess.Operator == "" || sess.ID == "" {
 		d := policy.Decision{Effect: policy.Deny, Code: policy.CodeMalformed, Message: "the session carries no operator identity or session id; write tools need both"}
@@ -92,6 +102,9 @@ func (s *Service) RequestDraftTask(ctx context.Context, sess Session, in DraftTa
 	ns := s.ns(in.Namespace)
 	s.record(audit.Entry{Kind: audit.KindToolCall, Actor: sess.Operator, SessionID: sess.ID, Tool: "request_draft_task", Namespace: ns, Object: "FleetTask/" + in.Name})
 	if d := needSession(sess); d != nil {
+		return refused(*d), nil
+	}
+	if d := s.outOfScope(sess, "request_draft_task", policy.Request{Op: policy.OpDraftTask, Namespace: ns, DraftTask: &policy.DraftTaskParams{Name: in.Name, Draft: true}}); d != nil {
 		return refused(*d), nil
 	}
 	if errs := validation.IsDNS1123Subdomain(in.Name); len(errs) > 0 {
@@ -159,6 +172,9 @@ func (s *Service) RequestActivateTask(ctx context.Context, sess Session, in Acti
 	if d := needSession(sess); d != nil {
 		return refused(*d), nil
 	}
+	if d := s.outOfScope(sess, "request_activate_task", policy.Request{Op: policy.OpActivateTask, Namespace: ns, ActivateTask: &policy.ActivateTaskParams{TaskName: in.TaskName}}); d != nil {
+		return refused(*d), nil
+	}
 	snap, err := fleet.TaskSnapshot(ctx, s.C, ns, in.TaskName)
 	if err != nil {
 		return RequestResult{}, err
@@ -191,6 +207,9 @@ func (s *Service) RequestZoneMaintenance(ctx context.Context, sess Session, in Z
 	ns := s.ns(in.Namespace)
 	s.record(audit.Entry{Kind: audit.KindToolCall, Actor: sess.Operator, SessionID: sess.ID, Tool: "request_zone_maintenance", Namespace: ns, Object: "FleetZone/" + in.ZoneName})
 	if d := needSession(sess); d != nil {
+		return refused(*d), nil
+	}
+	if d := s.outOfScope(sess, "request_zone_maintenance", policy.Request{Op: policy.OpZoneMaintenance, Namespace: ns, ZoneMaintenance: &policy.ZoneMaintenanceParams{ScopeType: in.ScopeType, ZoneName: in.ZoneName, Mode: in.Mode, Reason: in.Reason}}); d != nil {
 		return refused(*d), nil
 	}
 	if in.ScopeType == "" {
@@ -236,6 +255,9 @@ func (s *Service) RequestZoneStop(ctx context.Context, sess Session, in ZoneStop
 	ns := s.ns(in.Namespace)
 	s.record(audit.Entry{Kind: audit.KindToolCall, Actor: sess.Operator, SessionID: sess.ID, Tool: "request_zone_stop", Namespace: ns, Object: "FleetZone/" + in.ZoneName})
 	if d := needSession(sess); d != nil {
+		return refused(*d), nil
+	}
+	if d := s.outOfScope(sess, "request_zone_stop", policy.Request{Op: policy.OpZoneStop, Namespace: ns, ZoneStop: &policy.ZoneStopParams{ZoneName: in.ZoneName, Reason: in.Reason}}); d != nil {
 		return refused(*d), nil
 	}
 	snap, err := fleet.ZoneSnapshot(ctx, s.C, ns, in.ZoneName)
