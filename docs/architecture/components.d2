@@ -1,7 +1,7 @@
 # Fleet Ops Copilot: processes, ServiceAccounts, model profiles, Swarmada webhooks.
 # Source for components.svg; render with `d2 --layout elk components.d2 components.svg`
-# (see README.md in this directory). Solid boxes are on main; dashed boxes are
-# designed (docs/DESIGN.md) but not on main.
+# (see README.md in this directory). Solid boxes are built; dashed boxes are
+# designed (docs/DESIGN.md) but not built, or built but off by default.
 
 direction: down
 
@@ -12,7 +12,7 @@ classes: {
   external: {style: {stroke: "#7a7a7a"; fill: "#f4f4f4"}}
 }
 
-legend: "Legend\nsolid box: on main\ndashed box: designed, not on main\nSA = ServiceAccount" {
+legend: "Legend\nsolid box: built\ndashed box: not built, or off by default\nSA = ServiceAccount" {
   near: top-right
   style: {font-size: 14}
 }
@@ -23,14 +23,15 @@ people: People {
 }
 
 claude_api: "Claude API\n(cloud profile)" {class: external}
+otel: "OTLP collector\n(optional: tracing.otlpEndpoint)" {class: external}
 
 cluster: Kubernetes cluster {
   foc: "namespace foc-system (Helm chart fleet-ops-copilot)" {
-    agent: "foc-agent (not built)\nSA foc-agent: no Kubernetes permission\nroles: Router, Diagnose, Dispatch, Zone ops, Reporter\nbackend: claude or llamacpp" {class: planned}
+    agent: "foc-agent (model loop, web UI)\nSA foc-agent: get/list ApprovalRequest only\nweb chat + requests panel: shows foc approve/reject,\ncannot decide; ClusterIP, no Ingress, no login\nbackend: claude, llamacpp or scripted\n(roles Router ... Reporter: not built)" {class: built}
     mcp: "foc-mcp (MCP server)\nSA foc-mcp: get/list/watch Swarmada,\ncreate ApprovalRequest; no Swarmada write\npolicy engine, audit JSONL" {class: built}
     approvals: "foc-approvals (controller, executor)\nSA foc-approvals: create draft FleetTask,\ncreate ZoneMaintenance, patch + estop-trigger FleetZone\nSubjectAccessReview, policy re-check, audit JSONL" {class: built}
     policy: "ConfigMap fleetops-policy\n(policies/default.yaml)" {class: built}
-    netpol: "NetworkPolicy (networkPolicy.enabled, off by default)\ndefault deny; DNS; API server ipBlock;\nfoc-agent -> foc-mcp; foc-agent -> Claude API ipBlock" {class: planned}
+    netpol: "NetworkPolicy (networkPolicy.enabled, off by default)\ndefault deny; DNS; API server ipBlock (incl. foc-agent);\nfoc-agent -> foc-mcp; foc-agent -> Claude API ipBlock;\nOTLP egress if given; no ingress to the web UI" {class: planned}
 
     airgap: "Air-gapped profile (config/airgap, not in chart)" {
       class: built
@@ -39,7 +40,7 @@ cluster: Kubernetes cluster {
     }
 
     agent -> mcp: "MCP over HTTP"
-    agent -> airgap.llama: "chat completions\n(airgap profile)" {style.stroke-dash: 5}
+    agent -> airgap.llama: "chat completions (airgap profile;\n-backend llamacpp, not set by any manifest)" {style.stroke-dash: 5}
     policy -> mcp: mounted {style.stroke-dash: 2}
     policy -> approvals: mounted {style.stroke-dash: 2}
   }
@@ -56,10 +57,13 @@ cluster: Kubernetes cluster {
   }
 
   foc.mcp -> apiserver: "read Swarmada;\ncreate ApprovalRequest"
+  foc.agent -> apiserver: "get/list ApprovalRequest\n(requests panel)"
   foc.approvals -> apiserver: "watch ApprovalDecision;\nexecute approved writes"
   apiserver -> swarmada.webhooks: "admission calls\nfor swarmada.io writes"
 }
 
-people.operator -> cluster.foc.agent: "chat (CLI or web UI, not built)" {style.stroke-dash: 5}
-cluster.foc.agent -> claude_api: "Messages API (cloud profile)\nkey from an existing Secret" {style.stroke-dash: 5}
+people.operator -> cluster.foc.agent: "web chat (kubectl port-forward);\nrequester recorded as unverified:<name>,\nnever approvable (R38)"
+cluster.foc.agent -> claude_api: "Messages API (cloud profile)\nkey from an existing Secret"
+cluster.foc.agent -> otel: "traces (OTLP/gRPC)" {style.stroke-dash: 5}
+cluster.foc.mcp -> otel: "traces: tool calls,\npolicy decisions" {style.stroke-dash: 5}
 people.approver -> cluster.apiserver: "foc approve or foc reject:\nApprovalDecision with own credentials;\nruns the activation command itself"

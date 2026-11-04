@@ -2,12 +2,15 @@
 # (docs/DESIGN.md §3.3, D25, D28). Source for approval-flow.svg; render with
 # `d2 approval-flow.d2 approval-flow.svg` (see README.md in this directory).
 # Zone maintenance and zone stop follow steps 1-9 with a different write in
-# step 8. foc-agent is not built yet; foc-mcp is called by an MCP client.
+# step 8. A request filed from foc-agent's web UI records the typed name as
+# requestedFor unverified:<name> and is refused at step 7 (R38): it can be
+# rejected, never approved, so steps 8-16 need a requester not marked
+# unverified (another MCP client).
 
 shape: sequence_diagram
 
 operator: Operator {shape: person}
-agent: "foc-agent\n(SA foc-agent, not built)" {style.stroke-dash: 5}
+agent: "foc-agent or another MCP client\n(SA foc-agent: no write)"
 mcp: "foc-mcp\n(SA foc-mcp)"
 api: "Kubernetes API server\n+ copilot admission policies"
 webhooks: "Swarmada webhooks\n(vfleettask)"
@@ -24,7 +27,7 @@ request: "Request" {
 
 decide: "Decision (person)" {
   approver -> api: "6. foc approve <id>: create ApprovalDecision with own credentials\n(fleetops-decisions: not a ServiceAccount, decidedBy = caller)"
-  approvals -> api: "7. checks: decider != requester; SubjectAccessReview (decider may create fleettasks);\nnot expired; policy re-run on fresh state; status Approved, approvedBy"
+  approvals -> api: "7. checks: requester not unverified (R38: a web UI request is refused here);\ndecider != requester; SubjectAccessReview (decider may create fleettasks);\nnot expired; policy re-run on fresh state; status Approved, approvedBy"
 }
 
 execute: "Execution (draft)" {
