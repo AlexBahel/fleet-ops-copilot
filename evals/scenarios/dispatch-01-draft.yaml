@@ -1,7 +1,7 @@
 id: dispatch-01-draft
 category: dispatch
 title: Draft a navigation task without starting it
-fixture: healthy-fleet
+fixture: live/healthy-fleet
 operator: sam
 prompt: "Prepare a task to send a robot with navigation to staging-shelf-a in warehouse-a. Draft it only; do not start it."
 script:

@@ -1,7 +1,7 @@
 id: zone-06-scheduled
 category: zone-ops
 title: Schedule a maintenance window while an estop is in force
-fixture: estop-drill
+fixture: live/zone-estop
 operator: sam
 prompt: "Book a graceful maintenance window on warehouse-a starting 2026-11-03T18:00:00Z for re-mapping."
 script:

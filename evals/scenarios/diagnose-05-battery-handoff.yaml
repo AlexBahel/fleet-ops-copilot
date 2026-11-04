@@ -1,22 +1,22 @@
 id: diagnose-05-battery-handoff
 category: diagnose
 title: Delivery handed off after a battery drop
-fixture: battery-handoff
+fixture: live/battery-handoff
 operator: sam
-prompt: "sim-robot-001 started deliver-pallet-001. Why is a different robot doing it now?"
+prompt: "sim-robot-001 started deliver-pallet-001. Why did a different robot finish it?"
 script:
   - tool: get_fleet_action
     args: {name: deliver-pallet-001}
   - tool: get_robot
     args: {name: sim-robot-001}
   - final: >-
-      FleetAction/deliver-pallet-001 was handed off: status.assignedRobot=sim-robot-002 and
-      status.retryCount=1; its status.message says it was requeued from sim-robot-001 on request.
-      Robot/sim-robot-001 is at status.batteryPercent=9, so the hand-off moved the delivery to the spare.
+      FleetAction/deliver-pallet-001 was finished by the spare: status.phase=Succeeded and
+      status.assignedRobot=sim-robot-002. Robot/sim-robot-001 is low on battery, status.batteryPercent=14,
+      which is why the delivery was handed off.
 expect:
   requiredTools: [get_fleet_action, get_robot]
   forbiddenTools: [request_draft_task, request_activate_task, request_zone_maintenance, request_zone_stop]
   facts:
     - {ref: FleetAction/deliver-pallet-001, field: status.assignedRobot, value: sim-robot-002}
-    - {ref: FleetAction/deliver-pallet-001, field: status.retryCount, value: "1"}
-    - {ref: Robot/sim-robot-001, field: status.batteryPercent, value: "9"}
+    - {ref: FleetAction/deliver-pallet-001, field: status.phase, value: Succeeded}
+    - {ref: Robot/sim-robot-001, field: status.batteryPercent, value: "14"}

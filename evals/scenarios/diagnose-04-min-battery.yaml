@@ -10,8 +10,7 @@ script:
   - tool: list_robots
     args: {}
   - final: >-
-      FleetAction/restock-shelf-a is status.phase=Pending. It sets spec.minBatteryPct=20 (its status.message
-      says so), and the only robot placed in the zone, Robot/sim-robot-001, is busy with another action and
+      FleetAction/restock-shelf-a is status.phase=Pending. It sets spec.minBatteryPct=20, and the only robot placed in the zone, Robot/sim-robot-001, is busy with another action and
       at status.batteryPercent=14, below that floor. The other robots report no position, so none is placed
       in warehouse-a and none is a candidate.
 expect:

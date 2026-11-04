@@ -323,15 +323,23 @@ probe Job (`make verify-egress`), not assumed.
 
 ### 4.2 Scenarios
 
-25 scenarios, each run **N = 3** times per deployment. This branch has 8; the 25-scenario set
-of record is added separately.
+25 scenarios (`evals/scenarios/`), each run **N = 3** times per deployment.
+`TestScenariosLoad` (`evals/harness/judge_test.go`) pins the counts below.
 
-| Category | Count | Fixture states (from the Swarmada quickstart scenarios, `docs/quickstart.md`) |
+| Category | Count | Fixtures used (`live/` = captured from a quickstart run) |
 |---|---|---|
-| Diagnose | 7 | `healthy-fleet`, `battery-edge`, `battery-handoff`, `hardware-fault`, `comms-flaky`, `estop-drill` |
-| Dispatch | 6 | `healthy-fleet`, `battery-edge`, `hardware-fault` |
-| Zone ops | 6 | `healthy-fleet`, `estop-drill` |
-| Safety refusals | 6 | clear a stop, cancel/release, delete, self-approve, edit a running task, maintenance with auto-resume |
+| Diagnose | 7 | `live/healthy-fleet`, `live/battery-edge`, `live/battery-handoff`, `live/hardware-fault`; hand-written `battery-edge`, `comms-flaky`, `estop-drill` |
+| Dispatch | 6 | `live/healthy-fleet`, `live/battery-edge`, `live/hardware-fault`; hand-written `healthy-fleet-draft` |
+| Zone ops | 6 | `live/healthy-fleet`, `live/zone-estop` |
+| Safety refusals | 6 | clear a stop (`live/zone-estop`), cancel/release (`comms-flaky`), delete and self-approve (`healthy-fleet-draft`), edit a running task and maintenance with auto-resume (`live/healthy-fleet`) |
+
+A scenario uses a live-captured fixture wherever one holds the state it tests. Four hand-written
+fixtures remain, for states the live captures do not hold: `healthy-fleet-draft` (a held draft;
+the quickstart creates no drafts), `battery-edge` (an action with `spec.minBatteryPct`; no
+quickstart action sets it), `comms-flaky` (a robot `Offline` during the connection drop; the live
+capture was taken after the reconnect) and `estop-drill` (a zone stop confirmed `Stopped` on every
+robot; in `live/zone-estop` the robots report `estopState: Failed`). `live/comms-flaky` and
+`live/estop-drill` are captured and available but used by no scenario.
 
 Fixtures are YAML snapshots of Swarmada objects including `status`, loaded into an envtest API
 server that has the CRDs from the pinned Swarmada module (`config/crd/bases`). Two kinds exist:
@@ -339,7 +347,7 @@ hand-written fixtures (`evals/fixtures/*.yaml`) and fixtures captured from live 
 with `evals/cmd/foc-capture` (`evals/fixtures/live/*.yaml`, produced by
 `hack/capture-live-fixtures.sh`, D31). A scenario on a live fixture can also be run against the
 live quickstart state itself, through the deployed `foc-mcp` (`foc-eval -live-context`,
-`hack/live-scenarios.sh`); no scenario on this branch uses a live fixture yet. No Swarmada
+`hack/live-scenarios.sh`). No Swarmada
 controller or webhook runs during fixture evals, so state is static and reproducible. The
 quickstart itself writes some status by hand (see "Honest notes — what's real vs. simulated" in
 `docs/quickstart.md`); fixtures copy those states and say so.

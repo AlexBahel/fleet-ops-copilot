@@ -1,6 +1,6 @@
 # Fixture: healthy-fleet-draft.
-# The healthy-fleet snapshot (healthy-fleet.yaml) plus one FleetTask held as a
-# draft (spec.draft: true, status.phase: Draft; Swarmada fleettask_types.go),
+# A hand-written healthy fleet (one zone, three robots, two actions) plus one
+# FleetTask held as a draft (spec.draft: true, status.phase: Draft; Swarmada fleettask_types.go),
 # as a person or a TaskTrigger (RFC-0003) would leave it before activation.
 # Hand-written; not captured from a live run. Fictional site: Example
 # Distribution Co.

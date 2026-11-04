@@ -32,8 +32,9 @@ remove it.
   behave as designed on fixture states, and says nothing about a model's pass rate.
 - Model latency (p50, p95) and cost per 100 requests, for both deployments. The latency in the
   fixture results covers tool execution against a test API server only.
-- This branch has 8 of the 25 scenarios; the 25-scenario set of record is added separately. No
-  scenario uses the live-captured fixtures (`evals/fixtures/live/`) yet.
+- No eval scenario reaches `DENY_DRAFT_GATE_ABSENT`: fixture evals always run with the draft
+  gate served. The refusal is covered by the policy unit tests (`internal/policy/policy_test.go`),
+  an envtest test (`test/envtest/approval_test.go`) and the live test (`test/live`).
 
 ## Not enforced, or enforced only partly
 
