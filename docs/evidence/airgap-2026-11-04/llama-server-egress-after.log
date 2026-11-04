@@ -1,0 +1,10 @@
+2026-11-04T21:49:22Z
+from deploy/llama-server (container llama-server, pod started 21:36:12Z), new NetworkPolicies:
+http://foc-mcp:8080/healthz -> curl exit 28 :: curl: (28) Resolving timed out after 5000 milliseconds 000command terminated with exit code 28 
+http://10.244.0.18:8080/healthz -> curl exit 28 :: curl: (28) Failed to connect to 10.244.0.18 port 8080 after 5001 ms: Timeout was reached 000command terminated with exit code 28 
+https://example.com -> curl exit 28 :: curl: (28) Resolving timed out after 5003 milliseconds 000command terminated with exit code 28 
+https://1.1.1.1 -> curl exit 28 :: curl: (28) Failed to connect to 1.1.1.1 port 443 after 5002 ms: Timeout was reached 000command terminated with exit code 28 
+https://8.8.8.8 -> curl exit 28 :: curl: (28) Failed to connect to 8.8.8.8 port 443 after 5002 ms: Timeout was reached 000command terminated with exit code 28 
+https://10.96.0.1:443/version -> curl exit 28 :: curl: (28) Failed to connect to 10.96.0.1 port 443 after 5004 ms: Timeout was reached 000command terminated with exit code 28 
+https://172.18.0.2:6443/version -> curl exit 28 :: curl: (28) Failed to connect to 172.18.0.2 port 6443 after 5003 ms: Timeout was reached 000command terminated with exit code 28 
+2026-11-04T21:49:58Z

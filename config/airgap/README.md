@@ -42,10 +42,13 @@ their tag; `make load-llama-image` pulls by digest, so the tag cannot drift.
 
 ## Network policy
 
-Together the policies allow egress only to pods in the namespace, to cluster
-DNS in `kube-system`, and, for `foc-mcp`, `foc-approvals` and `foc-agent`, to
-the Kubernetes API server. `llama-server` and the probe get no API access.
-Ingress to `llama-server` is limited to `foc-agent` and `foc-egress-probe`.
+Together the policies allow, for egress, only cluster DNS in `kube-system` (every
+pod except `llama-server`), the Kubernetes API server (`foc-mcp`,
+`foc-approvals`, `foc-agent`), `llama-server` port 8080 (`foc-agent`,
+`foc-egress-probe`) and `foc-mcp` port 8080 (`foc-agent`). `llama-server` may
+open no connection at all. Ingress to `llama-server` is limited to `foc-agent`
+and `foc-egress-probe`. Measured on a kind cluster:
+`docs/evidence/airgap-2026-11-04/`.
 
 `networkpolicy.yaml` contains two documentation addresses (`192.0.2.10`,
 `192.0.2.11`) where the API server endpoint and Service address go;
@@ -57,6 +60,9 @@ in-namespace control request succeeds and every external target (two IP
 addresses and one name) is unreachable. `make verify-egress-baseline` runs the
 same probe in a namespace without the policy, where it must report open egress;
 without that result a passing probe does not show that the probe works.
+On kind's default CNI a new pod's egress was open for up to about 1.2 s after
+its container started, so the probe, which makes its requests at once, fails
+there (`docs/KNOWN-LIMITS.md`).
 
 ## Make targets (kind clusters named `foc-*` only)
 

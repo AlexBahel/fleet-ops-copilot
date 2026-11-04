@@ -1,0 +1,16 @@
+2026-11-04T21:48:37Z
+kubectl --context kind-foc-airgap create namespace foc-egress-baseline --dry-run=client -o yaml | kubectl --context kind-foc-airgap apply -f -
+namespace/foc-egress-baseline created
+kubectl --context kind-foc-airgap -n foc-egress-baseline delete job foc-egress-probe --ignore-not-found --wait
+sed 's|value: "http://llama-server:8080/health"|value: ""|' config/airgap/egress-probe.yaml | kubectl --context kind-foc-airgap -n foc-egress-baseline apply -f -
+job.batch/foc-egress-probe created
+egress probe: 2026-11-04T21:48:38Z
+no control target (baseline run)
+OPEN: https://1.1.1.1 (curl exit 0) 
+OPEN: https://8.8.8.8 (curl exit 0) 
+OPEN: https://example.com (curl exit 0) 
+RESULT: egress is NOT blocked
+namespace "foc-egress-baseline" deleted
+baseline: egress is open without the policy, as expected; the probe can detect it
+exit 0
+2026-11-04T21:48:40Z

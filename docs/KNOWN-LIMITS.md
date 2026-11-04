@@ -21,16 +21,19 @@ remove it.
   behave as designed on fixture states, and says nothing about a model's pass rate.
 - Model latency (p50, p95) and cost per 100 requests, for both deployments. The latency in the
   fixture results covers tool execution against a test API server only.
-- The `llamacpp` backend (`internal/llm/llamacpp.go`, `foc-eval -backend llamacpp`) and the
-  air-gapped manifests (`config/airgap/`) have not run against a model or a cluster: the backend
-  is tested against a fake server, the manifests with `kubeconform`, and of the `hack/airgap.mk`
-  targets only `validate-airgap` has run.
-- The Helm chart (`charts/fleet-ops-copilot`), its cloud-profile NetworkPolicy (off by default), the
-  egress probe (`make verify-egress`, for the air-gapped policy) and `docs/RUNBOOK.md` (draft) have
-  not been installed or run on a cluster. The chart is checked with `helm lint --strict`,
+- The `llamacpp` backend (`internal/llm/llamacpp.go`, `foc-eval -backend llamacpp`) has not run
+  an evaluation against a model; it is tested against a fake server.
+- The air-gapped manifests (`config/airgap/`) and the `hack/airgap.mk` targets have run on one
+  single-node kind cluster (kind v0.33.0, CNI kindnet, Docker Desktop on arm64;
+  `docs/evidence/airgap-2026-11-04/`), on no other CNI or node.
+- The Helm chart (`charts/fleet-ops-copilot`), its cloud-profile NetworkPolicy (off by default) and
+  `docs/RUNBOOK.md` (draft) have not been installed or run on a cluster. The chart is checked with `helm lint --strict`,
   kubeconform and `make chart-parity` (its default render equals `config/`).
-- Sampling is at each API's defaults (D43). The Claude API rejects `temperature` on the models
-  used, so repeated claude runs vary; `results.json` records the settings sent (`backendSettings`).
+- Claude sampling is at the API's defaults (D43): the Claude API rejects `temperature` on the
+  models used, so repeated claude runs vary. Air-gapped measurements send the model publisher's
+  `temperature`, `top_p`, `top_k` and `repeat_penalty`; the rest are llama-server defaults, which
+  differ from transformers in places (D49). `results.json` records the settings sent
+  (`backendSettings`).
 - No eval scenario reaches `DENY_DRAFT_GATE_ABSENT`: fixture evals always run with the draft
   gate served. The refusal is covered by the policy unit tests (`internal/policy/policy_test.go`),
   an envtest test (`test/envtest/approval_test.go`) and the live test (`test/live`).
@@ -64,6 +67,16 @@ remove it.
 - **Audit storage.** Each process writes its own JSONL file; there is no shared store, rotation
   or retention yet. In `config/deploy` the files are on `emptyDir` volumes and are lost when a
   pod is replaced. A failed Event write is recorded in the JSONL file only.
+
+- **Egress in the air-gapped profile** (`config/airgap/networkpolicy.yaml`, D50), measured on
+  kind's default CNI (`docs/evidence/airgap-2026-11-04/`): a new pod's egress was open for up to
+  about 1.2 s after its container started, then denied. The committed egress probe makes its
+  requests in that window, so `make verify-egress` fails there; started 10 s later, the same probe
+  passes. Whether a connection opened in the window survives was not tested. Cluster DNS answered
+  queries for external names in kind (CoreDNS forwards to the host). `kubectl port-forward`
+  reaches `llama-server` regardless of its ingress policy; RBAC (`pods/portforward`) governs it.
+  NetworkPolicy does not govern image pulls, which the node makes; no image is pulled at runtime
+  only because every pod uses `imagePullPolicy: IfNotPresent` and the images are loaded first.
 
 ## Test environment
 

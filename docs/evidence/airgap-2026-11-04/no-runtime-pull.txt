@@ -1,0 +1,76 @@
+2026-11-04T21:55:43Z
+== every container spec in namespace foc-system (pods present now): image, imagePullPolicy, imageID
+foc-approvals-6d8ff7b5cb-k8hgx
+  container foc-approvals image=fleet-ops-copilot:dev imagePullPolicy=IfNotPresent
+  ephemeral egresscheck-1793829234 image=ghcr.io/ggml-org/llama.cpp:server-b12004 imagePullPolicy=IfNotPresent
+  ephemeral egresscheck2-1793829280 image=ghcr.io/ggml-org/llama.cpp:server-b12004 imagePullPolicy=IfNotPresent
+  status foc-approvals imageID=docker.io/library/import-2026-11-04@sha256:a4206a75fbdf82e63e91a4cffcfbc4102a7082b4c920824efcb051e549e22088
+foc-egress-probe-fl4jv
+  container probe image=ghcr.io/ggml-org/llama.cpp:server-b12004 imagePullPolicy=IfNotPresent
+  status probe imageID=docker.io/library/import-2026-11-04@sha256:b7504e20ac23be18064401f6e5b4ee0dfbe9fb51a5c7a77dfac2d9cd70fc9cf9
+foc-mcp-54c59899b9-8kqw4
+  container foc-mcp image=fleet-ops-copilot:dev imagePullPolicy=IfNotPresent
+  ephemeral egresscheck-1793829232 image=ghcr.io/ggml-org/llama.cpp:server-b12004 imagePullPolicy=IfNotPresent
+  ephemeral egresscheck2-1793829249 image=ghcr.io/ggml-org/llama.cpp:server-b12004 imagePullPolicy=IfNotPresent
+  status foc-mcp imageID=docker.io/library/import-2026-11-04@sha256:a4206a75fbdf82e63e91a4cffcfbc4102a7082b4c920824efcb051e549e22088
+llama-server-7bcf974fd6-44wbl
+  init check-model image=ghcr.io/ggml-org/llama.cpp:server-b12004 imagePullPolicy=IfNotPresent
+  container llama-server image=ghcr.io/ggml-org/llama.cpp:server-b12004 imagePullPolicy=IfNotPresent
+  status llama-server imageID=docker.io/library/import-2026-11-04@sha256:b7504e20ac23be18064401f6e5b4ee0dfbe9fb51a5c7a77dfac2d9cd70fc9cf9
+
+== Jobs' pod templates
+foc-egress-probe image=ghcr.io/ggml-org/llama.cpp:server-b12004 imagePullPolicy=IfNotPresent
+
+== Deployments' pod templates
+foc-approvals foc-approvals image=fleet-ops-copilot:dev imagePullPolicy=IfNotPresent
+foc-mcp foc-mcp image=fleet-ops-copilot:dev imagePullPolicy=IfNotPresent
+llama-server llama-server image=ghcr.io/ggml-org/llama.cpp:server-b12004 imagePullPolicy=IfNotPresent
+
+== events in foc-system by reason (all retained events)
+   3 BackoffLimitExceeded
+   3 Completed
+  20 Created
+   6 Killing
+  20 Pulled
+  15 ScalingReplicaSet
+  15 Scheduled
+  20 Started
+  15 SuccessfulCreate
+   6 SuccessfulDelete
+  10 Unhealthy
+
+== image-related events in foc-system (Pulling/Pulled/Failed/BackOff/ErrImagePull)
+FIRST                  LAST                   COUNT    OBJECT                           REASON                 MESSAGE
+2026-11-04T21:32:46Z   2026-11-04T21:46:02Z   3        foc-approvals-5555cf994b-wbvwg   Pulled                 Container image "fleet-ops-copilot:dev" already present on machine and can be accessed by the pod
+2026-11-04T21:47:57Z   2026-11-04T21:47:57Z   1        foc-approvals-59bf654bd4-vtdwx   Pulled                 Container image "fleet-ops-copilot:dev" already present on machine and can be accessed by the pod
+2026-11-04T21:32:46Z   2026-11-04T21:32:46Z   1        foc-approvals-64995b5947-vp8gm   Pulled                 Container image "fleet-ops-copilot:dev" already present on machine and can be accessed by the pod
+2026-11-04T21:48:56Z   2026-11-04T21:48:56Z   1        foc-approvals-6d8ff7b5cb-k8hgx   Pulled                 Container image "fleet-ops-copilot:dev" already present on machine and can be accessed by the pod
+2026-11-04T21:53:55Z   2026-11-04T21:53:55Z   1        foc-approvals-6d8ff7b5cb-k8hgx   Pulled                 Container image "ghcr.io/ggml-org/llama.cpp:server-b12004" already present on machine and can be accessed by the pod
+2026-11-04T21:54:40Z   2026-11-04T21:54:40Z   1        foc-approvals-6d8ff7b5cb-k8hgx   Pulled                 Container image "ghcr.io/ggml-org/llama.cpp:server-b12004" already present on machine and can be accessed by the pod
+2026-11-04T21:50:10Z   2026-11-04T21:50:10Z   1        foc-egress-probe-277pr           Pulled                 Container image "ghcr.io/ggml-org/llama.cpp:server-b12004" already present on machine and can be accessed by the pod
+2026-11-04T21:50:19Z   2026-11-04T21:50:19Z   1        foc-egress-probe-fl4jv           Pulled                 Container image "ghcr.io/ggml-org/llama.cpp:server-b12004" already present on machine and can be accessed by the pod
+2026-11-04T21:49:05Z   2026-11-04T21:49:05Z   1        foc-egress-probe-sb7ph           Pulled                 Container image "ghcr.io/ggml-org/llama.cpp:server-b12004" already present on machine and can be accessed by the pod
+2026-11-04T21:50:15Z   2026-11-04T21:50:15Z   1        foc-egress-probe-zjfqz           Pulled                 Container image "ghcr.io/ggml-org/llama.cpp:server-b12004" already present on machine and can be accessed by the pod
+2026-11-04T21:51:16Z   2026-11-04T21:51:16Z   1        foc-egress-window-mk7fh          Pulled                 Container image "ghcr.io/ggml-org/llama.cpp:server-b12004" already present on machine and can be accessed by the pod
+2026-11-04T21:52:18Z   2026-11-04T21:52:18Z   1        foc-egress-window-vxmst          Pulled                 Container image "ghcr.io/ggml-org/llama.cpp:server-b12004" already present on machine and can be accessed by the pod
+2026-11-04T21:48:56Z   2026-11-04T21:48:56Z   1        foc-mcp-54c59899b9-8kqw4         Pulled                 Container image "fleet-ops-copilot:dev" already present on machine and can be accessed by the pod
+2026-11-04T21:53:52Z   2026-11-04T21:53:52Z   1        foc-mcp-54c59899b9-8kqw4         Pulled                 Container image "ghcr.io/ggml-org/llama.cpp:server-b12004" already present on machine and can be accessed by the pod
+2026-11-04T21:54:09Z   2026-11-04T21:54:09Z   1        foc-mcp-54c59899b9-8kqw4         Pulled                 Container image "ghcr.io/ggml-org/llama.cpp:server-b12004" already present on machine and can be accessed by the pod
+2026-11-04T21:32:46Z   2026-11-04T21:32:46Z   1        foc-mcp-5c966c7dc8-6rrzn         Pulled                 Container image "fleet-ops-copilot:dev" already present on machine and can be accessed by the pod
+2026-11-04T21:32:46Z   2026-11-04T21:45:59Z   3        foc-mcp-7bdcc5466c-wtn6m         Pulled                 Container image "fleet-ops-copilot:dev" already present on machine and can be accessed by the pod
+2026-11-04T21:47:57Z   2026-11-04T21:47:57Z   1        foc-mcp-85794d767c-s7wxb         Pulled                 Container image "fleet-ops-copilot:dev" already present on machine and can be accessed by the pod
+2026-11-04T21:36:12Z   2026-11-04T21:36:12Z   1        llama-server-7bcf974fd6-44wbl    Pulled                 Container image "ghcr.io/ggml-org/llama.cpp:server-b12004" already present on machine and can be accessed by the pod
+2026-11-04T21:36:12Z   2026-11-04T21:36:12Z   1        llama-server-7bcf974fd6-44wbl    Pulled                 Container image "ghcr.io/ggml-org/llama.cpp:server-b12004" already present on machine and can be accessed by the pod
+
+== node containerd images (crictl)
+IMAGE                                           TAG                  IMAGE ID            SIZE
+docker.io/library/fleet-ops-copilot             dev                  778ebd93020e7       48.5MB
+ghcr.io/ggml-org/llama.cpp                      server-b12004        9210c212957aa       296MB
+2026-11-04T21:55:44Z
+
+== 2026-11-04T21:57:21Z Pulling events in the whole cluster (all are outside foc-system)
+FIRST                  NS                   OBJECT                                             REASON                      MESSAGE
+2026-11-04T21:29:45Z   cert-manager         cert-manager-cainjector-79854ff6f9-5sct2           Pulling                     Pulling image "quay.io/jetstack/cert-manager-cainjector:v1.16.2"
+2026-11-04T21:29:45Z   cert-manager         cert-manager-d9d55bbcb-8ls78                       Pulling                     Pulling image "quay.io/jetstack/cert-manager-controller:v1.16.2"
+2026-11-04T21:29:45Z   cert-manager         cert-manager-webhook-6f7f9486dd-nspzb              Pulling                     Pulling image "quay.io/jetstack/cert-manager-webhook:v1.16.2"
+2026-11-04T21:34:02Z   system               swarmada-controller-manager-55568b6f49-h4r5h       Pulling                     Pulling image "busybox:1.36"

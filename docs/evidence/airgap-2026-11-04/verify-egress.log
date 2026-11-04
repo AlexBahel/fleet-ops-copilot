@@ -1,0 +1,20 @@
+2026-11-04T21:49:05Z
+kubectl --context kind-foc-airgap -n foc-system delete job foc-egress-probe --ignore-not-found --wait
+kubectl --context kind-foc-airgap -n foc-system apply -f config/airgap/egress-probe.yaml
+job.batch/foc-egress-probe created
+egress probe: 2026-11-04T21:49:06Z
+control ok: http://llama-server:8080/health http 200
+OPEN: https://1.1.1.1 (curl exit 0) 
+OPEN: https://8.8.8.8 (curl exit 0) 
+OPEN: https://example.com (curl exit 0) 
+RESULT: egress is NOT blocked
+verify-egress: FAIL
+make: *** [verify-egress] Error 1
+exit 2
+probe pod foc-egress-probe-sb7ph image=ghcr.io/ggml-org/llama.cpp:server-b12004 imagePullPolicy=IfNotPresent imageID=docker.io/library/import-2026-11-04@sha256:b7504e20ac23be18064401f6e5b4ee0dfbe9fb51a5c7a77dfac2d9cd70fc9cf9
+TIME                   REASON      MESSAGE
+<nil>                  Scheduled   Successfully assigned foc-system/foc-egress-probe-sb7ph to foc-airgap-control-plane
+2026-11-04T21:49:05Z   Pulled      Container image "ghcr.io/ggml-org/llama.cpp:server-b12004" already present on machine and can be accessed by the pod
+2026-11-04T21:49:05Z   Created     Container created
+2026-11-04T21:49:06Z   Started     Container started
+2026-11-04T21:49:08Z
