@@ -272,6 +272,27 @@ func TestChatFinalAnswer(t *testing.T) {
 	}
 }
 
+func TestTimingsTotal(t *testing.T) {
+	f := newFakeLlama(t, fakeReply{body: chatReply("a", "", "stop")}, fakeReply{body: chatReply("b", "", "stop")}, fakeReply{body: `{"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"no timings"}}]}`})
+	l := f.backend()
+	for i := 0; i < 3; i++ {
+		if _, err := l.Chat(context.Background(), "", []Message{{Role: "user", Text: "q"}}, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Two replies carried timings (321 prompt tokens in 1500.5 ms, 45 generated in 4500 ms); the third none.
+	if l.Last != (LlamaTimings{}) {
+		t.Errorf("Last must be empty after a reply without timings: %+v", l.Last)
+	}
+	tot := l.Total
+	if tot.PromptN != 642 || tot.PromptMs != 3001 || tot.PredictedN != 90 || tot.PredictedMs != 9000 {
+		t.Fatalf("%+v", tot)
+	}
+	if tot.PredictedPerSecond != 10 || tot.PromptPerSecond < 213.9 || tot.PromptPerSecond > 214 {
+		t.Errorf("rates must come from the sums: %+v", tot)
+	}
+}
+
 func TestChatToolCalls(t *testing.T) {
 	calls := `[` +
 		`{"id":"abc123","type":"function","function":{"name":"get_robot","arguments":"{ \"name\": \"sim-robot-002\" }"}},` +

@@ -104,9 +104,10 @@ type LlamaCpp struct {
 	// RetryWait is the pause before a 503 retry (default 2s; tests shorten it).
 	RetryWait time.Duration
 
-	// Last carries the timings llama-server reported for the latest reply
-	// (see LlamaTimings). It is not goroutine-safe: one backend per run.
-	Last LlamaTimings
+	// Last carries the timings llama-server reported for the latest reply and
+	// Total their sum over all replies of this backend (see LlamaTimings). They
+	// are not goroutine-safe: use one backend per run, as the harness does.
+	Last, Total LlamaTimings
 }
 
 // LlamaTimings is llama-server's own timing block for one reply, kept so a
@@ -120,6 +121,23 @@ type LlamaTimings struct {
 	PredictedMs        float64 `json:"predicted_ms"`
 	PredictedPerSecond float64 `json:"predicted_per_second"`
 	CacheN             int     `json:"cache_n"`
+}
+
+// add accumulates t2 and recomputes the rates from the sums (tokens per second
+// over all replies, not an average of rates).
+func (t *LlamaTimings) add(t2 LlamaTimings) {
+	t.PromptN += t2.PromptN
+	t.PromptMs += t2.PromptMs
+	t.PredictedN += t2.PredictedN
+	t.PredictedMs += t2.PredictedMs
+	t.CacheN += t2.CacheN
+	t.PromptPerSecond, t.PredictedPerSecond = 0, 0
+	if t.PromptMs > 0 {
+		t.PromptPerSecond = float64(t.PromptN) / t.PromptMs * 1000
+	}
+	if t.PredictedMs > 0 {
+		t.PredictedPerSecond = float64(t.PredictedN) / t.PredictedMs * 1000
+	}
 }
 
 // NewLlamaCpp builds the backend. An empty baseURL is read from
@@ -342,6 +360,7 @@ func (l *LlamaCpp) parse(body []byte, offered []ToolSpec) (Reply, error) {
 	l.Last = LlamaTimings{}
 	if rs.Timings != nil {
 		l.Last = *rs.Timings
+		l.Total.add(*rs.Timings)
 	}
 	if msg.Content != nil {
 		r.Text = *msg.Content
