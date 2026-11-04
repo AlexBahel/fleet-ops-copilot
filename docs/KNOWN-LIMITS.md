@@ -9,6 +9,10 @@ remove it.
   allow-lists. The tool-use loop (`internal/agent`) offers every tool.
 - A login for the web UI (DESIGN D56). Without one, requests filed from the page are never
   approvable; `foc chat` is the client that files approvable requests.
+- A token-backed person identity on a cluster (ruling R43). On kind that is a static token file
+  for the fictional people (`--token-auth-file`, as envtest already uses); in production it is
+  OIDC. Neither is set up by any script or manifest yet, so on a kind cluster no person can be a
+  verified requester (a ServiceAccount token would authenticate as that ServiceAccount).
 - Conversation memory: each chat message is an independent agent run (D55). No streaming of
   answers: the page and `foc chat` wait for the whole run.
 - `make foc-up` (only its preflight, `scripts/foc-up-preflight.sh`, exists). The air-gapped
@@ -60,12 +64,16 @@ remove it.
   The Service is ClusterIP only, the chart renders no Ingress (`make chart-parity` refuses one),
   and the RUNBOOK uses `kubectl port-forward`; whether NetworkPolicy applies to port-forwarded
   traffic depends on the CNI. The only rate limit is the per-pod cap on chats in flight.
-- **Requester tokens (D57).** A verified requester needs a bearer token: a kubeconfig user that
-  authenticates with a client certificate (kind's default admin) has none, so its requests are
-  unverified. The token reaches `foc-mcp` through `foc-agent` over plain HTTP inside the cluster,
-  and both processes briefly hold a credential that is valid against the API server; `foc-mcp`
-  uses it only for a `TokenReview` (default audiences) and keeps a SHA-256 of it for 30 seconds.
-  Session ids are still asserted by the client.
+- **Client-certificate users are unverified requesters (D57, R43).** On kind, kind's admin and the
+  people `hack/kind-person.sh` creates authenticate with client certificates and have no bearer
+  token, so a request they file (through `foc chat` or any other client) records
+  `unverified:<name>` and can only be rejected. A verified requester needs a token-backed person
+  identity: a static token file on kind for the fictional people, OIDC in production (see "Not
+  built yet").
+- **Requester tokens (D57).** The token reaches `foc-mcp` through `foc-agent` over plain HTTP
+  inside the cluster, and both processes briefly hold a credential that is valid against the API
+  server; `foc-mcp` uses it only for a `TokenReview` (default audiences) and keeps a SHA-256 of it
+  for 30 seconds. Session ids are still asserted by the client.
 - **Impersonation.** A person allowed to impersonate users can create a decision as another
   person; the admission policy sees the impersonated identity. This is how Kubernetes
   authentication works, not something the copilot can detect.
