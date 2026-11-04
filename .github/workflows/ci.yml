@@ -1,0 +1,61 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  # Runs on every push: checks that need no Go toolchain.
+  hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: No local-only files are tracked
+        run: |
+          tracked="$(git ls-files -- local go.work go.work.sum)"
+          if [ -n "$tracked" ]; then echo "tracked but must stay local: $tracked"; exit 1; fi
+      - name: Every Go file carries the Apache-2.0 header
+        run: |
+          missing="$(git ls-files '*.go' | xargs grep -L 'Licensed under the Apache License, Version 2.0' || true)"
+          if [ -n "$missing" ]; then echo "missing header: $missing"; exit 1; fi
+      - name: Every commit after the repository's first is signed off (DCO)
+        run: |
+          root="$(git rev-list --max-parents=0 HEAD)"
+          bad=""
+          for c in $(git rev-list --no-merges HEAD --not $root); do
+            git show -s --format=%B "$c" | grep -q '^Signed-off-by: ' || bad="$bad $c"
+          done
+          if [ -n "$bad" ]; then echo "commits without Signed-off-by:$bad"; exit 1; fi
+
+  # Build, vet, lint, unit tests, envtest and fixture evals.
+  #
+  # Disabled until go.mod pins the public Swarmada v0.4 release: before that the
+  # github.com/swarmada/swarmada module cannot be resolved here, so every Go step
+  # would fail (docs/DESIGN.md D2, D26). Until the pin, `make ci` runs locally.
+  # The commit that pins go.mod removes the `if: false`.
+  go:
+    if: false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.14.0
+          args: --timeout=5m
+      - name: Install envtest binaries
+        run: go install sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.17
+      - name: make ci
+        run: make ci
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fixture-eval-results
+          path: evals/results/fixtures/
