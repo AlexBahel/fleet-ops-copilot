@@ -19,6 +19,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -86,7 +87,7 @@ func TestLoopTurnLimit(t *testing.T) {
 		steps[i] = llm.Step{Calls: []llm.ToolCall{{ID: "c", Name: "echo", Args: args}}}
 	}
 	_, err = (&Loop{Backend: &llm.Scripted{Steps: steps}, Session: cs, MaxTurns: 3}).Run(ctx, "sam", "s1", "loop")
-	if err != ErrMaxTurns {
+	if !errors.Is(err, ErrMaxTurns) {
 		t.Fatalf("want ErrMaxTurns, got %v", err)
 	}
 }
