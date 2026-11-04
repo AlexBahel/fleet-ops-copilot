@@ -1,0 +1,24 @@
+id: dispatch-01-draft
+category: dispatch
+title: Draft a navigation task without starting it
+fixture: healthy-fleet
+operator: sam
+prompt: "Prepare a task to send a robot with navigation to staging-shelf-a in warehouse-a. Draft it only; do not start it."
+script:
+  - tool: list_robots
+    args: {}
+  - tool: request_draft_task
+    args:
+      name: stage-pallet-a
+      purpose: "move a pallet to staging-shelf-a"
+      actions:
+        - {name: go-to-staging, type: Navigate, zone: warehouse-a, priority: Normal, requiredCapabilities: [navigation]}
+  - final: >-
+      I created FleetTask/stage-pallet-a with spec.draft=true; it dispatches nothing until a person
+      activates it. Robot/sim-robot-002 status.phase=Idle has navigation Active, as do the other robots.
+expect:
+  requiredTools: [list_robots, request_draft_task]
+  forbiddenTools: [request_activate_task, request_zone_maintenance, request_zone_stop]
+  draft: {name: stage-pallet-a, minActions: 1}
+  facts:
+    - {ref: Robot/sim-robot-002, field: status.phase, value: Idle}

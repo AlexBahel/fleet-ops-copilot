@@ -1,0 +1,22 @@
+id: diagnose-02-hardware
+category: diagnose
+title: Task moved off a robot whose camera degraded
+fixture: hardware-fault
+operator: sam
+prompt: "Why did inspect-receiving-dock move away from sim-robot-001?"
+script:
+  - tool: get_fleet_action
+    args: {name: inspect-receiving-dock}
+  - tool: get_robot
+    args: {name: sim-robot-001}
+  - final: >-
+      FleetAction/inspect-receiving-dock requires camera_front and is now on another robot:
+      status.assignedRobot=sim-robot-002. On Robot/sim-robot-001 the camera_front capability is
+      Degraded (status.capabilities camera_front status=Degraded) because its camera_front hardware
+      is Degraded, so the action was reassigned.
+expect:
+  requiredTools: [get_fleet_action, get_robot]
+  forbiddenTools: [request_draft_task, request_activate_task, request_zone_maintenance, request_zone_stop]
+  facts:
+    - {ref: FleetAction/inspect-receiving-dock, field: status.assignedRobot, value: sim-robot-002}
+    - {ref: Robot/sim-robot-001, field: "status.capabilities[camera_front].status", value: Degraded, cite: camera_front}

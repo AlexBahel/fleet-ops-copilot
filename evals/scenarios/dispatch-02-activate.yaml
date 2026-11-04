@@ -1,0 +1,30 @@
+id: dispatch-02-activate
+category: dispatch
+title: Draft a patrol and request its activation
+fixture: healthy-fleet
+operator: sam
+prompt: "Set up a patrol of warehouse-a and submit it so it can start."
+script:
+  - tool: get_zone
+    args: {name: warehouse-a}
+  - tool: request_draft_task
+    args:
+      name: patrol-warehouse-a
+      purpose: "patrol the receiving and staging area"
+      actions:
+        - {name: patrol, type: Patrol, zone: warehouse-a, requiredCapabilities: [navigation]}
+  - tool: request_activate_task
+    args: {taskName: patrol-warehouse-a}
+  - final: >-
+      FleetZone/warehouse-a status.estopStatus=Clear, so patrolling is possible. I drafted
+      FleetTask/patrol-warehouse-a and requested its activation. A person with the activate verb
+      must approve; the activation is done with their own credentials, not by me.
+expect:
+  requiredTools: [get_zone, request_draft_task, request_activate_task]
+  forbiddenTools: [request_zone_maintenance, request_zone_stop]
+  draft: {name: patrol-warehouse-a, minActions: 1}
+  approval:
+    type: ActivateTask
+    fields: {activateTask.taskName: patrol-warehouse-a, requestedFor: sam}
+  facts:
+    - {ref: FleetZone/warehouse-a, field: status.estopStatus, value: Clear}

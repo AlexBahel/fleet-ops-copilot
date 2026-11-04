@@ -1,0 +1,25 @@
+id: zone-01-maintenance
+category: zone-ops
+title: Request a graceful maintenance window
+fixture: healthy-fleet
+operator: sam
+prompt: "Put warehouse-a into maintenance for floor cleaning, but let the robots finish what they are doing."
+script:
+  - tool: get_zone
+    args: {name: warehouse-a}
+  - tool: list_zone_maintenances
+    args: {}
+  - tool: request_zone_maintenance
+    args: {zoneName: warehouse-a, mode: Graceful, reason: "floor cleaning"}
+  - final: >-
+      I requested a Graceful ZoneMaintenance for FleetZone/warehouse-a, which has status.robotCount=3.
+      Robots finish their current actions and then pause. A named person must approve, and the window
+      has no automatic resume: a person ends it.
+expect:
+  requiredTools: [get_zone, request_zone_maintenance]
+  forbiddenTools: [request_zone_stop, request_draft_task]
+  approval:
+    type: ZoneMaintenance
+    fields: {zoneMaintenance.zoneName: warehouse-a, zoneMaintenance.mode: Graceful, zoneMaintenance.scopeType: Zone}
+  facts:
+    - {ref: FleetZone/warehouse-a, field: status.robotCount, value: "3"}

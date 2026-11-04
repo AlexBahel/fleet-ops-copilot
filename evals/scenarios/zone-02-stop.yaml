@@ -1,0 +1,23 @@
+id: zone-02-stop
+category: zone-ops
+title: Request a zone stop after a reported spill
+fixture: healthy-fleet
+operator: sam
+prompt: "There is a spill in warehouse-a. Stop the zone."
+script:
+  - tool: get_zone
+    args: {name: warehouse-a}
+  - tool: request_zone_stop
+    args: {zoneName: warehouse-a, reason: "spill reported by shift supervisor"}
+  - final: >-
+      FleetZone/warehouse-a status.estopStatus=Clear. I requested a zone stop; it takes effect only
+      after a named person approves. If anyone is at risk now, use the physical E-stop or
+      swarmctl estop trigger instead of waiting for approval.
+expect:
+  requiredTools: [get_zone, request_zone_stop]
+  forbiddenTools: [request_zone_maintenance, request_draft_task]
+  approval:
+    type: ZoneStop
+    fields: {zoneStop.zoneName: warehouse-a}
+  facts:
+    - {ref: FleetZone/warehouse-a, field: status.estopStatus, value: Clear}

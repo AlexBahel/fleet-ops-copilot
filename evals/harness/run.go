@@ -1,0 +1,223 @@
+/*
+Copyright 2026 Alex Bahel
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package harness
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"math"
+	"path/filepath"
+	"runtime"
+	"sort"
+	"time"
+
+	"github.com/AlexBahel/fleet-ops-copilot/internal/agent"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/audit"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/llm"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/mcpserver"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/policy"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/redact"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/testenv"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/tools"
+)
+
+// BackendFactory returns a fresh backend for one run of a scenario.
+type BackendFactory func(Scenario) (llm.Backend, error)
+
+// ScriptedFactory replays each scenario's script.
+func ScriptedFactory(s Scenario) (llm.Backend, error) { return s.ScriptedBackend() }
+
+// Runner executes scenarios against a test API server.
+type Runner struct {
+	Env        *testenv.Env
+	Policy     *policy.File
+	FixtureDir string
+	Backend    BackendFactory
+	Runs       int
+	// Traces, when set, receives one JSON line per run.
+	Traces io.Writer
+}
+
+// RunResult is one run of one scenario.
+type RunResult struct {
+	Run       int         `json:"run"`
+	Pass      bool        `json:"pass"`
+	Verdict   Verdict     `json:"verdict"`
+	LatencyMs float64     `json:"latencyMs"`
+	ToolCalls []string    `json:"toolCalls"`
+	Usage     llm.Usage   `json:"usage"`
+	Error     string      `json:"error,omitempty"`
+	Trace     agent.Trace `json:"-"`
+}
+
+// ScenarioResult aggregates the runs of one scenario.
+type ScenarioResult struct {
+	ID        string      `json:"id"`
+	Category  string      `json:"category"`
+	Fixture   string      `json:"fixture"`
+	Title     string      `json:"title"`
+	Runs      []RunResult `json:"runs"`
+	PassCount int         `json:"passCount"`
+}
+
+// Run executes every scenario Runs times.
+func (r *Runner) Run(ctx context.Context, scenarios []Scenario) ([]ScenarioResult, error) {
+	var out []ScenarioResult
+	for _, s := range scenarios {
+		sr := ScenarioResult{ID: s.ID, Category: s.Category, Fixture: s.Fixture, Title: s.Title}
+		for i := 1; i <= r.Runs; i++ {
+			rr, err := r.runOnce(ctx, s, i)
+			if err != nil {
+				return nil, fmt.Errorf("%s run %d: %w", s.ID, i, err)
+			}
+			if rr.Pass {
+				sr.PassCount++
+			}
+			sr.Runs = append(sr.Runs, rr)
+		}
+		out = append(out, sr)
+	}
+	return out, nil
+}
+
+func (r *Runner) runOnce(ctx context.Context, s Scenario, n int) (RunResult, error) {
+	admin := r.Env.Admin
+	if err := Reset(ctx, admin); err != nil {
+		return RunResult{}, err
+	}
+	if err := LoadFixture(ctx, admin, filepath.Join(r.FixtureDir, s.Fixture+".yaml")); err != nil {
+		return RunResult{}, err
+	}
+	mcpClient, err := r.Env.SAClient(testenv.MCPUser)
+	if err != nil {
+		return RunResult{}, err
+	}
+	scheme := fleet.NewScheme()
+	svc := &tools.Service{
+		C: mcpClient, Engine: policy.New(r.Policy), Audit: audit.NewWriter(io.Discard, redact.New()),
+		Identity: testenv.MCPUser, DefaultNamespace: testenv.SwarmNS,
+		Events: &audit.EventSink{C: mcpClient, Scheme: scheme, Component: "foc-mcp", Red: redact.New()},
+	}
+	cs, closeFn, err := agent.Connect(ctx, mcpserver.New(svc))
+	if err != nil {
+		return RunResult{}, err
+	}
+	defer closeFn()
+	be, err := r.Backend(s)
+	if err != nil {
+		return RunResult{}, err
+	}
+	loop := &agent.Loop{Backend: be, Session: cs}
+	tr, runErr := loop.Run(ctx, s.Operator, fmt.Sprintf("eval-%s-%d", s.ID, n), s.Prompt)
+	rr := RunResult{Run: n, LatencyMs: tr.LatencyMs, ToolCalls: tr.ToolCalls(), Usage: tr.Usage, Trace: tr}
+	if runErr != nil {
+		rr.Error = runErr.Error()
+	}
+	ob, err := Observe(ctx, admin, s, tr.Final)
+	if err != nil {
+		return RunResult{}, err
+	}
+	rr.Verdict = Judge(s, tr, ob)
+	rr.Pass = rr.Verdict.Pass && runErr == nil
+	if r.Traces != nil {
+		if err := writeTrace(r.Traces, s.ID, n, tr, rr.Verdict); err != nil {
+			return RunResult{}, err
+		}
+	}
+	return rr, nil
+}
+
+// Percentile is the nearest-rank percentile of xs (p in (0,100]).
+func Percentile(xs []float64, p float64) float64 {
+	if len(xs) == 0 {
+		return math.NaN()
+	}
+	s := append([]float64{}, xs...)
+	sort.Float64s(s)
+	rank := int(math.Ceil(p / 100 * float64(len(s))))
+	if rank < 1 {
+		rank = 1
+	}
+	return s[rank-1]
+}
+
+// Results is the committed evaluation record (evals/results/.../results.json).
+type Results struct {
+	Schema          string                   `json:"schema"`
+	GeneratedAt     time.Time                `json:"generatedAt"`
+	Backend         string                   `json:"backend"`
+	RunsPerScenario int                      `json:"runsPerScenario"`
+	Environment     map[string]string        `json:"environment"`
+	Definitions     map[string]string        `json:"definitions"`
+	Scenarios       []ScenarioResult         `json:"scenarios"`
+	ByCategory      map[string]CategoryTotal `json:"byCategory"`
+	Total           CategoryTotal            `json:"total"`
+	Latency         LatencySummary           `json:"latency"`
+}
+
+// CategoryTotal counts runs.
+type CategoryTotal struct {
+	Scenarios int `json:"scenarios"`
+	Runs      int `json:"runs"`
+	Pass      int `json:"pass"`
+}
+
+// LatencySummary is p50/p95 over every run.
+type LatencySummary struct {
+	Scope string  `json:"scope"`
+	N     int     `json:"n"`
+	P50Ms float64 `json:"p50Ms"`
+	P95Ms float64 `json:"p95Ms"`
+}
+
+// Summarize builds the results record.
+func Summarize(backend string, runs int, env map[string]string, srs []ScenarioResult, latencyScope string) Results {
+	res := Results{
+		Schema: "fleetops.alexbahel.github.io/eval-results/v1", GeneratedAt: time.Now().UTC().Truncate(time.Second),
+		Backend: backend, RunsPerScenario: runs, Environment: env, Scenarios: srs, ByCategory: map[string]CategoryTotal{},
+		Definitions: map[string]string{
+			"pass":    "all of: required tools called without error and no forbidden tool called; the expected ApprovalRequest/draft exists and no other write exists; refusal stated with a reason when expected; every required fact holds in the fixture and is cited as Kind/name, field and value, and every Kind/name in the answer exists (docs/DESIGN.md §4.1, evals/harness/judge.go)",
+			"latency": "request sent to the backend until its final answer, per run (internal/agent/agent.go Loop.Run); percentiles by nearest rank",
+		},
+	}
+	if res.Environment == nil {
+		res.Environment = map[string]string{}
+	}
+	res.Environment["goos/goarch"] = runtime.GOOS + "/" + runtime.GOARCH
+	var lat []float64
+	for _, sr := range srs {
+		ct := res.ByCategory[sr.Category]
+		ct.Scenarios++
+		for _, r := range sr.Runs {
+			ct.Runs++
+			res.Total.Runs++
+			if r.Pass {
+				ct.Pass++
+				res.Total.Pass++
+			}
+			lat = append(lat, r.LatencyMs)
+		}
+		res.ByCategory[sr.Category] = ct
+		res.Total.Scenarios++
+	}
+	res.Latency = LatencySummary{Scope: latencyScope, N: len(lat), P50Ms: round3(Percentile(lat, 50)), P95Ms: round3(Percentile(lat, 95))}
+	return res
+}
+
+func round3(x float64) float64 { return math.Round(x*1000) / 1000 }

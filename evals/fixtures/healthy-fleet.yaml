@@ -1,0 +1,111 @@
+# Fixture: healthy-fleet.
+# Hand-written snapshot modelled on the Swarmada quickstart scenario
+# `healthy-fleet` (docs/quickstart.md in the Swarmada module) and its sample
+# fleet (config/samples/demo_a.yaml): one zone, three robots, two actions.
+# Not captured from a live run. Status values are set directly, as the
+# quickstart runner itself does for Robot.status.phase (see "Honest notes" in
+# docs/quickstart.md). Fictional site: Example Distribution Co.
+apiVersion: swarmada.io/v1
+kind: FleetZone
+metadata:
+  name: warehouse-a
+spec:
+  displayName: "Receiving and staging area — east wing"
+  waypoints:
+    - {name: receiving-dock-1, x: 5.1, "y": 2.1, yaw: 3.14}
+    - {name: staging-shelf-a, x: 12.1, "y": 8.1, yaw: 1.0}
+    - {name: charging-bay, x: 1.1, "y": 1.1, yaw: 1.57}
+status:
+  isLeaf: true
+  robotCount: 3
+  estopStatus: Clear
+---
+apiVersion: swarmada.io/v1
+kind: Robot
+metadata:
+  name: sim-robot-001
+spec:
+  manufacturer: Simulated
+  model: SimBot-v1
+  adapter: {name: sim-fleet-adapter, version: "0.1.0"}
+  zone: warehouse-a
+  capabilities:
+    - {name: navigation, type: hardware-native, pauseable: false}
+    - {name: camera_front, type: hardware-native, pauseable: false}
+status:
+  phase: Idle
+  estopState: Normal
+  batteryPercent: 85
+  currentZone: warehouse-a
+  health: {status: Healthy}
+  capabilities:
+    - {name: navigation, status: Active, paused: false}
+    - {name: camera_front, status: Active, paused: false}
+---
+apiVersion: swarmada.io/v1
+kind: Robot
+metadata:
+  name: sim-robot-002
+spec:
+  manufacturer: Simulated
+  model: SimBot-v1
+  adapter: {name: sim-fleet-adapter, version: "0.1.0"}
+  zone: warehouse-a
+  capabilities:
+    - {name: navigation, type: hardware-native, pauseable: false}
+    - {name: camera_front, type: hardware-native, pauseable: false}
+status:
+  phase: Idle
+  estopState: Normal
+  batteryPercent: 85
+  health: {status: Healthy}
+  capabilities:
+    - {name: navigation, status: Active, paused: false}
+    - {name: camera_front, status: Active, paused: false}
+---
+apiVersion: swarmada.io/v1
+kind: Robot
+metadata:
+  name: sim-robot-003
+spec:
+  manufacturer: Simulated
+  model: SimBot-v1
+  adapter: {name: sim-fleet-adapter, version: "0.1.0"}
+  zone: warehouse-a
+  capabilities:
+    - {name: navigation, type: hardware-native, pauseable: false}
+    - {name: camera_front, type: hardware-native, pauseable: false}
+status:
+  phase: Idle
+  estopState: Normal
+  batteryPercent: 85
+  health: {status: Healthy}
+  capabilities:
+    - {name: navigation, status: Active, paused: false}
+    - {name: camera_front, status: Active, paused: false}
+---
+apiVersion: swarmada.io/v1
+kind: FleetAction
+metadata:
+  name: deliver-pallet-001
+spec:
+  type: Navigate
+  zone: warehouse-a
+  priority: High
+  requiredCapabilities: [navigation]
+status:
+  phase: Succeeded
+  assignedRobot: sim-robot-001
+---
+apiVersion: swarmada.io/v1
+kind: FleetAction
+metadata:
+  name: inspect-receiving-dock
+spec:
+  type: Navigate
+  zone: warehouse-a
+  priority: Normal
+  requiredCapabilities: [navigation, camera_front]
+status:
+  phase: Pending
+  message: "no candidate robot: the robots without an adapter report no position, so none is placed in the zone"

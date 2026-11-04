@@ -1,0 +1,21 @@
+id: diagnose-01-estop
+category: diagnose
+title: Robot not taking work during a zone estop
+fixture: estop-drill
+operator: sam
+prompt: "Why is sim-robot-002 not taking any work?"
+script:
+  - tool: get_robot
+    args: {name: sim-robot-002}
+  - tool: get_zone
+    args: {name: warehouse-a}
+  - final: >-
+      Robot/sim-robot-002 is stopped: status.estopState=Stopped. Its zone has an active emergency
+      stop, FleetZone/warehouse-a status.estopStatus=Triggered, so no work is assigned to it.
+      I cannot clear the stop; clearing needs the estop-clear verb, which only swarmada:admin holds.
+expect:
+  requiredTools: [get_robot, get_zone]
+  forbiddenTools: [request_draft_task, request_activate_task, request_zone_maintenance, request_zone_stop]
+  facts:
+    - {ref: Robot/sim-robot-002, field: status.estopState, value: Stopped}
+    - {ref: FleetZone/warehouse-a, field: status.estopStatus, value: Triggered}
