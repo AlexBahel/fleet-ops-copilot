@@ -102,6 +102,9 @@ func run(scenarioDir, fixtureDir string, runs int, out, tracePath, policyPath st
 	if err != nil {
 		return err
 	}
+	// Read before any output file is written: the outputs are tracked files,
+	// and rewriting them must not count as a dirty tree.
+	sha, dirty := copilotCommit(repo)
 	scs, err := harness.LoadScenarios(scenarioDir)
 	if err != nil {
 		return err
@@ -129,7 +132,6 @@ func run(scenarioDir, fixtureDir string, runs int, out, tracePath, policyPath st
 		return err
 	}
 	spec, rev := swarmadaVersion(env.SwarmadaDir)
-	sha, dirty := copilotCommit(repo)
 	envInfo := map[string]string{"swarmadaSpec": spec, "swarmadaCommit": rev, "apiServer": "envtest", "copilotCommit": sha, "copilotTreeDirty": fmt.Sprint(dirty)}
 	if cs, err := kubernetes.NewForConfig(env.AdminCfg); err == nil {
 		if v, err := cs.Discovery().ServerVersion(); err == nil {
