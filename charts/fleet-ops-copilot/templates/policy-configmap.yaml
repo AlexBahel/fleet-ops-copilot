@@ -1,0 +1,14 @@
+{{- include "foc.validate" . }}
+# The copilot policy file, read by foc-mcp and foc-approvals. Site rules only;
+# the hard invariants are compiled in (docs/DESIGN.md §3.2).
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fleetops-policy
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "foc.chartLabels" . | nindent 4 }}
+data:
+  default.yaml: |
+    {{- include "foc.policy" . | nindent 4 }}

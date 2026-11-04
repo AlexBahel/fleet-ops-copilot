@@ -1,0 +1,93 @@
+# Fleet Ops Copilot chart values. With these defaults the rendered objects are
+# the ones in config/ on main (CRDs, RBAC, admission policies, config/deploy);
+# `make chart-parity` checks that.
+#
+# Install into namespace foc-system only: the admission policies and the
+# envtest identities name ServiceAccounts in foc-system (docs/KNOWN-LIMITS.md,
+# "ServiceAccount names"). Any other release namespace fails the render.
+
+image:
+  repository: fleet-ops-copilot
+  tag: dev
+  pullPolicy: IfNotPresent
+
+# Swarmada namespaces the copilot works in. Each one gets the two namespaced
+# RoleBindings (foc-mcp, foc-approvals). Every namespace the policy file lists
+# must be here; the render fails otherwise. The first entry is foc-mcp's
+# default namespace (-namespace).
+swarmadaNamespaces:
+  - warehouse-a
+
+# Copilot policy file, mounted from ConfigMap fleetops-policy. Empty: the
+# chart's files/default-policy.yaml, a copy of policies/default.yaml. Set to
+# the full YAML text of a policy file to replace it (helm --set-file
+# policy.content=<file>). Hard invariants are compiled into the binaries and
+# cannot be enabled here (docs/DESIGN.md §3.2).
+policy:
+  content: ""
+
+mcp:
+  replicas: 1
+  port: 8080
+  resources: {}
+
+approvals:
+  replicas: 1
+  probePort: 8081
+  resources: {}
+
+# foc-agent talks to the model and holds no Kubernetes permission. On main it
+# exists only as a ServiceAccount: cmd/foc-agent is not built yet
+# (docs/KNOWN-LIMITS.md, "Not built yet"), so the chart renders no foc-agent
+# Deployment.
+agent:
+  serviceAccount:
+    create: true
+
+# Model backend profile.
+llm:
+  # cloud | airgap. Only cloud is templated. airgap fails the render on
+  # purpose: the air-gapped profile (llama-server, its storage and egress
+  # policy) is on branch airgap-prep, not on main.
+  profile: cloud
+  cloud:
+    model: claude-sonnet-5-5
+    # Reference to a Secret that already exists in foc-system. The chart never
+    # creates, reads or templates the key itself. No workload on main reads it
+    # yet; foc-agent will receive it as the ANTHROPIC_API_KEY environment
+    # variable (docs/DESIGN.md §3.8).
+    apiKeySecretRef:
+      name: fleet-ops-copilot-claude
+      key: ANTHROPIC_API_KEY
+
+# Audit files. emptyDir only, as in config/deploy: the files are lost when a
+# pod is replaced (docs/KNOWN-LIMITS.md, "Audit storage").
+audit:
+  dir: /var/lib/fleetops/audit
+
+# NetworkPolicy for the cloud profile (docs/DESIGN.md §3.7). Off by default:
+# main has no NetworkPolicy, and none of these has been applied to a cluster
+# yet. When enabled, apiServer.cidrs is required (NetworkPolicy cannot select
+# the API server by label). Enforcement needs a CNI that implements
+# NetworkPolicy.
+networkPolicy:
+  enabled: false
+  apiServer:
+    # API server endpoint and Service address, each as a /32, for example
+    # from `kubectl get endpointslices -n default -l kubernetes.io/service-name=kubernetes`
+    # and `kubectl get svc -n default kubernetes`.
+    cidrs: []
+    ports: [443, 6443]
+  dns:
+    namespace: kube-system
+    podLabels:
+      k8s-app: kube-dns
+  # foc-agent egress to the Claude API. NetworkPolicy has no FQDN rules, so
+  # this is a list of CIDRs (or an egress proxy's address). Empty: no rule.
+  # Selects no pod until foc-agent exists.
+  claudeApiEgress:
+    cidrs: []
+    ports: [443]
+  # Additional peers allowed to reach foc-mcp's MCP port besides foc-agent,
+  # as NetworkPolicy `from` entries.
+  mcpExtraIngressFrom: []

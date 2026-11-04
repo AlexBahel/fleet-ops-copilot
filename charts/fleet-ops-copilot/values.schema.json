@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["image", "swarmadaNamespaces", "policy", "mcp", "approvals", "agent", "llm", "audit", "networkPolicy"],
+  "properties": {
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "tag", "pullPolicy"],
+      "properties": {
+        "repository": {"type": "string", "minLength": 1},
+        "tag": {"type": "string", "minLength": 1},
+        "pullPolicy": {"enum": ["Always", "IfNotPresent", "Never"]}
+      }
+    },
+    "swarmadaNamespaces": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", "maxLength": 63}
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {"content": {"type": "string"}}
+    },
+    "mcp": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "replicas": {"type": "integer", "minimum": 0},
+        "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+        "resources": {"type": "object"}
+      }
+    },
+    "approvals": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "replicas": {"type": "integer", "minimum": 0, "maximum": 1, "description": "foc-approvals runs without leader election; more than one replica is not supported"},
+        "probePort": {"type": "integer", "minimum": 1, "maximum": 65535},
+        "resources": {"type": "object"}
+      }
+    },
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "serviceAccount": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {"create": {"type": "boolean"}}
+        }
+      }
+    },
+    "llm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile", "cloud"],
+      "properties": {
+        "profile": {"enum": ["cloud", "airgap"]},
+        "cloud": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["model", "apiKeySecretRef"],
+          "properties": {
+            "model": {"type": "string", "minLength": 1},
+            "apiKeySecretRef": {
+              "description": "Reference to an existing Secret. There is deliberately no field for the key itself.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "key"],
+              "properties": {
+                "name": {"type": "string", "minLength": 1},
+                "key": {"type": "string", "minLength": 1}
+              }
+            }
+          }
+        }
+      }
+    },
+    "audit": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {"dir": {"type": "string", "pattern": "^/"}}
+    },
+    "networkPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "apiServer": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "cidrs": {"type": "array", "items": {"type": "string", "minLength": 1}},
+            "ports": {"type": "array", "items": {"type": "integer", "minimum": 1, "maximum": 65535}}
+          }
+        },
+        "dns": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "namespace": {"type": "string", "minLength": 1},
+            "podLabels": {"type": "object", "minProperties": 1, "additionalProperties": {"type": "string"}}
+          }
+        },
+        "claudeApiEgress": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "cidrs": {"type": "array", "items": {"type": "string", "minLength": 1}},
+            "ports": {"type": "array", "items": {"type": "integer", "minimum": 1, "maximum": 65535}}
+          }
+        },
+        "mcpExtraIngressFrom": {"type": "array", "items": {"type": "object"}}
+      }
+    }
+  }
+}

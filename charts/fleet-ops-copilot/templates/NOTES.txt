@@ -1,0 +1,11 @@
+Fleet Ops Copilot {{ .Chart.Version }} installed in {{ .Release.Namespace }}.
+
+Workloads: foc-mcp (Service foc-mcp:{{ .Values.mcp.port }}), foc-approvals.
+foc-agent: ServiceAccount only; cmd/foc-agent is not built yet.
+Swarmada namespaces: {{ join ", " .Values.swarmadaNamespaces }}
+Model profile: {{ .Values.llm.profile }}; API key reference: Secret {{ .Values.llm.cloud.apiKeySecretRef.name }}, key {{ .Values.llm.cloud.apiKeySecretRef.key }} (not read by any workload yet).
+NetworkPolicy: {{ if .Values.networkPolicy.enabled }}enabled{{ else }}disabled{{ end }}.
+
+Drafts are refused (DENY_DRAFT_GATE_ABSENT) unless Swarmada's FleetTask
+admission webhook is served. Bind ClusterRole fleetops:approver to the people
+who decide requests. See docs/RUNBOOK.md.

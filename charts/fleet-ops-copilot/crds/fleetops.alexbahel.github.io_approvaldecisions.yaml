@@ -1,0 +1,95 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.5
+  name: approvaldecisions.fleetops.alexbahel.github.io
+spec:
+  group: fleetops.alexbahel.github.io
+  names:
+    kind: ApprovalDecision
+    listKind: ApprovalDecisionList
+    plural: approvaldecisions
+    shortNames:
+    - adec
+    singular: approvaldecision
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.requestRef
+      name: Request
+      type: string
+    - jsonPath: .spec.verdict
+      name: Verdict
+      type: string
+    - jsonPath: .spec.decidedBy
+      name: DecidedBy
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: ApprovalDecision records one person's approve or reject of one
+          ApprovalRequest.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              ApprovalDecisionSpec is created by a person with their own credentials.
+              An admission policy (config/admission) binds decidedBy to the authenticated
+              username and refuses ServiceAccounts and updates.
+            properties:
+              comment:
+                type: string
+              decidedBy:
+                description: DecidedBy must equal the creating user's authenticated
+                  username.
+                minLength: 1
+                type: string
+              decidedByGroups:
+                description: |-
+                  DecidedByGroups must equal the creating user's authenticated groups, so
+                  the approver's authority can be checked with SubjectAccessReview.
+                items:
+                  type: string
+                type: array
+              requestRef:
+                description: RequestRef is the ApprovalRequest name in the same namespace.
+                minLength: 1
+                type: string
+              verdict:
+                description: Verdict is the approver's answer.
+                enum:
+                - Approve
+                - Reject
+                type: string
+            required:
+            - decidedBy
+            - requestRef
+            - verdict
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources: {}

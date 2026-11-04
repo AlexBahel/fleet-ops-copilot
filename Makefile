@@ -75,3 +75,35 @@ deploy-kind: image ## Install CRDs, RBAC, admission policies, foc-mcp and foc-ap
 
 test-live: build ## Approval paths against a live cluster (hack/live-approval-path.sh sets the environment)
 	$(GO) test -tags live -count=1 -v -timeout 900s ./test/live/...
+
+# ---- Helm chart (charts/fleet-ops-copilot) -----------------------------------
+# kubeconform has no schema for CustomResourceDefinition, so the CRDs are left
+# out of chart-validate; chart-parity checks they are byte-identical to
+# config/crd, which envtest loads into a real API server.
+CHART := charts/fleet-ops-copilot
+HELM ?= helm
+KUBECONFORM ?= kubeconform
+CHART_KUBE_VERSIONS ?= 1.30.0 1.37.0
+# RFC 5737 documentation addresses, used only to render the NetworkPolicy.
+CHART_NP_SET := --set networkPolicy.enabled=true --set 'networkPolicy.apiServer.cidrs={192.0.2.10/32,192.0.2.11/32}' --set 'networkPolicy.claudeApiEgress.cidrs={198.51.100.0/24}'
+
+.PHONY: chart-lint chart-validate chart-parity chart-check
+
+chart-lint: ## helm lint the chart (strict)
+	$(HELM) lint $(CHART) --namespace foc-system --strict
+
+chart-validate: ## Render the chart (defaults, and with NetworkPolicy) and schema-check it with kubeconform
+	@command -v $(KUBECONFORM) >/dev/null || { echo "kubeconform not found (go install github.com/yannh/kubeconform/cmd/kubeconform@v0.7.0)"; exit 1; }
+	@for v in $(CHART_KUBE_VERSIONS); do \
+		echo "== Kubernetes $$v, defaults"; \
+		$(HELM) template foc $(CHART) -n foc-system | $(KUBECONFORM) -strict -summary -kubernetes-version $$v - || exit 1; \
+		echo "== Kubernetes $$v, networkPolicy.enabled"; \
+		$(HELM) template foc $(CHART) -n foc-system $(CHART_NP_SET) | $(KUBECONFORM) -strict -summary -kubernetes-version $$v - || exit 1; \
+	done
+
+chart-parity: ## Check the chart's default render equals config/ (CRDs, RBAC, admission, deploy) and policies/default.yaml
+	@mkdir -p $(BIN)
+	$(HELM) template foc $(CHART) -n foc-system --include-crds > $(BIN)/chart-rendered.yaml
+	$(GO) run ./scripts/chart-parity -rendered $(BIN)/chart-rendered.yaml
+
+chart-check: chart-lint chart-validate chart-parity ## All chart checks

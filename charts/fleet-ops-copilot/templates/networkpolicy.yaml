@@ -1,0 +1,129 @@
+{{- include "foc.validate" . }}
+{{- if .Values.networkPolicy.enabled }}
+# Cloud-profile NetworkPolicy (docs/DESIGN.md §3.7): default-deny ingress and
+# egress in the release namespace, then DNS for every pod, the API server for
+# foc-mcp and foc-approvals, foc-agent -> foc-mcp, and foc-agent -> the
+# Claude API when CIDRs are given. Policies are additive: a pod may do what
+# any policy selecting it allows.
+#
+# Not applied to a cluster yet. Enforcement needs a CNI that implements
+# NetworkPolicy; the egress probe that verifies it (make verify-egress) is on
+# branch airgap-prep. Kubelet probes and `kubectl port-forward` are normally
+# not subject to NetworkPolicy, but that depends on the CNI.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: fleet-ops-copilot-default-deny
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "foc.chartLabels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: fleet-ops-copilot-egress-dns
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "foc.chartLabels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: {{ .Values.networkPolicy.dns.namespace }}}}
+          podSelector:
+            matchLabels:
+              {{- toYaml .Values.networkPolicy.dns.podLabels | nindent 14 }}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+---
+# NetworkPolicy cannot select the API server by label. Depending on the CNI
+# the address seen is the Service address or, after DNAT, the endpoint, so
+# both belong in apiServer.cidrs.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: fleet-ops-copilot-egress-apiserver
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "foc.chartLabels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchExpressions:
+      - {key: app.kubernetes.io/name, operator: In, values: [foc-mcp, foc-approvals]}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        {{- range .Values.networkPolicy.apiServer.cidrs }}
+        - ipBlock: {cidr: {{ . }}}
+        {{- end }}
+      ports:
+        {{- range .Values.networkPolicy.apiServer.ports }}
+        - {protocol: TCP, port: {{ . }}}
+        {{- end }}
+---
+# foc-mcp accepts MCP connections from foc-agent (and any extra peers given).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: foc-mcp-ingress
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "foc.chartLabels" . | nindent 4 }}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: foc-mcp}}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: foc-agent}}
+        {{- with .Values.networkPolicy.mcpExtraIngressFrom }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      ports:
+        - {protocol: TCP, port: {{ .Values.mcp.port }}}
+---
+# foc-agent may open connections to foc-mcp. Selects no pod until foc-agent exists.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: foc-agent-egress-mcp
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "foc.chartLabels" . | nindent 4 }}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: foc-agent}}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: foc-mcp}}
+      ports:
+        - {protocol: TCP, port: {{ .Values.mcp.port }}}
+{{- with .Values.networkPolicy.claudeApiEgress.cidrs }}
+---
+# foc-agent -> Claude API. Selects no pod until foc-agent exists.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: foc-agent-egress-claude-api
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "foc.chartLabels" $ | nindent 4 }}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: foc-agent}}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        {{- range . }}
+        - ipBlock: {cidr: {{ . }}}
+        {{- end }}
+      ports:
+        {{- range $.Values.networkPolicy.claudeApiEgress.ports }}
+        - {protocol: TCP, port: {{ . }}}
+        {{- end }}
+{{- end }}
+{{- end }}

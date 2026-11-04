@@ -1,0 +1,49 @@
+{{- include "foc.validate" . }}
+# foc-approvals: approval controller and executor. Writes to Swarmada only for
+# a request a named person approved. The audit file is on an emptyDir volume
+# and does not survive a pod restart (docs/KNOWN-LIMITS.md, "Audit storage").
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: foc-approvals
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "foc.workloadLabels" (dict "name" "foc-approvals" "root" .) | nindent 4 }}
+spec:
+  replicas: {{ .Values.approvals.replicas }}
+  selector:
+    matchLabels: {app.kubernetes.io/name: foc-approvals}
+  template:
+    metadata:
+      labels:
+        {{- include "foc.workloadLabels" (dict "name" "foc-approvals" "root" .) | nindent 8 }}
+      annotations:
+        # Restart on a policy change (helm upgrade).
+        checksum/policy: {{ include "foc.policy" . | sha256sum }}
+    spec:
+      serviceAccountName: foc-approvals
+      securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: foc-approvals
+          image: {{ include "foc.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: [/usr/local/bin/foc-approvals]
+          args:
+            - -policy=/etc/fleetops/policy/default.yaml
+            - -audit={{ .Values.audit.dir }}/foc-approvals.jsonl
+            - -health-probe-bind-address=:{{ .Values.approvals.probePort }}
+          ports: [{name: probes, containerPort: {{ .Values.approvals.probePort }}}]
+          {{- with .Values.approvals.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts:
+            - {name: policy, mountPath: /etc/fleetops/policy, readOnly: true}
+            - {name: audit, mountPath: {{ .Values.audit.dir }}}
+      volumes:
+        - name: policy
+          configMap: {name: fleetops-policy}
+        - name: audit
+          emptyDir: {}
