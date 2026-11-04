@@ -17,10 +17,15 @@ limitations under the License.
 // Command foc is the operator and approver CLI. It acts with the caller's own
 // kubeconfig credentials.
 //
-//	foc requests [-n NS]
-//	foc approve REQUEST [-n NS] [-comment TEXT]
-//	foc reject  REQUEST [-n NS] [-comment TEXT]
+//	foc requests [-n NS] [--context NAME]
+//	foc approve REQUEST [-n NS] [--context NAME] [-comment TEXT]
+//	foc reject  REQUEST [-n NS] [--context NAME] [-comment TEXT]
 //	foc audit verify FILE
+//
+// --context selects a kubeconfig context; without it the current context is
+// used. Before an activation command, foc approve prints the API server and
+// namespace the decision was recorded in, so the approver can check that the
+// command will run against the same cluster.
 package main
 
 import (
@@ -28,10 +33,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"text/tabwriter"
 
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/approval"
@@ -40,9 +46,9 @@ import (
 )
 
 const usage = `usage:
-  foc requests [-n NAMESPACE]
-  foc approve REQUEST [-n NAMESPACE] [-comment TEXT]
-  foc reject  REQUEST [-n NAMESPACE] [-comment TEXT]
+  foc requests [-n NAMESPACE] [--context NAME]
+  foc approve REQUEST [-n NAMESPACE] [--context NAME] [-comment TEXT]
+  foc reject  REQUEST [-n NAMESPACE] [--context NAME] [-comment TEXT]
   foc audit verify FILE`
 
 func main() {
@@ -76,10 +82,15 @@ func run(args []string) error {
 	case "requests":
 		fs := flag.NewFlagSet("requests", flag.ContinueOnError)
 		ns := fs.String("n", "warehouse-a", "namespace")
+		kctx := fs.String("context", "", "kubeconfig context (default: the current context)")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
-		c, err := client.New(ctrl.GetConfigOrDie(), client.Options{Scheme: fleet.NewScheme()})
+		cfg, err := config.GetConfigWithContext(*kctx)
+		if err != nil {
+			return err
+		}
+		c, err := client.New(cfg, client.Options{Scheme: fleet.NewScheme()})
 		if err != nil {
 			return err
 		}
@@ -104,10 +115,15 @@ func run(args []string) error {
 		fs := flag.NewFlagSet(args[0], flag.ContinueOnError)
 		ns := fs.String("n", "warehouse-a", "namespace")
 		comment := fs.String("comment", "", "comment recorded on the decision")
+		kctx := fs.String("context", "", "kubeconfig context (default: the current context)")
 		if err := fs.Parse(args[2:]); err != nil {
 			return err
 		}
-		a, err := approval.NewApprover(ctrl.GetConfigOrDie())
+		cfg, err := config.GetConfigWithContext(*kctx)
+		if err != nil {
+			return err
+		}
+		a, err := approval.NewApprover(cfg)
 		if err != nil {
 			return err
 		}
@@ -121,9 +137,29 @@ func run(args []string) error {
 		}
 		fmt.Printf("decision %s recorded. %s\n", out.Decision, out.Message)
 		if out.Instruction != "" {
-			fmt.Printf("\nrun with your own credentials:\n  %s\n", out.Instruction)
+			fmt.Print(activationBanner(cfg.Host, *ns, *kctx, out.Instruction))
 		}
 		return nil
 	}
 	return fmt.Errorf("%s", usage)
+}
+
+// activationBanner shows where the decision was recorded (API server and
+// namespace) above the command the approver runs. With an explicit context the
+// command carries the same --context, so it targets the cluster the decision
+// was recorded in rather than whatever context is current.
+func activationBanner(host, ns, kctx, instruction string) string {
+	var b strings.Builder
+	b.WriteString("\nrun with your own credentials, against:\n")
+	fmt.Fprintf(&b, "  API server: %s\n", host)
+	if kctx != "" {
+		fmt.Fprintf(&b, "  context:    %s\n", kctx)
+	}
+	fmt.Fprintf(&b, "  namespace:  %s\n", ns)
+	cmd := instruction
+	if kctx != "" && strings.HasPrefix(cmd, "kubectl ") {
+		cmd = "kubectl --context " + kctx + " " + strings.TrimPrefix(cmd, "kubectl ")
+	}
+	fmt.Fprintf(&b, "\n  %s\n", cmd)
+	return b.String()
 }
