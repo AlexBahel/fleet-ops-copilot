@@ -84,9 +84,11 @@ func main() {
 		if *model == "" {
 			*model = llm.DefaultClaudeModel
 		}
-		if _, err := llm.NewClaude(*model, *effort); err != nil {
+		c, err := llm.NewClaude(*model, *effort)
+		if err != nil {
 			log.Fatal(err)
 		}
+		cfg.settings = c.Settings()
 		cfg.name = "claude:" + *model + " effort=" + *effort
 		cfg.factory = func(harness.Scenario) (llm.Backend, error) { return llm.NewClaude(*model, *effort) }
 		cfg.latencyScope = "Claude API (" + *model + ", effort " + *effort + ") from this machine, plus tool execution over in-process MCP against envtest; request sent until final answer"
@@ -100,6 +102,7 @@ func main() {
 			log.Fatal(err)
 		}
 		*model = l.Model
+		cfg.settings = l.Settings()
 		cfg.name = fmt.Sprintf("llamacpp:%s temperature=%g", l.Model, l.Temperature)
 		cfg.factory = func(harness.Scenario) (llm.Backend, error) { return llm.NewLlamaCpp(*llamaURL, *model) }
 		cfg.latencyScope = "llama-server at " + l.BaseURL + " from this machine, plus tool execution over in-process MCP against envtest; request sent until final answer"
@@ -118,6 +121,7 @@ type runConfig struct {
 	name, latencyScope                                        string
 	factory                                                   harness.BackendFactory
 	pricing                                                   *harness.Pricing
+	settings                                                  map[string]string
 	gate                                                      bool
 }
 
@@ -249,6 +253,7 @@ func run(c runConfig) error {
 		}
 	}
 	res := harness.Summarize(c.name, runs, envInfo, srs, c.latencyScope)
+	res.BackendSettings = c.settings
 	if c.pricing != nil {
 		res.SetCost(*c.pricing)
 	}

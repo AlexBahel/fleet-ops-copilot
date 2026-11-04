@@ -84,3 +84,26 @@ func TestNewClaudeNeedsKeyFromEnv(t *testing.T) {
 		t.Fatalf("%+v %v", c, err)
 	}
 }
+
+// R20: the recorded settings come from the request fields Chat sends.
+func TestClaudeSettingsRecordWhatIsSent(t *testing.T) {
+	t.Setenv("ANTHROPIC_API_KEY", "test")
+	c, err := NewClaude("claude-sonnet-5-5", "medium")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := c.Settings()
+	want := map[string]string{
+		"model": "claude-sonnet-5-5", "max_tokens": "16000", "output_config": `{"effort":"medium"}`,
+		"thinking": NotSent, "temperature": NotSent, "top_p": NotSent, "top_k": NotSent,
+		"cache_control": `{"type":"ephemeral"}`,
+	}
+	for k, v := range want {
+		if s[k] != v {
+			t.Errorf("%s = %q, want %q", k, s[k], v)
+		}
+	}
+	if !strings.HasPrefix(s["anthropic-version"], "set by github.com/anthropics/anthropic-sdk-go/v2 ") {
+		t.Errorf("anthropic-version = %q", s["anthropic-version"])
+	}
+}

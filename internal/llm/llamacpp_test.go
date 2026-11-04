@@ -585,3 +585,23 @@ func TestReplayArgs(t *testing.T) {
 		}
 	}
 }
+
+// R20: the recorded settings come from the request fields Chat sends.
+func TestLlamaCppSettingsRecordWhatIsSent(t *testing.T) {
+	t.Setenv(EnvLlamaCppTemperature, "0.7")
+	l, err := NewLlamaCpp("http://127.0.0.1:1", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := l.Settings()
+	want := map[string]string{
+		"model": DefaultLlamaCppModel, "temperature": "0.7", "max_tokens": "4096", "stream": "false",
+		"top_p": NotSent, "top_k": NotSent, "min_p": NotSent, "repeat_penalty": NotSent, "seed": NotSent,
+		"tool_choice": "auto when tools are offered",
+	}
+	for k, v := range want {
+		if s[k] != v {
+			t.Errorf("%s = %q, want %q", k, s[k], v)
+		}
+	}
+}

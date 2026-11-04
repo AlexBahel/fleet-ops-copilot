@@ -255,7 +255,8 @@ func (l *LlamaCpp) Chat(ctx context.Context, system string, history []Message, t
 	if err != nil {
 		return Reply{}, err
 	}
-	rq := llamaRequest{Model: l.Model, Messages: msgs, Tools: ts, Temperature: l.Temperature, MaxTokens: l.MaxTokens}
+	rq := l.baseRequest()
+	rq.Messages, rq.Tools = msgs, ts
 	if len(ts) > 0 {
 		rq.ToolChoice = "auto"
 	}
@@ -273,6 +274,26 @@ func (l *LlamaCpp) Chat(ctx context.Context, system string, history []Message, t
 		return Reply{}, err
 	}
 	return l.parse(body, tools)
+}
+
+// baseRequest holds every request field except the conversation and tools.
+// Chat and Settings both start from it.
+func (l *LlamaCpp) baseRequest() llamaRequest {
+	return llamaRequest{Model: l.Model, Temperature: l.Temperature, MaxTokens: l.MaxTokens}
+}
+
+// llamaSettingKeys are the request fields that control sampling and output
+// length in llama-server's chat-completions API.
+var llamaSettingKeys = []string{"model", "temperature", "max_tokens", "stream", "top_p", "top_k", "min_p", "repeat_penalty", "seed"}
+
+// Settings implements SettingsReporter from the fields Chat sends.
+func (l *LlamaCpp) Settings() map[string]string {
+	s, err := settingsFrom(l.baseRequest(), llamaSettingKeys)
+	if err != nil {
+		return map[string]string{"error": err.Error()}
+	}
+	s["tool_choice"] = "auto when tools are offered"
+	return s
 }
 
 // do sends req (retrying a 503 while the model loads) and returns a 200 body.

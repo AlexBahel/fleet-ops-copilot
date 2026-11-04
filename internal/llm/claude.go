@@ -82,15 +82,11 @@ func (c *Claude) Chat(ctx context.Context, system string, history []Message, too
 	if err != nil {
 		return Reply{}, err
 	}
-	resp, err := c.client.Messages.New(ctx, anthropic.MessageNewParams{
-		Model:        c.Model,
-		MaxTokens:    c.MaxTokens,
-		System:       []anthropic.TextBlockParam{{Text: system}},
-		Messages:     msgs,
-		Tools:        ts,
-		OutputConfig: anthropic.OutputConfigParam{Effort: anthropic.OutputConfigEffort(c.Effort)},
-		CacheControl: anthropic.NewCacheControlEphemeralParam(),
-	})
+	p := c.baseParams()
+	p.System = []anthropic.TextBlockParam{{Text: system}}
+	p.Messages = msgs
+	p.Tools = ts
+	resp, err := c.client.Messages.New(ctx, p)
 	if err != nil {
 		return Reply{}, err
 	}
@@ -121,6 +117,31 @@ func (c *Claude) Chat(ctx context.Context, system string, history []Message, too
 		r.Calls = nil
 	}
 	return r, nil
+}
+
+// baseParams holds every request field except the conversation and tools.
+// Chat and Settings both start from it.
+func (c *Claude) baseParams() anthropic.MessageNewParams {
+	return anthropic.MessageNewParams{
+		Model:        c.Model,
+		MaxTokens:    c.MaxTokens,
+		OutputConfig: anthropic.OutputConfigParam{Effort: anthropic.OutputConfigEffort(c.Effort)},
+		CacheControl: anthropic.NewCacheControlEphemeralParam(),
+	}
+}
+
+// claudeSettingKeys are the request fields that control sampling, thinking,
+// effort and output length.
+var claudeSettingKeys = []string{"model", "max_tokens", "output_config", "thinking", "temperature", "top_p", "top_k", "cache_control"}
+
+// Settings implements SettingsReporter from the fields Chat sends.
+func (c *Claude) Settings() map[string]string {
+	s, err := settingsFrom(c.baseParams(), claudeSettingKeys)
+	if err != nil {
+		return map[string]string{"error": err.Error()}
+	}
+	s["anthropic-version"] = "set by github.com/anthropics/anthropic-sdk-go/v2 " + moduleVersion("github.com/anthropics/anthropic-sdk-go/v2")
+	return s
 }
 
 func claudeMessages(history []Message) ([]anthropic.MessageParam, error) {

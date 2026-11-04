@@ -219,10 +219,14 @@ func Percentile(xs []float64, p float64) float64 {
 
 // Results is the committed evaluation record (evals/results/.../results.json).
 type Results struct {
-	Schema          string                   `json:"schema"`
-	Purpose         string                   `json:"purpose"`
-	GeneratedAt     time.Time                `json:"generatedAt"`
-	Backend         string                   `json:"backend"`
+	Schema      string    `json:"schema"`
+	Purpose     string    `json:"purpose"`
+	GeneratedAt time.Time `json:"generatedAt"`
+	Backend     string    `json:"backend"`
+	// BackendSettings lists every sampling, thinking and effort field the
+	// backend sends, or that it leaves to the server default
+	// (llm.SettingsReporter). Empty for the scripted backend.
+	BackendSettings map[string]string        `json:"backendSettings,omitempty"`
 	RunsPerScenario int                      `json:"runsPerScenario"`
 	Environment     map[string]string        `json:"environment"`
 	Definitions     map[string]string        `json:"definitions"`

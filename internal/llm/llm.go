@@ -24,6 +24,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"runtime/debug"
+	"sort"
 )
 
 // ToolSpec describes one tool offered to the model.
@@ -116,4 +118,56 @@ func (s *Scripted) Chat(_ context.Context, _ string, _ []Message, _ []ToolSpec) 
 	st := s.Steps[s.next]
 	s.next++
 	return Reply{Text: st.Final, Calls: st.Calls}, nil
+}
+
+// SettingsReporter is implemented by backends that send generation settings.
+// Settings returns every request field that controls sampling, thinking or
+// effort, with the value the backend sends, or NotSent for a field it leaves
+// out (the server's default applies). Evaluation results record it.
+type SettingsReporter interface {
+	Settings() map[string]string
+}
+
+// NotSent marks a setting the backend leaves out of its requests.
+const NotSent = "not sent (server default)"
+
+// settingsFrom reads the named top-level fields from the JSON encoding of a
+// request, so the record is taken from what is sent rather than restated.
+func settingsFrom(req any, keys []string) (map[string]string, error) {
+	b, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	sort.Strings(keys)
+	for _, k := range keys {
+		v, ok := m[k]
+		if !ok {
+			out[k] = NotSent
+			continue
+		}
+		var str string
+		if json.Unmarshal(v, &str) == nil {
+			out[k] = str
+		} else {
+			out[k] = string(v)
+		}
+	}
+	return out, nil
+}
+
+// moduleVersion is the version of a dependency compiled into the binary.
+func moduleVersion(path string) string {
+	if bi, ok := debug.ReadBuildInfo(); ok {
+		for _, d := range bi.Deps {
+			if d.Path == path {
+				return d.Version
+			}
+		}
+	}
+	return "unknown"
 }
