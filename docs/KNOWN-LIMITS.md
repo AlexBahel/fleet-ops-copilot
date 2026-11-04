@@ -15,8 +15,6 @@ remove it.
 
 ## Not built yet
 
-- Model backend `llamacpp` (`llama-server`). The `claude` and `scripted` backends exist
-  (`internal/llm`).
 - The five agent roles (Router, Diagnose, Dispatch, Zone ops, Reporter) and their tool
   allow-lists. The tool-use loop (`internal/agent`) offers every tool.
 - `foc-agent`, the web chat UI, and the OIDC pass-through for approving in a browser.
@@ -32,6 +30,10 @@ remove it.
   behave as designed on fixture states, and says nothing about a model's pass rate.
 - Model latency (p50, p95) and cost per 100 requests, for both deployments. The latency in the
   fixture results covers tool execution against a test API server only.
+- The `llamacpp` backend (`internal/llm/llamacpp.go`, `foc-eval -backend llamacpp`) and the
+  air-gapped manifests (`config/airgap/`) have not run against a model or a cluster: the backend
+  is tested against a fake server, the manifests with `kubeconform`, and of the `hack/airgap.mk`
+  targets only `validate-airgap` has run.
 - No eval scenario reaches `DENY_DRAFT_GATE_ABSENT`: fixture evals always run with the draft
   gate served. The refusal is covered by the policy unit tests (`internal/policy/policy_test.go`),
   an envtest test (`test/envtest/approval_test.go`) and the live test (`test/live`).

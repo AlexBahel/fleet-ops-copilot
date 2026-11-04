@@ -234,7 +234,8 @@ allow-list of MCP tools; the policy engine applies regardless of role.
   model that answered (D30). Built: `internal/llm/claude.go`.
 - `llamacpp`: `llama-server`'s HTTP chat-completions endpoint with tool calling, called with
   `net/http` (no extra SDK). Model file Qwen2.5-7B-Instruct GGUF; quantisation set in Helm values
-  and recorded in every measurement.
+  and recorded in every measurement. Built: `internal/llm/llamacpp.go`; `foc-eval -backend
+  llamacpp`; manifests in `config/airgap/`.
 - `scripted`: replays fixed model turns; used by unit tests and the CI eval gate.
 
 ### 3.6 Kubernetes RBAC and admission policies
@@ -390,7 +391,7 @@ internal/tools     typed read and request tools
 internal/policy    policy engine + YAML loader
 internal/approval  store, decision checks, executor
 internal/audit     JSONL writer, Events, verify
-internal/llm       backend interface; scripted backend (claude, llamacpp later)
+internal/llm       backend interface; claude, llamacpp and scripted backends
 internal/agent     tool-use loop over MCP
 internal/agents    Router, Diagnose, Dispatch, Zone ops, Reporter (later)
 internal/testenv   shared envtest environment for tests and evals

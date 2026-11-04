@@ -15,9 +15,9 @@ limitations under the License.
 */
 
 // Package llm defines the model-backend interface the agent loop uses, and
-// two backends: claude (Claude API, claude.go) and scripted, which replays
-// fixed turns for tests and the CI evaluation gate. The llamacpp backend
-// (docs/DESIGN.md §3.5) is not built yet.
+// three backends: claude (Claude API, claude.go), llamacpp (llama-server's
+// chat-completions API, llamacpp.go) and scripted, which replays fixed turns
+// for tests and the CI evaluation gate.
 package llm
 
 import (
