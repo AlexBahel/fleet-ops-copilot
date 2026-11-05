@@ -174,7 +174,10 @@ func (e *env) mcpSession(t *testing.T, person string) *mcp.ClientSession {
 	if err != nil {
 		t.Fatalf("connecting to foc-mcp at %s as %q: %v", e.mcpURL, person, err)
 	}
-	t.Cleanup(func() { _ = cs.Close() })
+	// The session belongs to the (sub)test that opened it: closed when that
+	// test ends and dropped from the cache, so a later subtest reconnects
+	// instead of reusing a closed session.
+	t.Cleanup(func() { _ = cs.Close(); delete(e.sessions, person) })
 	e.sessions[person] = cs
 	return cs
 }
