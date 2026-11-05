@@ -212,8 +212,8 @@ anyway, revoke it.
 
 | Profile | Model | Status on main |
 |---|---|---|
-| `cloud` | Claude via the Claude API | Chart value `llm.profile: cloud` (default). The `claude` backend exists (`internal/llm/claude.go`); no in-cluster process uses it yet. |
-| `airgap` | Qwen2.5-7B-Instruct served by `llama-server` in the cluster | Plain manifests and make targets (`config/airgap/`, `hack/airgap.mk`) and the `llamacpp` backend (`internal/llm/llamacpp.go`); not templated in the chart, and not yet run against a cluster or a model (docs/KNOWN-LIMITS.md). `llm.profile: airgap` makes the chart render fail on purpose. |
+| `cloud` | Claude via the Claude API | Chart value `llm.profile: cloud` (default). The chart runs foc-agent with `-backend=claude` (`internal/llm/claude.go`); it starts once the API key Secret exists (section 2). foc-agent has not yet run against the model on a cluster (docs/KNOWN-LIMITS.md); Sonnet 5.5 and Opus 5.5 were measured through `foc-eval` (`evals/results/comparison-2026-11-05.md`). |
+| `airgap` | Qwen2.5-7B-Instruct served by `llama-server` in the cluster | Plain manifests and make targets (`config/airgap/`, `hack/airgap.mk`) and the `llamacpp` backend (`internal/llm/llamacpp.go`); not templated in the chart. Run on single-node kind clusters with kindnet (`docs/evidence/airgap-2026-11-04/`, `docs/evidence/airgap-2026-11-05/`); the `llamacpp` backend ran one evaluation against Qwen2.5-7B-Instruct through `foc-eval` (`evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-05/`). foc-agent does not run with it yet (docs/KNOWN-LIMITS.md). `llm.profile: airgap` makes the chart render fail on purpose. |
 
 Until the air-gapped profile is in the chart, it is installed beside the chart with these targets,
 in this order:
