@@ -43,7 +43,11 @@ jobs:
   go:
     runs-on: ubuntu-24.04
     steps:
+      # Full history: the baseline step below reads evals/baseline.json at the
+      # event's base commit.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
@@ -54,6 +58,14 @@ jobs:
           install-only: true
       - name: Install setup-envtest (version pinned in the Makefile)
         run: make envtest-assets
+      # A warning annotation (never a failure) for every category the change
+      # lowers in evals/baseline.json. The gate itself compares a run with the
+      # baseline in the same commit, so a commit that lowers both passes; this
+      # puts the lowering on the run page (scripts/baseline-lowered, D58).
+      - name: Warn when evals/baseline.json lowers a category
+        run: go run ./scripts/baseline-lowered -base "$BASE_SHA"
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
       - name: make ci
         run: make ci
       - uses: actions/upload-artifact@v7
