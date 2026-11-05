@@ -26,6 +26,7 @@ the model server's settings. Times are UTC.
 | Probe without the policy (`make verify-egress-baseline`) | all three external targets answered at start and after: egress is open without the policy, so the probe can detect it | `verify-egress-baseline.log` |
 | `make verify-egress` (R40 probe, D63), 3 runs | **PASS** 3/3. At start (not counted) all three targets answered; the policy was in force when a sentinel attempt to the API server timed out, returning at 2361, 2266 and 2379 ms; control `llama-server:8080/health` 200; after the wait all three targets blocked (curl exit 28) | `verify-egress.log`, `verify-egress-run2.log`, `verify-egress-run3.log` |
 | Images | every container in `foc-system` uses `imagePullPolicy: IfNotPresent`. The copilot, llama-server and probe containers: every `Pulled` event says "already present". Two `Pulling` events, both at chart install (03:55:14), before the air-gapped profile: the optional trace backend's `jaegertracing/jaeger:2.22.0` and `otel/opentelemetry-collector:0.164.0`, which are not part of the air-gapped profile (RUNBOOK §8) | `no-runtime-pull.txt` |
+| Collector restart check | before restart 9 spans reached Jaeger; after restart 0, Collector log `dial tcp …:4317: i/o timeout`; new connection from the Collector's network namespace timed out; from a namespace without a policy Jaeger answered | `collector-restart-check.log` |
 | Trace of one evaluation request | `foc.request` → `llm.chat` → 2 × (`tool.call` → `mcp.tool` → `policy.decide` `REQUIRE_APPROVAL`) → `llm.chat`, trace `896e1f3a6a70766dedd60386a116cb4c` (PILOT run of dispatch-05, `foc-eval -otlp-endpoint`, D65); Jaeger UI through `kubectl port-forward svc/foc-jaeger 16686:16686`, which shows the start in the browser's local time (20:07:46 UTC−8 = 04:07:46Z) | `trace-dispatch-05.png` |
 
 ## What this shows
@@ -35,5 +36,7 @@ API server and cluster DNS for the copilot components, and denied entirely for t
 On this CNI a new pod's egress is open at its start: each probe's at-start attempts (within
 ~0.35 s of the script starting) connected, as on 2026-11-04 (`../airgap-2026-11-04/`).
 
-Not shown here: whether a connection opened before the policy applies survives it
-(`docs/KNOWN-LIMITS.md`).
+A connection opened before the policy existed survived it: the trace Collector's connection to
+Jaeger carried spans for at least 68.6 minutes under a policy that allows the Collector DNS only,
+and failed once the Collector restarted (`collector-restart-check.log`, `docs/KNOWN-LIMITS.md`).
+The traces of the PILOT and record runs reached Jaeger through that connection.
