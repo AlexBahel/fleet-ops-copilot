@@ -1,0 +1,375 @@
+// Copyright 2026 Alex Bahel
+// Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+package scripts
+
+import (
+	"encoding/base64"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"slices"
+	"strings"
+	"testing"
+
+	"sigs.k8s.io/yaml"
+
+	"github.com/AlexBahel/fleet-ops-copilot/internal/testenv"
+)
+
+// runScript runs a hack script with the stub directory first on PATH and only
+// the given variables set.
+func (e env) runScript(t *testing.T, script string, vars map[string]string, args ...string) (string, error) {
+	t.Helper()
+	path, err := filepath.Abs("../../" + script)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("bash", append([]string{path}, args...)...) //nolint:gosec // G204: fixed script paths
+	cmd.Dir = filepath.Dir(e.home)
+	cmd.Env = []string{"HOME=" + e.home, "PATH=" + e.stubs + ":/usr/bin:/bin"}
+	for k, v := range vars {
+		cmd.Env = append(cmd.Env, k+"="+v)
+	}
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
+func readFile(t *testing.T, p string) string {
+	t.Helper()
+	b, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+var tokenLine = regexp.MustCompile(`^([0-9a-f]{48}),([a-z]+),([a-z]+),"([a-z-]+)"$`)
+
+// R43: gen writes the kube-apiserver static token file, mode 600, one random
+// token per person, and keeps an existing file.
+func TestKindPeopleGen(t *testing.T) {
+	e := newEnv(t)
+	dir := filepath.Join(t.TempDir(), "people")
+	if out, err := e.runScript(t, "hack/kind-people.sh", nil, "gen", dir); err != nil {
+		t.Fatalf("gen: %v\n%s", err, out)
+	}
+	file := filepath.Join(dir, "tokens.csv")
+	fi, err := os.Stat(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode().Perm() != 0o600 {
+		t.Errorf("tokens.csv mode %v, want 0600", fi.Mode().Perm())
+	}
+	first := readFile(t, file)
+	seen := map[string]bool{}
+	var names []string
+	for _, l := range strings.Split(strings.TrimSpace(first), "\n") {
+		m := tokenLine.FindStringSubmatch(l)
+		if m == nil {
+			t.Fatalf("line %q is not token,user,uid,\"group\"", redactToken(l))
+		}
+		if m[2] != m[3] || seen[m[1]] {
+			t.Errorf("uid must equal the user, and tokens must differ: %q", redactToken(l))
+		}
+		seen[m[1]] = true
+		names = append(names, m[2])
+	}
+	slices.Sort(names)
+	if !slices.Equal(names, []string{"dana", "eve", "sam"}) {
+		t.Errorf("people %v, want dana eve sam", names)
+	}
+	if out, err := e.runScript(t, "hack/kind-people.sh", nil, "gen", dir); err != nil || !strings.Contains(out, "keeping it") {
+		t.Fatalf("second gen: %v\n%s", err, out)
+	}
+	if readFile(t, file) != first {
+		t.Error("a second gen replaced the token file")
+	}
+}
+
+func redactToken(l string) string {
+	if i := strings.Index(l, ","); i > 0 {
+		return "<token>" + l[i:]
+	}
+	return l
+}
+
+// The people the script makes are the people envtest uses (same names, groups
+// and roles), so a test written against one holds against the other.
+func TestKindPeopleMatchEnvtest(t *testing.T) {
+	src := readFile(t, "../../hack/kind-people.sh")
+	block := src[strings.Index(src, "PEOPLE=(")+len("PEOPLE=("):]
+	block = block[:strings.Index(block, "\n)")]
+	got := map[string][2]string{}
+	for _, l := range strings.Split(block, "\n") {
+		l = strings.Trim(strings.TrimSpace(l), `"`)
+		if l == "" {
+			continue
+		}
+		f := strings.Split(l, "|")
+		if len(f) != 3 {
+			t.Fatalf("PEOPLE entry %q is not name|group|roles", l)
+		}
+		got[f[0]] = [2]string{f[1], f[2]}
+	}
+	if len(got) != len(testenv.DefaultPeople) {
+		t.Fatalf("script has %d people, envtest has %d", len(got), len(testenv.DefaultPeople))
+	}
+	for _, p := range testenv.DefaultPeople {
+		g, ok := got[p.Name]
+		if !ok {
+			t.Errorf("%s is not in hack/kind-people.sh", p.Name)
+			continue
+		}
+		if g[0] != strings.Join(p.Groups, ",") || g[1] != strings.Join(p.Roles, ",") {
+			t.Errorf("%s: script has group %q roles %q; envtest has %v %v", p.Name, g[0], g[1], p.Groups, p.Roles)
+		}
+	}
+}
+
+// kubectlStub answers the two reads kind-people.sh kubeconfig makes and
+// records every call.
+func (e env) kubectlStub(t *testing.T, server string) {
+	t.Helper()
+	body := "#!/bin/sh\necho \"kubectl $*\" >> '" + e.calls + "'\n" +
+		"case \"$*\" in\n" +
+		"  *certificate-authority-data*) printf '%s' '" + base64.StdEncoding.EncodeToString([]byte("fake-ca")) + "' ;;\n" +
+		"  *.server*) printf '%s' '" + server + "' ;;\n" +
+		"esac\nexit 0\n"
+	if err := os.WriteFile(filepath.Join(e.stubs, "kubectl"), []byte(body), 0o700); err != nil { //nolint:gosec // G306: executable stub in t.TempDir()
+		t.Fatal(err)
+	}
+}
+
+// The kubeconfig for a person holds their token and nothing else secret; the
+// token appears in no command line and no output.
+func TestKindPeopleKubeconfig(t *testing.T) {
+	e := newEnv(t)
+	e.kubectlStub(t, "https://127.0.0.1:40123")
+	dir := filepath.Join(t.TempDir(), "people")
+	if out, err := e.runScript(t, "hack/kind-people.sh", nil, "gen", dir); err != nil {
+		t.Fatalf("gen: %v\n%s", err, out)
+	}
+	tokens := filepath.Join(dir, "tokens.csv")
+	var samToken string
+	for _, l := range strings.Split(strings.TrimSpace(readFile(t, tokens)), "\n") {
+		if m := tokenLine.FindStringSubmatch(l); m != nil && m[2] == "sam" {
+			samToken = m[1]
+		}
+	}
+	out := filepath.Join(t.TempDir(), "persons", "sam.kubeconfig")
+	vars := map[string]string{"KUBECONFIG": e.dedicated(t)}
+	stdout, err := e.runScript(t, "hack/kind-people.sh", vars, "kubeconfig", "kind-foc-test-1", "sam", tokens, out)
+	if err != nil {
+		t.Fatalf("kubeconfig: %v\n%s", err, stdout)
+	}
+	if strings.TrimSpace(stdout) != "sam@foc-test-1" {
+		t.Errorf("printed %q, want the context name sam@foc-test-1", stdout)
+	}
+	if strings.Contains(stdout, samToken) {
+		t.Error("the token was printed")
+	}
+	if calls, _ := os.ReadFile(e.calls); strings.Contains(string(calls), samToken) {
+		t.Error("the token is on a command line")
+	}
+	fi, err := os.Stat(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode().Perm() != 0o600 {
+		t.Errorf("kubeconfig mode %v, want 0600", fi.Mode().Perm())
+	}
+	var kc struct {
+		Clusters []struct {
+			Name    string
+			Cluster struct {
+				Server                   string
+				CertificateAuthorityData string `json:"certificate-authority-data"`
+			}
+		}
+		Users []struct {
+			Name string
+			User struct{ Token string }
+		}
+		Contexts []struct {
+			Name    string
+			Context struct{ Cluster, User string }
+		}
+	}
+	if err := yaml.Unmarshal([]byte(readFile(t, out)), &kc); err != nil {
+		t.Fatal(err)
+	}
+	if len(kc.Users) != 1 || kc.Users[0].Name != "sam" || kc.Users[0].User.Token != samToken {
+		t.Errorf("users %+v: want one user, sam, with sam's token", redactedUsers(kc.Users))
+	}
+	if len(kc.Contexts) != 1 || kc.Contexts[0].Name != "sam@foc-test-1" || kc.Contexts[0].Context.User != "sam" || kc.Contexts[0].Context.Cluster != "foc-test-1" {
+		t.Errorf("contexts %+v", kc.Contexts)
+	}
+	if len(kc.Clusters) != 1 || kc.Clusters[0].Cluster.Server != "https://127.0.0.1:40123" || kc.Clusters[0].Cluster.CertificateAuthorityData != base64.StdEncoding.EncodeToString([]byte("fake-ca")) {
+		t.Errorf("clusters %+v", kc.Clusters)
+	}
+	// A person that is not in the token file gets nothing.
+	if out, err := e.runScript(t, "hack/kind-people.sh", vars, "kubeconfig", "kind-foc-test-1", "mallory", tokens, filepath.Join(t.TempDir(), "m")); err == nil || !strings.Contains(out, "no token for 'mallory'") {
+		t.Errorf("unknown person: err=%v\n%s", err, out)
+	}
+}
+
+func redactedUsers(us []struct {
+	Name string
+	User struct{ Token string }
+}) []string {
+	var out []string
+	for _, u := range us {
+		out = append(out, u.Name)
+	}
+	return out
+}
+
+func TestKindPeopleRefuses(t *testing.T) {
+	e := newEnv(t)
+	e.kubectlStub(t, "https://127.0.0.1:1")
+	dir := filepath.Join(t.TempDir(), "people")
+	if _, err := e.runScript(t, "hack/kind-people.sh", nil, "gen", dir); err != nil {
+		t.Fatal(err)
+	}
+	tokens := filepath.Join(dir, "tokens.csv")
+	out := filepath.Join(t.TempDir(), "x")
+	for _, c := range []struct {
+		name, ctx, kubeconfig, want string
+	}{
+		{"context not foc", "kind-prod", e.dedicated(t), "CONTEXT must be kind-foc-*"},
+		{"docker-desktop", "docker-desktop", e.dedicated(t), "CONTEXT must be kind-foc-*"},
+		{"default kubeconfig", "kind-foc-test-1", filepath.Join(e.home, ".kube", "config"), "resolves to ~/.kube/config"},
+		{"kubeconfig unset", "kind-foc-test-1", "", "KUBECONFIG must be set"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			_ = os.Remove(e.calls)
+			vars := map[string]string{}
+			if c.kubeconfig != "" {
+				vars["KUBECONFIG"] = c.kubeconfig
+			}
+			o, err := e.runScript(t, "hack/kind-people.sh", vars, "kubeconfig", c.ctx, "sam", tokens, out)
+			if err == nil || !strings.Contains(o, c.want) {
+				t.Fatalf("want a refusal containing %q, got err=%v\n%s", c.want, err, o)
+			}
+			if calls, _ := os.ReadFile(e.calls); len(calls) > 0 {
+				t.Errorf("refused, but kubectl ran: %s", calls)
+			}
+			if _, err := os.Stat(out); err == nil {
+				t.Error("a kubeconfig was written")
+			}
+		})
+	}
+}
+
+// The kind configuration foc-up renders mounts the token directory into the
+// node and passes --token-auth-file to the API server, with no placeholder
+// left.
+func TestKindConfigTemplate(t *testing.T) {
+	tmpl := readFile(t, "../../hack/kind/foc-cluster.yaml.tmpl")
+	rendered := strings.ReplaceAll(tmpl, "@PEOPLE_DIR@", "/work/foc-up/people")
+	if strings.Contains(rendered, "@") {
+		t.Error("a placeholder is left after rendering")
+	}
+	var cfg struct {
+		Kind  string
+		Nodes []struct {
+			Role        string
+			ExtraMounts []struct {
+				HostPath, ContainerPath string
+				ReadOnly                bool
+			}
+		}
+		KubeadmConfigPatches []string
+	}
+	if err := yaml.Unmarshal([]byte(rendered), &cfg); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Kind != "Cluster" || len(cfg.Nodes) != 1 || cfg.Nodes[0].Role != "control-plane" {
+		t.Fatalf("config %+v", cfg)
+	}
+	m := cfg.Nodes[0].ExtraMounts
+	if len(m) != 1 || m[0].HostPath != "/work/foc-up/people" || !m[0].ReadOnly {
+		t.Fatalf("extraMounts %+v: want the token directory, read-only", m)
+	}
+	if len(cfg.KubeadmConfigPatches) != 1 {
+		t.Fatalf("%d kubeadm patches, want 1", len(cfg.KubeadmConfigPatches))
+	}
+	var patch struct {
+		Kind      string
+		APIServer struct {
+			ExtraArgs    map[string]string
+			ExtraVolumes []struct {
+				HostPath, MountPath string
+				ReadOnly            bool
+			}
+		} `json:"apiServer"`
+	}
+	if err := yaml.Unmarshal([]byte(cfg.KubeadmConfigPatches[0]), &patch); err != nil {
+		t.Fatal(err)
+	}
+	if patch.Kind != "ClusterConfiguration" || patch.APIServer.ExtraArgs["token-auth-file"] != m[0].ContainerPath+"/tokens.csv" {
+		t.Errorf("patch %+v: the API server must read %s/tokens.csv", patch, m[0].ContainerPath)
+	}
+	v := patch.APIServer.ExtraVolumes
+	if len(v) != 1 || v[0].HostPath != m[0].ContainerPath || v[0].MountPath != m[0].ContainerPath || !v[0].ReadOnly {
+		t.Errorf("extraVolumes %+v: the API server pod must mount the node's %s read-only", v, m[0].ContainerPath)
+	}
+}
+
+// make foc-up with FOC_UP_DRY_RUN=1 prints the plan: the steps in order, the
+// kubeconfig and context on every kubectl and helm line, Swarmada's webhook
+// overlay, the chart, and creates the token file and kind configuration.
+func TestFocUpDryRunPlan(t *testing.T) {
+	e := newEnv(t)
+	work := t.TempDir()
+	kc := e.dedicated(t)
+	out, err := e.runScript(t, "hack/foc-up.sh", map[string]string{
+		"CLUSTER": "foc-test-1", "KUBECONFIG": kc, "FOC_UP_DIR": work, "FOC_UP_DRY_RUN": "1", "FOC_UP_TRACING": "1",
+	})
+	if err != nil {
+		t.Fatalf("dry run failed: %v\n%s", err, out)
+	}
+	order := []string{
+		"people tokens", "kind create cluster --name foc-test-1", "--config " + filepath.Join(work, "kind-config.yaml"),
+		"kind-people.sh kubeconfig kind-foc-test-1 sam", "warehouse-quickstart/run.sh --scenario healthy-fleet",
+		"apply -k " + filepath.Join(work, "swarmada", "config", "controlstream-tls"), "foc-up-preflight.sh",
+		"make -C", "kind load docker-image fleet-ops-copilot:dev --name foc-test-1",
+		"upgrade --install foc", "tracing.backend.enabled=true", "kind-people.sh bind kind-foc-test-1 warehouse-a",
+		"rollout status deploy/foc-mcp deploy/foc-approvals", "dry run finished",
+	}
+	at := 0
+	for _, want := range order {
+		i := strings.Index(out[at:], want)
+		if i < 0 {
+			t.Fatalf("plan lacks %q after offset %d; output:\n%s", want, at, out)
+		}
+		at += i + len(want)
+	}
+	for _, l := range strings.Split(out, "\n") {
+		if strings.Contains(l, "[dry-run] kubectl ") || strings.Contains(l, "[dry-run] helm ") {
+			hasCtx := strings.Contains(l, "--context kind-foc-test-1 ") || strings.Contains(l, "--kube-context kind-foc-test-1 ")
+			if !strings.Contains(l, "--kubeconfig "+kc) || !hasCtx {
+				t.Errorf("a cluster command without the dedicated kubeconfig and explicit context: %s", l)
+			}
+		}
+	}
+	if strings.Contains(out, ".kube/config") {
+		t.Errorf("the plan mentions ~/.kube/config:\n%s", out)
+	}
+	if fi, err := os.Stat(filepath.Join(work, "people", "tokens.csv")); err != nil || fi.Mode().Perm() != 0o600 {
+		t.Errorf("tokens.csv: %v %v", fi, err)
+	}
+	cfg := readFile(t, filepath.Join(work, "kind-config.yaml"))
+	if !strings.Contains(cfg, "hostPath: "+filepath.Join(work, "people")) || strings.Contains(cfg, "@PEOPLE_DIR@") {
+		t.Errorf("kind configuration not rendered with the token directory:\n%s", cfg)
+	}
+	if calls, _ := os.ReadFile(e.calls); len(calls) > 0 {
+		t.Errorf("a dry run ran external commands: %s", calls)
+	}
+	if !strings.Contains(readFile(t, filepath.Join(work, "last-run.txt")), "dry-run=1") {
+		t.Error("last-run.txt does not say dry-run=1")
+	}
+}

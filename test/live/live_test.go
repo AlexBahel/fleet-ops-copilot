@@ -25,7 +25,9 @@ limitations under the License.
 //
 //	KUBECONFIG                    kubeconfig holding both contexts below
 //	FOC_LIVE_ADMIN_CONTEXT        cluster-admin context (setup reads, tokens, kubectl exec)
-//	FOC_LIVE_APPROVER_CONTEXT     context of a person who holds fleetops:approver and swarmada:fleet-manager
+//	FOC_LIVE_APPROVER_CONTEXT     context of a person who authenticates with a bearer token (dana) and holds fleetops:approver and swarmada:fleet-manager
+//	FOC_LIVE_TOKENS_FILE          the people's static token file (hack/kind-people.sh gen): requests are filed with the
+//	                              requester's own bearer token, so the requester is verified (D57, R43)
 //	FOC_LIVE_MCP_URL              foc-mcp streamable HTTP endpoint, e.g. http://127.0.0.1:18080/mcp
 //	FOC_LIVE_FOC                  path to the foc binary
 //	FOC_LIVE_PHASE                "no-webhooks" (Swarmada serves no admission webhooks) or "webhooks"
@@ -75,13 +77,31 @@ const (
 
 type env struct {
 	adminCtx, approverCtx, mcpURL, focBin, evidence string
+	tokens                                          map[string]string // person -> bearer token (never logged)
+	sessions                                        map[string]*mcp.ClientSession
 	admin                                           client.Client
 	adminCS                                         *kubernetes.Clientset
 	adminCfg                                        *rest.Config
 	approverCfg                                     *rest.Config
 	approverUser                                    string
-	mcp                                             *mcp.ClientSession
 	session                                         string
+}
+
+// readTokens parses a kube-apiserver static token file: token,user,uid,"groups".
+func readTokens(path string) (map[string]string, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for _, l := range strings.Split(strings.TrimSpace(string(b)), "\n") {
+		f := strings.SplitN(l, ",", 4)
+		if len(f) < 3 || f[0] == "" || f[1] == "" {
+			return nil, fmt.Errorf("%s: line is not token,user,uid,groups", path)
+		}
+		out[f[1]] = f[0]
+	}
+	return out, nil
 }
 
 func mustEnv(t *testing.T, k string) string {
@@ -101,9 +121,13 @@ func setup(t *testing.T, phase string) *env {
 	e := &env{
 		adminCtx: mustEnv(t, "FOC_LIVE_ADMIN_CONTEXT"), approverCtx: mustEnv(t, "FOC_LIVE_APPROVER_CONTEXT"),
 		mcpURL: mustEnv(t, "FOC_LIVE_MCP_URL"), focBin: mustEnv(t, "FOC_LIVE_FOC"), evidence: os.Getenv("FOC_LIVE_EVIDENCE_DIR"),
-		session: fmt.Sprintf("live-%d", time.Now().Unix()),
+		session:  fmt.Sprintf("live-%d", time.Now().Unix()),
+		sessions: map[string]*mcp.ClientSession{},
 	}
 	var err error
+	if e.tokens, err = readTokens(mustEnv(t, "FOC_LIVE_TOKENS_FILE")); err != nil {
+		t.Fatal(err)
+	}
 	if e.adminCfg, err = config.GetConfigWithContext(e.adminCtx); err != nil {
 		t.Fatal(err)
 	}
@@ -129,21 +153,39 @@ func setup(t *testing.T, phase string) *env {
 	if strings.HasPrefix(e.approverUser, "system:serviceaccount:") {
 		t.Fatal("the approver context must be a person, not a ServiceAccount")
 	}
-	cs, err := mcp.NewClient(&mcp.Implementation{Name: "foc-live-test", Version: "0"}, nil).
-		Connect(context.Background(), &mcp.StreamableClientTransport{Endpoint: e.mcpURL}, nil)
-	if err != nil {
-		t.Fatalf("connecting to foc-mcp at %s: %v", e.mcpURL, err)
-	}
-	t.Cleanup(func() { _ = cs.Close() })
-	e.mcp = cs
 	return e
 }
 
-// call invokes a request tool on the deployed foc-mcp as the given operator.
-func (e *env) call(t *testing.T, op, tool string, args map[string]any) tools.RequestResult {
+// mcpSession returns the MCP session that sends person's bearer token with
+// every request ("" sends none, so the requester is unverified).
+func (e *env) mcpSession(t *testing.T, person string) *mcp.ClientSession {
 	t.Helper()
-	res, err := e.mcp.CallTool(context.Background(), &mcp.CallToolParams{
-		Meta: mcp.Meta{mcpserver.MetaSession: e.session, mcpserver.MetaOperator: op}, Name: tool, Arguments: args,
+	if cs, ok := e.sessions[person]; ok {
+		return cs
+	}
+	token := ""
+	if person != "" {
+		if token = e.tokens[person]; token == "" {
+			t.Fatalf("no token for %q in FOC_LIVE_TOKENS_FILE", person)
+		}
+	}
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "foc-live-test", Version: "0"}, nil).
+		Connect(context.Background(), mcpserver.ClientTransport(e.mcpURL, token), nil)
+	if err != nil {
+		t.Fatalf("connecting to foc-mcp at %s as %q: %v", e.mcpURL, person, err)
+	}
+	t.Cleanup(func() { _ = cs.Close() })
+	e.sessions[person] = cs
+	return cs
+}
+
+// callAs invokes a request tool on the deployed foc-mcp with person's bearer
+// token ("" for none) and the operator name asserted in _meta, which foc-mcp
+// ignores for a verified requester (D57).
+func (e *env) callAs(t *testing.T, person, asserted, tool string, args map[string]any) tools.RequestResult {
+	t.Helper()
+	res, err := e.mcpSession(t, person).CallTool(context.Background(), &mcp.CallToolParams{
+		Meta: mcp.Meta{mcpserver.MetaSession: e.session, mcpserver.MetaOperator: asserted}, Name: tool, Arguments: args,
 	})
 	if err != nil {
 		t.Fatalf("%s: %v", tool, err)
@@ -153,7 +195,31 @@ func (e *env) call(t *testing.T, op, tool string, args map[string]any) tools.Req
 	if err := json.Unmarshal(b, &out); err != nil {
 		t.Fatalf("%s: decoding %s: %v", tool, b, err)
 	}
-	t.Logf("%s by %s -> %s", tool, op, b)
+	t.Logf("%s by %s (token of %q, asserted %q) -> %s", tool, asserted, person, asserted, b)
+	return out
+}
+
+// requestedFor returns spec.requestedFor of an ApprovalRequest.
+func (e *env) requestedFor(t *testing.T, name string) string {
+	t.Helper()
+	var r focv1.ApprovalRequest
+	if err := e.admin.Get(context.Background(), client.ObjectKey{Namespace: ns, Name: name}, &r); err != nil {
+		t.Fatal(err)
+	}
+	return r.Spec.RequestedFor
+}
+
+// call files a request as the person op: with op's own bearer token, so the
+// requester is verified. A request that was created must name op as its
+// requester, not "unverified:op".
+func (e *env) call(t *testing.T, op, tool string, args map[string]any) tools.RequestResult {
+	t.Helper()
+	out := e.callAs(t, op, op, tool, args)
+	if name, ok := strings.CutPrefix(out.Created, "ApprovalRequest/"); ok {
+		if got := e.requestedFor(t, name); got != op {
+			t.Fatalf("ApprovalRequest %s: requestedFor %q, want %q (the token must make the requester verified)", name, got, op)
+		}
+	}
 	return out
 }
 
@@ -543,6 +609,47 @@ func TestLiveApprovalPaths(t *testing.T) {
 		}
 		if _, ok := z.Annotations[fleet.EstopAnnotation]; !ok {
 			t.Fatal("the zone stop was cleared")
+		}
+	})
+
+	// R43/D57 on the live API server: the requester is the person behind the
+	// bearer token, whatever name _meta asserts; without a token the requester
+	// is unverified:<name> and no one can approve the request.
+	t.Run("requester-is-authenticated-not-asserted", func(t *testing.T) {
+		draftArgs := func(name string) map[string]any {
+			return map[string]any{
+				"name": name, "purpose": "live check: the requester is the token's person",
+				"actions": []map[string]any{{"name": "inspect", "type": "Navigate", "zone": zone}},
+			}
+		}
+		// sam's token, _meta asserts dana: requestedFor is sam.
+		forged := requestName(t, e.callAs(t, "sam", "dana", "request_draft_task", draftArgs(fmt.Sprintf("foc-live-forged-%d", stamp))))
+		if got := e.requestedFor(t, forged); got != "sam" {
+			t.Errorf("requestedFor %q, want sam (the asserted name dana must have no effect)", got)
+		}
+		// No token, _meta asserts dana: unverified, and dana's own approval is refused.
+		anon := fmt.Sprintf("foc-live-unverified-%d", stamp)
+		unverified := requestName(t, e.callAs(t, "", "dana", "request_draft_task", draftArgs(anon)))
+		if got := e.requestedFor(t, unverified); got != "unverified:dana" {
+			t.Errorf("requestedFor %q, want unverified:dana", got)
+		}
+		e.foc(t, "approve", unverified, "-n", ns, "--context", e.approverCtx)
+		time.Sleep(10 * time.Second)
+		var ar focv1.ApprovalRequest
+		if err := e.admin.Get(ctx, client.ObjectKey{Namespace: ns, Name: unverified}, &ar); err != nil {
+			t.Fatal(err)
+		}
+		var ft swarmv1.FleetTask
+		err := e.admin.Get(ctx, client.ObjectKey{Namespace: ns, Name: anon}, &ft)
+		t.Logf("approved unverified request %s: state=%s refusedDecisions=%v message=%q; FleetTask/%s: %v", unverified, ar.Status.State, ar.Status.RefusedDecisions, ar.Status.Message, anon, err)
+		if len(ar.Status.RefusedDecisions) == 0 || ar.Status.State == focv1.StateApproved || ar.Status.State == focv1.StateExecuted {
+			t.Error("the approval of an unverified request was not refused")
+		}
+		if !apierrors.IsNotFound(err) {
+			t.Errorf("FleetTask %s exists after approving an unverified request", anon)
+		}
+		for _, r := range []string{forged, unverified} {
+			e.foc(t, "reject", r, "-n", ns, "--context", e.approverCtx, "-comment", "live check cleanup")
 		}
 	})
 

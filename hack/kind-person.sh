@@ -12,6 +12,11 @@
 # CONTEXT is an admin context on a foc-* kind cluster. The new context in
 # KUBECONFIG_OUT is named USER@<cluster>. The private key never leaves
 # KUBECONFIG_OUT.
+#
+# A person made here authenticates with a client certificate and has no bearer
+# token, so a request they file is an unverified requester (docs/DESIGN.md
+# D57). For a person who can file and approve verified requests use
+# hack/kind-people.sh (static tokens, R43, test only).
 set -euo pipefail
 ctx="$1" user="$2" group="$3" out="$4"
 [[ "$ctx" == kind-foc-* ]] || { echo "CONTEXT must be kind-foc-*" >&2; exit 1; }

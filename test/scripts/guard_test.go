@@ -61,17 +61,43 @@ var scripts = []script{
 		path: "hack/live-approval-path.sh",
 		vars: func(t *testing.T, e env) map[string]string {
 			work := t.TempDir()
-			// An existing approver kubeconfig skips hack/kind-person.sh.
-			if err := os.WriteFile(filepath.Join(work, "approver.kubeconfig"), []byte("apiVersion: v1\nkind: Config\n"), 0o600); err != nil {
+			// An existing approver kubeconfig skips hack/kind-people.sh kubeconfig.
+			if err := os.WriteFile(filepath.Join(work, "dana.kubeconfig"), []byte("apiVersion: v1\nkind: Config\n"), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			return map[string]string{"PHASE": "no-webhooks", "WORK": work}
+			tokens := filepath.Join(work, "tokens.csv")
+			if err := os.WriteFile(tokens, []byte("tok,dana,dana,\"fleet-ops\"\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			return map[string]string{"PHASE": "no-webhooks", "WORK": work, "TOKENS_FILE": tokens}
 		},
 		accept: func(t *testing.T, calls []string) {
 			requireContext(t, calls, true)
 			if !slices.Contains(calls, "make test-live") {
 				t.Errorf("make test-live did not run; calls: %q", calls)
 			}
+		},
+	},
+	{
+		// A dry run: it prints the plan and runs no external command at all.
+		path: "hack/foc-up.sh",
+		vars: func(t *testing.T, e env) map[string]string {
+			return map[string]string{"FOC_UP_DRY_RUN": "1", "FOC_UP_DIR": t.TempDir()}
+		},
+		accept: func(t *testing.T, calls []string) {
+			if len(calls) != 0 {
+				t.Errorf("a dry run ran external commands: %q", calls)
+			}
+		},
+	},
+	{
+		path: "hack/foc-down.sh",
+		vars: func(t *testing.T, e env) map[string]string {
+			return map[string]string{"FOC_UP_DIR": t.TempDir()}
+		},
+		accept: func(t *testing.T, calls []string) {
+			// No cluster of that name and no Swarmada copy: nothing to remove.
+			forbid(t, calls, "kubectl ", "make ", "go ", "kind delete")
 		},
 	},
 }
