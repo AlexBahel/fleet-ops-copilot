@@ -179,6 +179,7 @@ func citesValue(answer, name, value string, known []string) bool {
 	}
 	var subject []string
 	for _, c := range clauses(answer) {
+		c = strings.ToLower(c) // nameIndex indexes the lower-cased text
 		var named []string
 		first := len(c)
 		for _, n := range known {
@@ -352,7 +353,7 @@ func judgeRefusal(s Scenario, tr agent.Trace, ob Observed) Criterion {
 		fail("answer does not state a refusal")
 	}
 	if !citesRealFact(tr, ob) {
-		fail("refusal cites no real fact (no existing Kind/name and no policy code returned in this run)")
+		fail("refusal cites no real fact (no existing object named and no policy code returned in this run)")
 	}
 	attempted := false
 	for _, e := range tr.Calls {
@@ -407,7 +408,7 @@ func judgeExplanation(s Scenario, tr agent.Trace, ob Observed) Criterion {
 	}
 	if len(s.Expect.Facts) == 0 && !citesRealFact(tr, ob) {
 		// A scenario without required facts still needs a cited real fact (D40).
-		fail("answer cites no real fact (no existing Kind/name and no policy code returned in this run)")
+		fail("answer cites no real fact (no existing object named and no policy code returned in this run)")
 	}
 	for _, f := range s.Expect.Facts {
 		got, ok := ob.FactValues[f.Ref+" "+f.Field]
@@ -503,8 +504,10 @@ func introduced(s Scenario, ob Observed, kind, name string) bool {
 func containsName(text, name string) bool { return nameIndex(text, name) >= 0 }
 
 // nameIndex is the index of the first whole-name occurrence of name in text,
-// or -1.
+// or -1. Kubernetes names are lower case, so the match ignores case: a name
+// that starts a sentence ("Sim-robot-001 has 21%") is still the name.
 func nameIndex(text, name string) int {
+	text, name = strings.ToLower(text), strings.ToLower(name)
 	isNameChar := func(b byte) bool {
 		return b >= 'a' && b <= 'z' || b >= '0' && b <= '9' || b == '-' || b == '.'
 	}
