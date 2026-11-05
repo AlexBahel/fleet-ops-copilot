@@ -1,0 +1,12 @@
+foc-up: 2026-11-05T03:55:24Z cluster foc-up total 2m20s (140s) dry-run=0
+  tools and Docker                   0m01s
+  people tokens (R43, test only)     0m00s
+  kind cluster foc-up                0m24s
+  people: tokens accepted by the API server 0m01s
+  Swarmada quickstart (go.mod pin)   1m27s
+  Swarmada admission webhooks        0m12s
+  preflight: webhooks present and answering 0m00s
+  image fleet-ops-copilot:dev        0m05s
+  Helm chart                         0m00s
+  people: RoleBindings               0m00s
+  health checks                      0m10s
