@@ -176,7 +176,7 @@ go run -tags envtest ./evals/cmd/foc-eval -backend claude -model claude-sonnet-5
 
 ## How it was built
 
-Built with [Claude Code](https://claude.com/claude-code) under Al Bahel's design: the design,
+Built with [Claude Code](https://claude.com/claude-code) under Alex Bahel's design: the design,
 the decisions in `docs/DESIGN.md` §7 and the rulings they cite are the owner's; code, tests and
 documents were written with Claude Code. Two of the three models
 measured above (Claude Sonnet 5.5 and Opus 5.5) are from Anthropic, the maker of Claude Code.
