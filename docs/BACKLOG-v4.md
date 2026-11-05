@@ -15,7 +15,7 @@ Sonnet 5.5, Opus 5.5 and the air-gapped Qwen2.5-7B again.
 | # | Defect | Seen in | Direction |
 |---|---|---|---|
 | J1 | A kind word before a hyphenated word is read as an object that does not exist | Sonnet 5.5 diagnose-01 run 1 ("Robot/e-stop"); Opus 5.5 diagnose-07 run 2 ("Robot/emergency-stop") | Not count a hyphenated common word as an object name. It must still count a real invented `Kind name` |
-| J2 | A pronoun clause with an object name as its value is not accepted | Sonnet 5.5 diagnose-02 run 3: "It now has `status.assignedRobot`=sim-robot-002" | Accept a fact stated in a clause whose subject is a pronoun for the object just named |
+| J2 | A pronoun clause with an object name as its value is not accepted | Sonnet 5.5 diagnose-02 run 3: "It now has `status.assignedRobot`=sim-robot-002" | Accept a fact stated in a clause whose subject is a pronoun for the object named immediately before |
 | J3 | A collective statement is not attributed to each object (R47) | diagnose-07 run 3: "All three robots have their front camera active"; the run passed every other criterion | Attribute "all three robots ..." to each of the objects it covers, if the answer names them or the cluster has exactly that set |
 
 Each fix needs a judge test that fails on the old judge, and a check that no run in the three
