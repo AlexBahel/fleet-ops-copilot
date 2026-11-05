@@ -1,0 +1,4 @@
+# Used by `shellcheck -x hack/*.sh hack/lib/*.sh` (CI hygiene job): resolve
+# `# shellcheck source=` paths against the script's own directory.
+external-sources=true
+source-path=SCRIPTDIR

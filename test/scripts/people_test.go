@@ -373,3 +373,63 @@ func TestFocUpDryRunPlan(t *testing.T) {
 		t.Error("last-run.txt does not say dry-run=1")
 	}
 }
+
+// The tokens, the kubeconfigs and the Swarmada copy never go in the work tree:
+// foc-up, foc-down and kind-people gen refuse a directory inside the repository.
+func TestTokenDirectoryMustBeOutsideRepo(t *testing.T) {
+	repo, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	inside := filepath.Join(repo, "local", "foc-up-test-should-not-exist")
+	t.Cleanup(func() { _ = os.RemoveAll(inside) })
+	e := newEnv(t)
+	kc := e.dedicated(t)
+	vars := map[string]string{"CLUSTER": "foc-test-1", "KUBECONFIG": kc, "FOC_UP_DIR": inside, "FOC_UP_DRY_RUN": "1"}
+	for _, c := range []struct {
+		name, script string
+		args         []string
+	}{
+		{"foc-up", "hack/foc-up.sh", nil},
+		{"foc-down", "hack/foc-down.sh", nil},
+		{"kind-people gen", "hack/kind-people.sh", []string{"gen", filepath.Join(inside, "people")}},
+		{"repository root", "hack/kind-people.sh", []string{"gen", repo}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, err := e.runScript(t, c.script, vars, c.args...)
+			if err == nil || !strings.Contains(out, "inside the repository") {
+				t.Fatalf("want a refusal naming the repository, got err=%v\n%s", err, out)
+			}
+			if _, err := os.Stat(filepath.Join(inside, "people", "tokens.csv")); err == nil {
+				t.Error("a token file was written inside the repository")
+			}
+		})
+	}
+	// A symlink out of the temp directory into the repository is the same directory.
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(repo, link); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := e.runScript(t, "hack/kind-people.sh", nil, "gen", filepath.Join(link, "local", "x")); err == nil || !strings.Contains(out, "inside the repository") {
+		t.Errorf("symlink into the repository: err=%v\n%s", err, out)
+	}
+	if _, err := os.Stat(filepath.Join(repo, "local", "x")); err == nil {
+		t.Error("a refused run still created a directory inside the repository")
+	}
+	if _, err := os.Stat(inside); err == nil {
+		t.Error("a refused run still created FOC_UP_DIR inside the repository")
+	}
+}
+
+// Without FOC_UP_DIR the default is outside the repository.
+func TestFocUpDefaultDirectoryIsOutsideRepo(t *testing.T) {
+	e := newEnv(t)
+	out, err := e.runScript(t, "hack/foc-up.sh", map[string]string{"CLUSTER": "foc-test-1", "KUBECONFIG": e.dedicated(t), "FOC_UP_DRY_RUN": "1"})
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	want := filepath.Join(e.home, ".local", "state", "fleet-ops-copilot", "foc-up")
+	if _, err := os.Stat(filepath.Join(want, "people", "tokens.csv")); err != nil {
+		t.Errorf("tokens.csv not under %s: %v\n%s", want, err, out)
+	}
+}

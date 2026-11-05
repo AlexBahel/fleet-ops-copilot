@@ -97,7 +97,7 @@ remove it.
   `make foc-up`, D60); in production, OIDC.
 - **The kind person tokens are not an identity system (D60).** A static token file has no expiry
   and no rotation, and a change needs an API server restart. Anyone who can read
-  `local/foc-up/people/tokens.csv` (mode 600) or the node's `/etc/foc-people` can act as sam, dana
+  `$FOC_UP_DIR/people/tokens.csv` (mode 600) or the node's `/etc/foc-people` can act as sam, dana
   or eve on that cluster. It exists for fictional people on a local cluster, and no other.
 - **Requester tokens (D57).** The token reaches `foc-mcp` through `foc-agent` over plain HTTP
   inside the cluster, and both processes briefly hold a credential that is valid against the API

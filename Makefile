@@ -90,7 +90,8 @@ test-live: build ## Approval paths against a live cluster (hack/live-approval-pa
 # (hack/lib/foc-guard.sh). FOC_UP_* variables (hack/foc-up.sh header) pass through
 # from the environment: FOC_UP_DRY_RUN=1, FOC_UP_TRACING=1, FOC_UP_ANTHROPIC_KEY_FILE.
 FOC_CLUSTER ?= foc-up
-FOC_UP_DIR ?= $(CURDIR)/local/foc-up
+# Outside the repository on purpose: it holds the people's bearer tokens (the scripts refuse a directory inside it).
+FOC_UP_DIR ?= $(HOME)/.local/state/fleet-ops-copilot/foc-up
 FOC_KUBECONFIG ?= $(FOC_UP_DIR)/kubeconfig
 # Compared with the base revision: BASE=<revision> (default: merge base with origin/main).
 BASE ?=

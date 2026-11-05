@@ -25,7 +25,7 @@
 # kubeconfig and the context kind-$CLUSTER.
 #
 # Environment (all optional):
-#   FOC_UP_DIR               working directory (default local/foc-up): people/ (tokens), persons/ (kubeconfigs),
+#   FOC_UP_DIR               working directory (default ~/.local/state/fleet-ops-copilot/foc-up, outside the repository: it holds tokens): people/ (tokens), persons/ (kubeconfigs),
 #                            swarmada/ (writable copy of the pinned module), logs/, last-run.txt
 #   FOC_UP_SCENARIO          Swarmada quickstart scenario (default healthy-fleet)
 #   FOC_UP_NODE_IMAGE        kind node image (default: kind v0.33.0's own default, pinned by digest)
@@ -47,7 +47,7 @@ foc_guard foc-up.sh
 export CLUSTER KUBECONFIG
 
 DRY="${FOC_UP_DRY_RUN:-0}"
-dir="${FOC_UP_DIR:-$repo/local/foc-up}"
+dir="${FOC_UP_DIR:-$HOME/.local/state/fleet-ops-copilot/foc-up}"
 scenario="${FOC_UP_SCENARIO:-healthy-fleet}"
 # The default node image of kind v0.33.0 (pkg/apis/config/defaults/image.go).
 node_image="${FOC_UP_NODE_IMAGE:-kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5}"
@@ -55,6 +55,7 @@ img="${FOC_UP_IMAGE:-fleet-ops-copilot:dev}"
 ctx="kind-$CLUSTER"
 ns=foc-system
 swarm_ns="${SWARMADA_NAMESPACE:-warehouse-a}"
+foc_outside_repo foc-up.sh "$dir" "$repo"
 mkdir -p "$dir/logs"
 chmod 700 "$dir"
 
@@ -73,6 +74,7 @@ stage_done() {
   stage_name=""
 }
 fail() { echo "foc-up: $*" >&2; exit 1; }
+# shellcheck disable=SC2154 # rc is assigned inside the single-quoted trap body
 trap 'rc=$?; [[ $rc -eq 0 ]] || echo "foc-up: FAILED${stage_name:+ in stage \"$stage_name\"} after $(fmt $((SECONDS - started))) (exit $rc). Logs: $dir/logs. Start over with: make foc-down foc-up" >&2' EXIT
 
 # x runs a command that changes something; with FOC_UP_DRY_RUN it only prints it.
@@ -97,7 +99,11 @@ for t in docker kind kubectl helm jq openssl curl go make python3; do
   command -v "$t" >/dev/null || missing+=" $t"
 done
 if [[ -n "$missing" ]]; then
-  [[ "$DRY" == 1 ]] && echo "  [dry-run] missing tools (a real run stops here):$missing" || fail "missing tools:$missing"
+  if [[ "$DRY" == 1 ]]; then
+    echo "  [dry-run] missing tools (a real run stops here):$missing"
+  else
+    fail "missing tools:$missing"
+  fi
 fi
 if [[ "$DRY" != 1 ]]; then
   docker info >/dev/null 2>&1 || fail "the Docker daemon is not reachable"
@@ -154,6 +160,7 @@ fi
 sw="$dir/swarmada"
 echo "  Swarmada $sw_ver -> $sw (a writable copy: the module cache is read-only and the quickstart builds in its tree)"
 if [[ "$DRY" == 1 ]]; then
+  # shellcheck disable=SC2016 # $1 and $2 are for the inner sh, not expanded here
   x sh -c 'tar -C "$1" -cf - . | tar -C "$2" -xf - && chmod -R u+w "$2"' copy-module "$sw_src" "$sw"
 elif [[ "$(cat "$sw/.foc-up-version" 2>/dev/null)" != "$sw_ver" ]]; then
   # tar, not cp -R: the module cache is mode 0555 and tar sets directory modes last.

@@ -11,7 +11,7 @@
 # people authenticate with OIDC (docs/RUNBOOK.md).
 #
 #   hack/kind-people.sh gen DIR
-#       Writes DIR/tokens.csv (mode 600; a random token per person, in the
+#       Writes DIR/tokens.csv (mode 600; DIR must be outside the repository; a random token per person, in the
 #       kube-apiserver --token-auth-file format) unless it exists. The file
 #       must exist before the cluster is created: hack/foc-up.sh does that and
 #       wires it into the kind configuration (hack/kind/foc-cluster.yaml.tmpl).
@@ -43,6 +43,7 @@ die() { echo "kind-people.sh: $*" >&2; exit 1; }
 guard() {
   local ctx="$1"
   [[ "$ctx" == kind-foc-* ]] || die "CONTEXT must be kind-foc-* (got '$ctx')"
+  # shellcheck disable=SC2034 # read by foc_guard (hack/lib/foc-guard.sh)
   CLUSTER="${ctx#kind-}"
   # shellcheck source=lib/foc-guard.sh
   source "$(dirname "$0")/lib/foc-guard.sh"
@@ -55,7 +56,10 @@ case "$cmd" in
   gen)
     [[ $# -eq 1 ]] || usage
     dir="$1"
-    mkdir -p "$dir"; chmod 700 "$dir"
+    # shellcheck source=lib/foc-guard.sh
+    source "$(dirname "$0")/lib/foc-guard.sh"
+    foc_outside_repo kind-people.sh "$dir" "$(cd "$(dirname "$0")/.." && pwd)"
+    chmod 700 "$dir"
     if [[ -s "$dir/tokens.csv" ]]; then
       echo "kind-people: $dir/tokens.csv exists; keeping it"
       exit 0

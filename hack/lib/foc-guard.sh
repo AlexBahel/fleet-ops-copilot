@@ -1,5 +1,6 @@
 # Copyright 2026 Alex Bahel
 # Licensed under the Apache License, Version 2.0 (see LICENSE).
+# shellcheck shell=bash
 #
 # Sourced by the hack/ scripts that act on a live kind cluster
 # (live-scenarios.sh, capture-live-fixtures.sh, live-approval-path.sh).
@@ -34,4 +35,24 @@ foc_guard() {
     fi
   done
   ((entries > 0)) || refuse "KUBECONFIG names no file"
+}
+
+# foc_outside_repo <script name> <directory> <repo root> refuses (exit 1) when
+# the directory is the repository or inside it. foc-up keeps the people's
+# bearer tokens, the kubeconfigs and a copy of Swarmada there; a clone has no
+# .git/info/exclude of the author's, so such files must not sit in the work
+# tree where `git add -A` could take them. The directory is created if needed.
+foc_outside_repo() {
+  local me="$1" d="$2" repo="$3" probe rest="" real_d real_repo
+  # Resolve through the nearest existing ancestor first, so that nothing is
+  # created inside the repository before the check.
+  probe="$d"
+  while [[ ! -d "$probe" ]]; do rest="/$(basename "$probe")$rest"; probe="$(dirname "$probe")"; done
+  real_d="$(cd "$probe" && pwd -P)$rest"
+  real_repo="$(cd "$repo" && pwd -P)"
+  if [[ "$real_d" == "$real_repo" || "$real_d" == "$real_repo"/* ]]; then
+    echo "$me: refused: FOC_UP_DIR '$real_d' is inside the repository '$real_repo'; it holds bearer tokens, use a directory outside it (default $HOME/.local/state/fleet-ops-copilot/foc-up)" >&2
+    exit 1
+  fi
+  mkdir -p "$d"
 }

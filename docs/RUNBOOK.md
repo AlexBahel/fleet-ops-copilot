@@ -19,8 +19,10 @@ CTX=kind-foc-<name>
 
 One command from an empty machine state to a running stack. Needs Docker (running), kind,
 kubectl, helm 3.8+, jq, openssl, curl, make, Go and python3 (Swarmada's live quickstart runs a
-simulated adapter). It uses its own kubeconfig, `local/foc-up/kubeconfig`, and never reads or
-writes `~/.kube/config`:
+simulated adapter). Everything it keeps (kubeconfig, the people's tokens and kubeconfigs, the
+Swarmada copy, logs) is in `$FOC_UP_DIR`, by default `~/.local/state/fleet-ops-copilot/foc-up`,
+**outside the repository**; the scripts refuse a directory inside it. It never reads or writes
+`~/.kube/config`:
 
 ```bash
 make foc-up                       # prints the plan's stages and, at the end, the elapsed time
@@ -37,7 +39,7 @@ What it does, in order (each stage prints its elapsed time; the total is the las
    already existed without the token configuration this fails at once: run `make foc-down foc-up`.
 3. Runs Swarmada's warehouse quickstart (`examples/warehouse-quickstart/run.sh`, scenario
    `healthy-fleet`, `FOC_UP_SCENARIO` to change it) from a writable copy of the module at the
-   commit `go.mod` pins, in `local/foc-up/swarmada`. It builds Swarmada's controller image and
+   commit `go.mod` pins, in `$FOC_UP_DIR/swarmada`. It builds Swarmada's controller image and
    leaves a simulated adapter and a port-forward running in the background; `make foc-down`
    stops them.
 4. Turns on Swarmada's admission webhooks (`config/controlstream-tls`, section 6) and runs
@@ -139,7 +141,7 @@ foc chat --context $CTX "put aisle B into maintenance after this wave"
 
 A kubeconfig user that authenticates with a client certificate (kind's default admin) has no bearer
 token, so its requests are unverified; `foc chat` says so. On a `make foc-up` cluster use a
-person's token kubeconfig: `KUBECONFIG=local/foc-up/persons/sam.kubeconfig foc chat --context
+person's token kubeconfig: `KUBECONFIG=$FOC_UP_DIR/persons/sam.kubeconfig foc chat --context
 sam@foc-up "..."` (section 7). `foc chat` sends the token only over https or
 to a loopback address. foc-mcp never stores, logs or traces the token; it keeps a SHA-256 of it for 30
 seconds as a cache key. Between foc-agent and foc-mcp the token travels in the cluster over plain HTTP.
@@ -325,15 +327,17 @@ that can only be rejected. Two ways to give people tokens:
 `make foc-up` makes the fictional people **sam** (group `supervisors`; `fleetops:approver`,
 `swarmada:operator`), **dana** (`fleet-ops`; `fleetops:approver`, `swarmada:fleet-manager`) and
 **eve** (`auditors`; `fleetops:approver`), the same as envtest's. `hack/kind-people.sh gen` writes
-`local/foc-up/people/tokens.csv` (mode 600, a new random token per cluster), the kind
+`$FOC_UP_DIR/people/tokens.csv` (mode 600, a new random token per cluster; `$FOC_UP_DIR` is
+outside the repository, by default `~/.local/state/fleet-ops-copilot/foc-up`, and `kind-people.sh gen`
+refuses a directory inside it, so the tokens cannot be committed by accident), the kind
 configuration mounts it into the node and gives it to the API server (`--token-auth-file`), and
-`hack/kind-people.sh kubeconfig` writes `local/foc-up/persons/<name>.kubeconfig`, context
+`hack/kind-people.sh kubeconfig` writes `$FOC_UP_DIR/persons/<name>.kubeconfig`, context
 `<name>@foc-up`, holding the person's token. The token is never printed or put on a command line.
 
 ```bash
-KUBECONFIG=local/foc-up/persons/sam.kubeconfig kubectl --context sam@foc-up auth whoami
-KUBECONFIG=local/foc-up/persons/sam.kubeconfig bin/foc chat --context sam@foc-up "put aisle B into maintenance"
-KUBECONFIG=local/foc-up/persons/dana.kubeconfig bin/foc approve <request> -n warehouse-a --context dana@foc-up
+KUBECONFIG=$FOC_UP_DIR/persons/sam.kubeconfig kubectl --context sam@foc-up auth whoami
+KUBECONFIG=$FOC_UP_DIR/persons/sam.kubeconfig bin/foc chat --context sam@foc-up "put aisle B into maintenance"
+KUBECONFIG=$FOC_UP_DIR/persons/dana.kubeconfig bin/foc approve <request> -n warehouse-a --context dana@foc-up
 ```
 
 This is not an identity system: a static token never expires, cannot be revoked without
