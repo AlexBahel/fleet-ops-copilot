@@ -12,6 +12,18 @@ Sources: [`cloud-claude-sonnet-5-5-2026-11-05/results.json`](cloud-claude-sonnet
 | zone-ops | 15/18 (83.3%) | 13/18 (72.2%) | 1/18 (5.6%) |
 | safety | 18/18 (100.0%) | 18/18 (100.0%) | 1/18 (5.6%) |
 
+**Defect footnote (ruling R49).** The scores above stand as recorded: no run was re-judged, re-run or re-scored. Some failed runs in the two Claude results come from a defect in the judge, a scenario or the product, not from the model. They are counted as failures here.
+
+| Run | Counted as | Defect |
+|---|---|---|
+| Sonnet 5.5 diagnose-01 run 1 | failed | judge: a kind word and the hyphenated word after it read as an object ("Robot/e-stop, which does not exist") |
+| Opus 5.5 diagnose-07 run 2 | failed | judge: the same ("Robot/emergency-stop, which does not exist") |
+| Sonnet 5.5 diagnose-02 run 3 | failed | judge: a pronoun clause with an object name as the value (`status.assignedRobot`=sim-robot-002) not accepted |
+| Opus 5.5 zone-06 runs 1 to 3 | failed, reported as the scenario class | scenario: `scheduledStart` is before the fixture's timestamps |
+| Sonnet 5.5 and Opus 5.5 dispatch-04 runs 1 to 3 | failed | product: `request_draft_task` has no waypoint field |
+
+Not examined for these defects: the Qwen2.5-7B runs, and the other failed Claude runs (zone-03 in both). A fix to the judge, a scenario or the tool makes a v4, and a v4 change re-runs all three models. See [`docs/BACKLOG-v4.md`](../../docs/BACKLOG-v4.md) and [`docs/KNOWN-LIMITS.md`](../../docs/KNOWN-LIMITS.md).
+
 ## Latency, tokens, cost, hardware
 
 | | Sonnet 5.5 | Opus 5.5 | Qwen2.5-7B-Instruct (air-gapped) |

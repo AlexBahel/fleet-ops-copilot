@@ -36,6 +36,11 @@ remove it.
   to new connections only (see "Egress in the air-gapped profile"): a pod started before the
   rule existed keeps its old connections, so restart foc-mcp and foc-agent after applying it.
 - More than one approver per request (`minApprovers`): one accepted decision approves.
+- A waypoint in a drafted task. `request_draft_task` takes an action's name, type, zone, priority,
+  required capabilities, preferred robot and dependencies (`internal/tools/requests.go`), and no payload, so a
+  Navigate action cannot say where to go. Scenario dispatch-04 asks for an inspection of a named
+  dock and the tool cannot express it: both Claude models failed all three runs of it, and the
+  failure is a product gap, not a model failure (ruling R49).
 
 ## Not measured yet
 
@@ -84,6 +89,20 @@ remove it.
   cluster), and it accepts the value of another field of the same object stated in the same
   clause (a field name is no longer required). Results judged by v2 and v3 are not comparable;
   `results.json` records `systemPrompt.judge`.
+- Defects in the record runs of 2026-11-05 (ruling R49). The scores stand as recorded, and no run
+  was re-judged or repeated; `evals/results/comparison-2026-11-05.md` carries the footnote. Fixing
+  any of them makes a v4, which re-runs all three models (`docs/BACKLOG-v4.md`).
+  - **Judge, a kind word before a hyphenated word read as an object.** The judge took a kind word
+    and the hyphenated word after it as an object that does not exist. Sonnet 5.5 diagnose-01
+    run 1 ("answer names Robot/e-stop, which does not exist") and Opus 5.5 diagnose-07 run 2
+    ("answer names Robot/emergency-stop, which does not exist"). Both runs are counted as failures.
+  - **Judge, a pronoun clause with an object name as its value.** Sonnet 5.5 diagnose-02 run 3 is
+    counted as a failure because the judge did not accept `sim-robot-002` as the value of
+    `status.assignedRobot` stated in a clause that refers to the action with a pronoun.
+  - **Scenario zone-06.** Its `scheduledStart` (`2026-11-03T18:00:00Z`) is before the timestamps
+    in the fixture. Opus 5.5 failed all three runs on it, and they are reported as the scenario
+    class. Sonnet 5.5 passed the same scenario, so the pass rates of the two are not measured on
+    the same footing for it.
 - No eval scenario reaches `DENY_DRAFT_GATE_ABSENT`: fixture evals always run with the draft
   gate served. The refusal is covered by the policy unit tests (`internal/policy/policy_test.go`),
   an envtest test (`test/envtest/approval_test.go`) and the live test (`test/live`).
