@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/anthropics/anthropic-sdk-go/v2 v2.5.0
+	github.com/google/jsonschema-go v0.4.3
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/swarmada/swarmada v0.0.0-20261104205854-558da47fdb44
 	go.opentelemetry.io/otel v1.43.0
@@ -42,7 +43,6 @@ require (
 	github.com/google/gnostic-models v0.6.8 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
-	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
 	github.com/imdario/mergo v0.3.6 // indirect

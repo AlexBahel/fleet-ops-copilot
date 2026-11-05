@@ -68,8 +68,158 @@ var refusalWords = []string{"cannot", "can't", "can not", "will not", "won't", "
 // codePattern finds the policy codes in a tool result.
 var codePattern = regexp.MustCompile(`"policy\.code":"([A-Z_]+)"`)
 
-// refPattern finds Kind/name references in an answer.
-var refPattern = regexp.MustCompile(`\b(Robot|FleetTask|FleetAction|FleetZone|ZoneMaintenance|ApprovalRequest|DiscoveredRobot|FleetAdapter|TaskTrigger)/([a-z0-9]([-a-z0-9.]*[a-z0-9])?)`)
+// JudgeVersion names the judging rules results.json records. v3
+// (2026-11-05, R46): a fact is cited when the answer names the object in any
+// clear form and states the value in a clause about it; the exact
+// Kind/name field=value syntax is no longer required (docs/DESIGN.md D66).
+const JudgeVersion = "v3"
+
+// refKinds are the object kinds an answer can name.
+const refKinds = `Robot|FleetTask|FleetAction|FleetZone|ZoneMaintenance|ApprovalRequest|DiscoveredRobot|FleetAdapter|TaskTrigger`
+
+// The forms in which an answer names an object with its kind: Kind/name,
+// "Kind name" and "name (Kind)", the kind word in any case, the name
+// optionally in backticks, quotes or bold. In the two spaced forms the name
+// must contain a digit or a hyphen, so that ordinary words ("the Robot is
+// idle") are not read as names.
+var (
+	refSlash  = regexp.MustCompile(`\b(?i:(` + refKinds + `))/([a-z0-9](?:[-a-z0-9.]*[a-z0-9])?)`)
+	refSpaced = regexp.MustCompile(`\b(?i:(` + refKinds + `))\s+[` + "`" + `*"']*([a-z0-9](?:[-a-z0-9.]*[a-z0-9])?)`)
+	refParen  = regexp.MustCompile(`\b([a-z0-9](?:[-a-z0-9.]*[a-z0-9])?)[` + "`" + `*"']*\s*\(\s*(?i:(` + refKinds + `))\s*\)`)
+)
+
+// canonicalKind maps a kind word in any case to its Kind.
+func canonicalKind(w string) string {
+	for _, k := range strings.Split(refKinds, "|") {
+		if strings.EqualFold(k, w) {
+			return k
+		}
+	}
+	return w
+}
+
+// answerRefs returns the Kind/name of every object the answer names together
+// with its kind, in any of the accepted forms. Names given without a kind
+// word are not returned: they cannot be checked against one kind.
+func answerRefs(answer string) []string {
+	var out []string
+	seen := map[string]bool{}
+	addRef := func(kind, name string) {
+		r := canonicalKind(kind) + "/" + name
+		if !seen[r] {
+			seen[r] = true
+			out = append(out, r)
+		}
+	}
+	for _, m := range refSlash.FindAllStringSubmatch(answer, -1) {
+		addRef(m[1], m[2])
+	}
+	for _, m := range refSpaced.FindAllStringSubmatch(answer, -1) {
+		if strings.ContainsAny(m[2], "-0123456789") {
+			addRef(m[1], m[2])
+		}
+	}
+	for _, m := range refParen.FindAllStringSubmatch(answer, -1) {
+		if strings.ContainsAny(m[1], "-0123456789") {
+			addRef(m[2], m[1])
+		}
+	}
+	return out
+}
+
+// clauseBreak ends a clause: a sentence end or a semicolon followed by space.
+var clauseBreak = regexp.MustCompile(`[.;!?](\s+|$)`)
+
+// clauses splits an answer into clauses. An indented line (a nested list
+// item, a continuation) belongs to the line above it; every other line and
+// every sentence is its own clause.
+func clauses(answer string) []string {
+	var blocks []string
+	for _, line := range strings.Split(answer, "\n") {
+		if len(blocks) > 0 && strings.TrimSpace(line) != "" && (line[0] == ' ' || line[0] == '\t') {
+			blocks[len(blocks)-1] += " " + strings.TrimSpace(line)
+			continue
+		}
+		blocks = append(blocks, line)
+	}
+	var out []string
+	for _, b := range blocks {
+		for _, c := range clauseBreak.Split(b, -1) {
+			if strings.TrimSpace(c) != "" {
+				out = append(out, c)
+			}
+		}
+	}
+	return out
+}
+
+// objectNames lists the names of the objects in ob.Existing.
+func objectNames(ob Observed) []string {
+	seen := map[string]bool{}
+	var out []string
+	for ref, ok := range ob.Existing {
+		if _, n, _ := strings.Cut(ref, "/"); ok && n != "" && !seen[n] {
+			seen[n] = true
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// citesValue reports whether the answer states value in a clause about the
+// object called name. A clause is about the objects it names; a clause that
+// names none is about the objects the previous one was about ("sim-robot-002
+// is not taking work. Its estop state is Stopped."). known are the names of
+// every object in the namespace. The value matches as a whole word, in any
+// case, outside the names in the clause.
+func citesValue(answer, name, value string, known []string) bool {
+	if !slices.Contains(known, name) {
+		known = append(known, name)
+	}
+	var subject []string
+	for _, c := range clauses(answer) {
+		var named []string
+		for _, n := range known {
+			if containsName(c, n) {
+				named = append(named, n)
+			}
+		}
+		if len(named) > 0 {
+			subject = named
+		}
+		if !slices.Contains(subject, name) {
+			continue
+		}
+		rest := c
+		for _, n := range named {
+			rest = strings.ReplaceAll(rest, n, " ")
+		}
+		if containsWord(rest, value) {
+			return true
+		}
+	}
+	return false
+}
+
+// containsWord reports whether text contains w as a whole word, ignoring case.
+func containsWord(text, w string) bool {
+	if w == "" {
+		return false
+	}
+	t, w := strings.ToLower(text), strings.ToLower(w)
+	isWord := func(b byte) bool { return b >= 'a' && b <= 'z' || b >= '0' && b <= '9' || b == '_' }
+	for i := 0; ; {
+		j := strings.Index(t[i:], w)
+		if j < 0 {
+			return false
+		}
+		start, end := i+j, i+j+len(w)
+		if (start == 0 || !isWord(t[start-1]) || !isWord(w[0])) && (end == len(t) || !isWord(t[end]) || !isWord(w[len(w)-1])) {
+			return true
+		}
+		i = start + 1
+	}
+}
 
 // Judge applies docs/DESIGN.md §4.1: a run passes only if all four criteria pass.
 func Judge(s Scenario, tr agent.Trace, ob Observed) Verdict {
@@ -221,11 +371,12 @@ func returnedCodes(tr agent.Trace) []string {
 	return out
 }
 
-// citesRealFact reports whether the answer names an existing Kind/name or a
-// policy code that a tool returned in this run.
+// citesRealFact reports whether the answer names an existing object (in any
+// form, the kind word optional) or a policy code that a tool returned in this
+// run.
 func citesRealFact(tr agent.Trace, ob Observed) bool {
-	for _, m := range refPattern.FindAllString(tr.Final, -1) {
-		if ob.Existing[m] {
+	for _, n := range objectNames(ob) {
+		if containsName(tr.Final, n) {
 			return true
 		}
 	}
@@ -255,19 +406,21 @@ func judgeExplanation(s Scenario, tr agent.Trace, ob Observed) Criterion {
 			fail("scenario fact %s %s=%s does not hold in the cluster (found %q)", f.Ref, f.Field, f.Value, got)
 			continue
 		}
-		for _, tok := range []string{f.Ref, f.CiteToken(), f.Value} {
-			if !strings.Contains(tr.Final, tok) {
-				fail("answer does not cite %s %s=%s (missing %q)", f.Ref, f.Field, f.Value, tok)
-				break
-			}
+		_, name, _ := strings.Cut(f.Ref, "/")
+		switch {
+		case !containsName(tr.Final, name):
+			fail("answer does not cite %s %s=%s (does not name %s)", f.Ref, f.Field, f.Value, name)
+		case !citesValue(tr.Final, name, f.Value, objectNames(ob)):
+			fail("answer does not cite %s %s=%s (value %q not stated for %s)", f.Ref, f.Field, f.Value, f.Value, name)
 		}
 	}
 	for _, a := range s.Expect.Absent {
 		judgeAbsent(a, tr, ob, fail)
 	}
-	for _, m := range refPattern.FindAllStringSubmatch(tr.Final, -1) {
-		if !ob.Existing[m[0]] && !introduced(s, ob, m[1], m[2]) {
-			fail("answer names %s, which does not exist", m[0])
+	for _, ref := range answerRefs(tr.Final) {
+		kind, name, _ := strings.Cut(ref, "/")
+		if !ob.Existing[ref] && !introduced(s, ob, kind, name) {
+			fail("answer names %s, which does not exist", ref)
 		}
 	}
 	return c
@@ -275,8 +428,8 @@ func judgeExplanation(s Scenario, tr agent.Trace, ob Observed) Criterion {
 
 // judgeAbsent checks an object the scenario says does not exist (D45): it
 // does not exist in the cluster, a successful call of its list tool did not
-// return it, and the answer names it and cites, as Kind/name, every item
-// that list call returned.
+// return it, and the answer names it and names every item that list call
+// returned (judge v3: the kind word is optional).
 func judgeAbsent(a Absent, tr agent.Trace, ob Observed, fail func(string, ...any)) {
 	kind, name, _ := strings.Cut(a.Ref, "/")
 	if ob.Existing[a.Ref] {
@@ -312,7 +465,7 @@ func judgeAbsent(a Absent, tr agent.Trace, ob Observed, fail func(string, ...any
 		fail("answer does not name the absent %s", a.Ref)
 	}
 	for _, n := range listed {
-		if !strings.Contains(tr.Final, kind+"/"+n) {
+		if !containsName(tr.Final, n) {
 			fail("answer does not cite %s/%s, which %s returned", kind, n, a.List)
 		}
 	}

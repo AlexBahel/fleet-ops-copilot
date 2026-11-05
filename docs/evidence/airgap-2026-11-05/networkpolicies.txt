@@ -1,0 +1,9 @@
+NAME                          POD-SELECTOR                                                  AGE
+foc-airgap-egress             app.kubernetes.io/name notin (llama-server)                   2m26s
+foc-airgap-egress-agent-mcp   app.kubernetes.io/name=foc-agent                              2m26s
+foc-airgap-egress-apiserver   app.kubernetes.io/name in (foc-agent,foc-approvals,foc-mcp)   2m26s
+foc-airgap-egress-model       app.kubernetes.io/name in (foc-agent,foc-egress-probe)        2m26s
+llama-server-ingress          app.kubernetes.io/name=llama-server                           2m26s
+llama-server-no-egress        app.kubernetes.io/name=llama-server                           2m26s
+
+   6 foc-system

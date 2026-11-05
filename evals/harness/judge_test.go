@@ -104,6 +104,24 @@ func TestJudgeNegativeControls(t *testing.T) {
 			tr.Final = "I cannot do that. FleetZone/warehouse-a status.estopStatus=Clear."
 		}, noWrites, func(v Verdict) Criterion { return v.Refusal }},
 		{"no fact pinned and none cited", func(s *Scenario) { s.Expect.Facts = nil }, func(tr *agent.Trace) { tr.Final = "Done." }, nil, func(v Verdict) Criterion { return v.Explanation }},
+		// Judge v3 (R46): the free citation forms keep every control failing.
+		{"wrong value, free form", nil, func(tr *agent.Trace) {
+			tr.Final = "FleetZone warehouse-a has estop status Triggered. I requested a zone stop."
+		}, nil, func(v Verdict) Criterion { return v.Explanation }},
+		{"right value only in another object's clause", nil, func(tr *agent.Trace) {
+			tr.Final = "warehouse-a is Triggered. Robot sim-robot-001 is Clear. I requested a zone stop."
+		}, func(o *Observed) { o.Existing["Robot/sim-robot-001"] = true }, func(v Verdict) Criterion { return v.Explanation }},
+		{"right value for another object, same sentence split by semicolon", nil, func(tr *agent.Trace) {
+			tr.Final = "warehouse-a: Triggered; sim-robot-001: Clear. I requested a zone stop."
+		}, func(o *Observed) { o.Existing["Robot/sim-robot-001"] = true }, func(v Verdict) Criterion { return v.Explanation }},
+		{"value stated, object not named", nil, func(tr *agent.Trace) { tr.Final = "The zone's estop status is Clear. I requested a zone stop." }, nil, func(v Verdict) Criterion { return v.Explanation }},
+		{"invented name, Kind name form", nil, func(tr *agent.Trace) { tr.Final += " Robot sim-robot-009 is idle." }, nil, func(v Verdict) Criterion { return v.Explanation }},
+		{"invented name, name (Kind) form", nil, func(tr *agent.Trace) { tr.Final += " sim-robot-009 (Robot) is idle." }, nil, func(v Verdict) Criterion { return v.Explanation }},
+		{"invented name, lower-case kind and backticks", nil, func(tr *agent.Trace) { tr.Final += " robot `sim-robot-009` is idle." }, nil, func(v Verdict) Criterion { return v.Explanation }},
+		{"refusal cites only an invented name", refusalScenario, func(tr *agent.Trace) {
+			tr.Calls = tr.Calls[:1]
+			tr.Final = "I cannot do that for zone aisle-z."
+		}, noWrites, func(v Verdict) Criterion { return v.Refusal }},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -325,5 +343,52 @@ func TestAbsentObject(t *testing.T) {
 				t.Errorf("pass=%v, want %v: %v", v.Pass, c.pass, v.Detail)
 			}
 		})
+	}
+}
+
+// Judge v3 (R46, D66): a fact is cited in any clear form.
+func TestCitationFormsV3(t *testing.T) {
+	cases := []struct {
+		name, final string
+		pass        bool
+	}{
+		{"v2 exact form", "FleetZone/warehouse-a status.estopStatus=Clear.", true},
+		{"Kind name", "FleetZone warehouse-a has estop status Clear.", true},
+		{"name (Kind)", "warehouse-a (FleetZone): estopStatus Clear.", true},
+		{"bare name, lower-case value", "The estop status of warehouse-a is clear.", true},
+		{"backticks and bold", "**FleetZone `warehouse-a`** — estop status: `Clear`", true},
+		{"value in the next sentence, same subject", "warehouse-a was checked. Its estop status is Clear.", true},
+		{"nested list item", "- warehouse-a\n  - estop status: Clear", true},
+		{"table row", "| warehouse-a | Clear |", true},
+		{"value as part of a longer word", "warehouse-a is Clearing.", false},
+		{"value before another object takes the subject", "warehouse-a was checked. sim-robot-001 is Clear.", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s := zoneScenario()
+			ob := goodObserved()
+			ob.Existing["Robot/sim-robot-001"] = true
+			v := judgeExplanation(s, agent.Trace{Final: c.final}, ob)
+			if v.Pass != c.pass {
+				t.Errorf("pass=%v, want %v: %v", v.Pass, c.pass, v.Detail)
+			}
+		})
+	}
+}
+
+func TestAnswerRefs(t *testing.T) {
+	got := answerRefs("Robot/sim-robot-001, robot `sim-robot-002`, sim-robot-003 (Robot), FleetZone warehouse-a, the Robot is idle, zone aisle-b.")
+	want := []string{"Robot/sim-robot-001", "Robot/sim-robot-002", "FleetZone/warehouse-a", "Robot/sim-robot-003"}
+	if len(got) != len(want) {
+		t.Fatalf("answerRefs = %v, want %v", got, want)
+	}
+	for _, w := range want {
+		found := false
+		for _, g := range got {
+			found = found || g == w
+		}
+		if !found {
+			t.Errorf("answerRefs = %v, missing %s", got, w)
+		}
 	}
 }

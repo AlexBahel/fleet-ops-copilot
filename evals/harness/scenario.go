@@ -124,7 +124,9 @@ type Fact struct {
 	Cite  string `json:"cite,omitempty"`
 }
 
-// CiteToken is the field text an answer must contain.
+// CiteToken is the field text judge v2 required in an answer. Judge v3 does
+// not use it (D66); the cite field of a scenario fact is kept so the scenario
+// files still load and v2 results can be read.
 func (f Fact) CiteToken() string {
 	if f.Cite != "" {
 		return f.Cite

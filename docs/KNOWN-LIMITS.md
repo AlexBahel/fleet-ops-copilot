@@ -68,6 +68,11 @@ remove it.
   (context size, slots, build), the Deployment's arguments and resources, and the thread count
   from the server's log (D64). The host description (`host.*`) is read from `sysctl` on macOS and
   `nproc`/`uname` on Linux only; Docker Desktop's VM shows only through the node's capacity.
+- Judge v3 (D66) accepts a fact in any clear form. It does not detect an invented object named
+  without its kind word (only `Kind/name`, `Kind name` and `name (Kind)` are checked against the
+  cluster), and it accepts the value of another field of the same object stated in the same
+  clause (a field name is no longer required). Results judged by v2 and v3 are not comparable;
+  `results.json` records `systemPrompt.judge`.
 - No eval scenario reaches `DENY_DRAFT_GATE_ABSENT`: fixture evals always run with the draft
   gate served. The refusal is covered by the policy unit tests (`internal/policy/policy_test.go`),
   an envtest test (`test/envtest/approval_test.go`) and the live test (`test/live`).

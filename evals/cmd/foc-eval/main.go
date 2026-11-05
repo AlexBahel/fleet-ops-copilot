@@ -55,9 +55,11 @@ import (
 	"github.com/AlexBahel/fleet-ops-copilot/evals/harness"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/llm"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/mcpserver"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/policy"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/redact"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/testenv"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/tools"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/tracing"
 )
 
@@ -373,6 +375,14 @@ func run(c runConfig) error {
 	}
 	res := harness.Summarize(c.name, runs, envInfo, srs, c.latencyScope)
 	res.BackendSettings = c.settings
+	// The tool list as the harness's foc-mcp serves it (R46): with
+	// -live-context the deployed foc-mcp serves its own, from its flags.
+	digest, err := mcpserver.ToolsDigest(ctx, mcpserver.New(&tools.Service{Engine: policy.New(pol), DefaultNamespace: testenv.SwarmNS}))
+	if err != nil {
+		return err
+	}
+	res.SystemPrompt["toolsSha256"] = digest
+	res.SystemPrompt["judge"] = harness.JudgeVersion
 	if c.pricing != nil {
 		res.SetCost(*c.pricing)
 	}

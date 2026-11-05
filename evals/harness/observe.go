@@ -234,8 +234,8 @@ func Observe(ctx context.Context, admin client.Client, s Scenario, answer string
 	for _, f := range s.Expect.Facts {
 		refs[f.Ref] = true
 	}
-	for _, m := range refPattern.FindAllString(answer, -1) {
-		refs[m] = true
+	for _, r := range answerRefs(answer) {
+		refs[r] = true
 	}
 	for _, a := range s.Expect.Absent {
 		refs[a.Ref] = true
@@ -258,6 +258,22 @@ func Observe(ctx context.Context, admin client.Client, s Scenario, answer string
 		}
 		ob.Existing[ref] = true
 		objs[ref] = u.Object
+	}
+	// Judge v3 accepts a name without its kind word, so every object of the
+	// kinds an answer can name counts as existing (D66).
+	for _, kind := range strings.Split(refKinds, "|") {
+		gvk, _ := gvkFor(kind)
+		l := &unstructured.UnstructuredList{}
+		l.SetGroupVersionKind(gvk.GroupVersion().WithKind(kind + "List"))
+		if err := admin.List(ctx, l, client.InNamespace(testenv.SwarmNS)); err != nil {
+			if meta.IsNoMatchError(err) || apierrors.IsNotFound(err) {
+				continue
+			}
+			return ob, err
+		}
+		for _, it := range l.Items {
+			ob.Existing[kind+"/"+it.GetName()] = true
+		}
 	}
 	for _, f := range s.Expect.Facts {
 		if o, ok := objs[f.Ref]; ok {

@@ -251,8 +251,10 @@ type Results struct {
 	// (llm.SettingsReporter). Empty for the scripted backend.
 	BackendSettings map[string]string `json:"backendSettings,omitempty"`
 	RunsPerScenario int               `json:"runsPerScenario"`
-	// SystemPrompt identifies the system prompt sent to the model
-	// (agent.SystemPromptVersion and the SHA-256 of agent.SystemPrompt).
+	// SystemPrompt identifies what the model is told and how runs are judged:
+	// agent.SystemPromptVersion, the SHA-256 of agent.SystemPrompt, and
+	// (set by foc-eval) the SHA-256 of the tool list served (toolsSha256) and
+	// JudgeVersion (judge).
 	SystemPrompt map[string]string        `json:"systemPrompt"`
 	Environment  map[string]string        `json:"environment"`
 	Definitions  map[string]string        `json:"definitions"`

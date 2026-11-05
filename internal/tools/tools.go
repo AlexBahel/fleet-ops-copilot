@@ -101,18 +101,18 @@ func (s *Service) readAudit(sess Session, tool, ns, obj string) {
 
 // NameInput selects one object.
 type NameInput struct {
-	Namespace string `json:"namespace,omitempty" jsonschema:"Kubernetes namespace; defaults to the copilot's namespace"`
+	Namespace string `json:"namespace,omitempty" jsonschema:"Kubernetes namespace (described per deployment by mcpserver.NamespaceDescription)"`
 	Name      string `json:"name" jsonschema:"object name"`
 }
 
 // ListInput selects a namespace.
 type ListInput struct {
-	Namespace string `json:"namespace,omitempty" jsonschema:"Kubernetes namespace; defaults to the copilot's namespace"`
+	Namespace string `json:"namespace,omitempty" jsonschema:"Kubernetes namespace (described per deployment by mcpserver.NamespaceDescription)"`
 }
 
 // EventsInput selects the Events of one object.
 type EventsInput struct {
-	Namespace string `json:"namespace,omitempty" jsonschema:"Kubernetes namespace"`
+	Namespace string `json:"namespace,omitempty" jsonschema:"Kubernetes namespace (described per deployment by mcpserver.NamespaceDescription)"`
 	Kind      string `json:"kind" jsonschema:"object kind, e.g. Robot, FleetTask, FleetAction, FleetZone"`
 	Name      string `json:"name" jsonschema:"object name"`
 }

@@ -1,0 +1,17 @@
+2026-11-05T04:00:48Z
+kubectl --context kind-foc-up -n foc-system delete job foc-egress-probe --ignore-not-found --wait
+kubectl --context kind-foc-up -n foc-system apply -f config/airgap/egress-probe.yaml
+job.batch/foc-egress-probe created
+egress probe: 2026-11-05T04:00:49Z; t is ms since the probe script started
+at-start t=152ms OPEN: https://1.1.1.1 (curl exit 0) 
+at-start t=236ms OPEN: https://8.8.8.8 (curl exit 0) 
+at-start t=327ms OPEN: https://example.com (curl exit 0) 
+at-start: egress open before the policy was in force for this pod (not counted; see docs/KNOWN-LIMITS.md)
+policy in force: t=2361ms sentinel https://kubernetes.default.svc:443/healthz denied (curl exit 28)
+control ok: t=2376ms http://llama-server:8080/health http 200
+after-wait t=7386ms blocked: https://1.1.1.1 (curl exit 28)
+after-wait t=12399ms blocked: https://8.8.8.8 (curl exit 28)
+after-wait t=17415ms blocked: https://example.com (curl exit 28)
+RESULT: all external targets blocked
+verify-egress: PASS (after the policy was in force: external blocked, control reachable; the at-start line is not counted)
+exit 0

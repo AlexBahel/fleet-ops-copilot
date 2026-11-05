@@ -1,0 +1,120 @@
+# Copyright 2026 Alex Bahel
+# Licensed under the Apache License, Version 2.0 (see LICENSE).
+#
+# Air-gapped egress control for namespace foc-system (docs/DESIGN.md §3.7, D50).
+# Apply with make deploy-airgap, which first replaces the two documentation
+# addresses below (192.0.2.10 and 192.0.2.11, RFC 5737 TEST-NET-1) with this
+# cluster's API server endpoint and Service address and refuses to apply while
+# either is still present.
+#
+# NetworkPolicies are additive: a pod may open a connection if any policy
+# selecting it allows it, and a pod selected by an Egress policy may open
+# nothing else. Together these allow, for egress, only
+#   - cluster DNS in kube-system (UDP and TCP 53), for every pod except llama-server,
+#   - the Kubernetes API server, for foc-mcp, foc-approvals and foc-agent,
+#   - llama-server port 8080, for foc-agent and the egress probe,
+#   - foc-mcp port 8080, for foc-agent.
+# llama-server may open no connection at all. Everything else, including the
+# internet, is denied. DNS is allowed because in-namespace Service names need
+# it; in a site with no upstream resolver it reaches nothing outside.
+#
+# Enforcement needs a CNI that implements NetworkPolicy. It is verified by
+# the egress probe (egress-probe.yaml, make verify-egress), not assumed.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: foc-airgap-egress
+  namespace: foc-system
+  labels: {app.kubernetes.io/part-of: fleet-ops-copilot}
+spec:
+  # NotIn also selects pods without the label.
+  podSelector:
+    matchExpressions:
+      - {key: app.kubernetes.io/name, operator: NotIn, values: [llama-server]}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
+          podSelector: {matchLabels: {k8s-app: kube-dns}}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: foc-airgap-egress-apiserver
+  namespace: foc-system
+  labels: {app.kubernetes.io/part-of: fleet-ops-copilot}
+spec:
+  podSelector:
+    matchExpressions:
+      - {key: app.kubernetes.io/name, operator: In, values: [foc-mcp, foc-approvals, foc-agent]}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock: {cidr: 172.18.0.2/32} # API server endpoint (kubectl get endpoints kubernetes)
+        - ipBlock: {cidr: 10.96.0.1/32} # API server Service address (kubectl get svc kubernetes)
+      ports:
+        - {protocol: TCP, port: 443}
+        - {protocol: TCP, port: 6443}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: foc-airgap-egress-model
+  namespace: foc-system
+  labels: {app.kubernetes.io/part-of: fleet-ops-copilot}
+spec:
+  podSelector:
+    matchExpressions:
+      - {key: app.kubernetes.io/name, operator: In, values: [foc-agent, foc-egress-probe]}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: llama-server}}
+      ports:
+        - {protocol: TCP, port: 8080}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: foc-airgap-egress-agent-mcp
+  namespace: foc-system
+  labels: {app.kubernetes.io/part-of: fleet-ops-copilot}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: foc-agent}}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: foc-mcp}}
+      ports:
+        - {protocol: TCP, port: 8080}
+---
+# Selected by an Egress policy with no rule: llama-server opens no connection.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: llama-server-no-egress
+  namespace: foc-system
+  labels: {app.kubernetes.io/part-of: fleet-ops-copilot}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: llama-server}}
+  policyTypes: [Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: llama-server-ingress
+  namespace: foc-system
+  labels: {app.kubernetes.io/part-of: fleet-ops-copilot}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: llama-server}}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - {key: app.kubernetes.io/name, operator: In, values: [foc-agent, foc-egress-probe]}
+      ports:
+        - {protocol: TCP, port: 8080}

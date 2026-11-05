@@ -19,9 +19,14 @@ package mcpserver
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
+	"strings"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -107,12 +112,59 @@ func (b bearer) RoundTrip(r *http.Request) (*http.Response, error) {
 
 func boolp(b bool) *bool { return &b }
 
+// NamespaceDescription is the description of every tool's namespace
+// parameter (R46, v3): it names the namespace the tools use when the
+// parameter is omitted and says that other namespaces are refused (requests
+// by policy, DENY_NAMESPACE; reads by the API server, since foc-mcp holds no
+// permission there). A model that does not know the namespace otherwise
+// guesses one (FOC-2r pilot: "default").
+func NamespaceDescription(svc *tools.Service) string {
+	var allowed []string
+	if svc.Engine != nil && svc.Engine.P != nil {
+		allowed = svc.Engine.P.Namespaces
+	}
+	switch {
+	case svc.DefaultNamespace == "":
+		return "Kubernetes namespace. Omit it; other namespaces are refused."
+	case len(allowed) > 1:
+		return fmt.Sprintf("Kubernetes namespace. Omit it to use %q, the fleet's namespace. Only %s are served; other namespaces are refused.", svc.DefaultNamespace, quoteList(allowed))
+	default:
+		return fmt.Sprintf("Kubernetes namespace. Omit it: the fleet's namespace is %q, and other namespaces are refused.", svc.DefaultNamespace)
+	}
+}
+
+func quoteList(xs []string) string {
+	q := make([]string, len(xs))
+	for i, x := range xs {
+		q[i] = fmt.Sprintf("%q", x)
+	}
+	return strings.Join(q, ", ")
+}
+
+// inputSchema is the schema the SDK would infer for In, with the namespace
+// parameter described by NamespaceDescription.
+func inputSchema[In any](nsDesc string) (*jsonschema.Schema, error) {
+	s, err := jsonschema.For[In](nil)
+	if err != nil {
+		return nil, err
+	}
+	if p, ok := s.Properties["namespace"]; ok {
+		p.Description = nsDesc
+	}
+	return s, nil
+}
+
 // add registers one tool. Each call runs in a server span that continues the
 // caller's trace when _meta carries a W3C traceparent (internal/tracing).
 func add[In, Out any](srv *mcp.Server, svc *tools.Service, tr trace.Tracer, name, desc string, readOnly bool, fn func(context.Context, tools.Session, In) (Out, error)) {
+	schema, err := inputSchema[In](NamespaceDescription(svc))
+	if err != nil {
+		panic(fmt.Sprintf("tool %s: input schema: %v", name, err)) // a programming error, like mcp.AddTool's own
+	}
 	t := &mcp.Tool{
 		Name:        name,
 		Description: desc,
+		InputSchema: schema,
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: readOnly, DestructiveHint: boolp(false), OpenWorldHint: boolp(false)},
 	}
 	mcp.AddTool(srv, t, func(ctx context.Context, req *mcp.CallToolRequest, in In) (*mcp.CallToolResult, Out, error) {
@@ -161,21 +213,11 @@ func New(svc *tools.Service) *mcp.Server {
 
 // Check verifies that the registered tool names are exactly ReadTools+RequestTools.
 func Check(ctx context.Context, srv *mcp.Server) error {
-	ct, st := mcp.NewInMemoryTransports()
-	ss, err := srv.Connect(ctx, st, nil)
+	tl, err := ListTools(ctx, srv)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = ss.Close() }()
-	cs, err := mcp.NewClient(&mcp.Implementation{Name: "check"}, nil).Connect(ctx, ct, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = cs.Close() }()
-	res, err := cs.ListTools(ctx, nil)
-	if err != nil {
-		return err
-	}
+	res := &mcp.ListToolsResult{Tools: tl}
 	want := map[string]bool{}
 	for _, n := range append(append([]string{}, ReadTools...), RequestTools...) {
 		want[n] = true
@@ -189,4 +231,49 @@ func Check(ctx context.Context, srv *mcp.Server) error {
 		}
 	}
 	return nil
+}
+
+// ListTools returns the tools srv serves, as a client sees them.
+func ListTools(ctx context.Context, srv *mcp.Server) ([]*mcp.Tool, error) {
+	ct, st := mcp.NewInMemoryTransports()
+	ss, err := srv.Connect(ctx, st, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = ss.Close() }()
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "check"}, nil).Connect(ctx, ct, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = cs.Close() }()
+	res, err := cs.ListTools(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	return res.Tools, nil
+}
+
+// ToolsDigest is the SHA-256 of the tool list srv serves (name, description
+// and input schema of each tool, sorted by name): what the model is told
+// besides the system prompt. Evaluation results record it (R46).
+func ToolsDigest(ctx context.Context, srv *mcp.Server) (string, error) {
+	tl, err := ListTools(ctx, srv)
+	if err != nil {
+		return "", err
+	}
+	type entry struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		InputSchema any    `json:"inputSchema"`
+	}
+	es := make([]entry, 0, len(tl))
+	for _, t := range tl {
+		es = append(es, entry{t.Name, t.Description, t.InputSchema})
+	}
+	sort.Slice(es, func(i, j int) bool { return es[i].Name < es[j].Name })
+	b, err := json.Marshal(es)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", sha256.Sum256(b)), nil
 }

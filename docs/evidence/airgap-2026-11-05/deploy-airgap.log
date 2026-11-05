@@ -1,0 +1,25 @@
+2026-11-05T03:59:48Z
+kubectl --context kind-foc-up apply -f config/airgap/llama-storage-hostpath.yaml -f config/airgap/llama-server.yaml
+persistentvolume/foc-llama-models created
+persistentvolumeclaim/llama-models created
+deployment.apps/llama-server created
+service/llama-server created
+kubectl --context kind-foc-up -n foc-system rollout status deploy/llama-server --timeout=900s
+Waiting for deployment "llama-server" rollout to finish: 0 of 1 updated replicas are available...
+deployment "llama-server" successfully rolled out
+API server endpoint 172.18.0.2, Service 10.96.0.1
+networkpolicy.networking.k8s.io/foc-airgap-egress created
+networkpolicy.networking.k8s.io/foc-airgap-egress-apiserver created
+networkpolicy.networking.k8s.io/foc-airgap-egress-model created
+networkpolicy.networking.k8s.io/foc-airgap-egress-agent-mcp created
+networkpolicy.networking.k8s.io/llama-server-no-egress created
+networkpolicy.networking.k8s.io/llama-server-ingress created
+deployment.apps/foc-mcp restarted
+deployment.apps/foc-approvals restarted
+Waiting for deployment "foc-mcp" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "foc-mcp" rollout to finish: 1 old replicas are pending termination...
+deployment "foc-mcp" successfully rolled out
+deployment "foc-approvals" successfully rolled out
+make deploy-airgap KIND_CLUSTER=foc-up 2>&1  0.24s user 0.13s system 3% cpu 12.334 total
+exit 0
+2026-11-05T04:00:01Z

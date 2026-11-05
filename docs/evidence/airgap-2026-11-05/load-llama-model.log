@@ -1,0 +1,18 @@
+2026-11-05T03:59:05Z
+SHA256SUMS (values equal the Hugging Face LFS sha256 of Qwen/Qwen2.5-7B-Instruct-GGUF, as recorded when downloaded):
+dfce12e3862a5283ccfb88221b48480e58745165de856439950d0f22590580db  qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf
+539cf93f78e887edea1c04e2d7d8cdaca9d01dae9c9025bcb8accbe29df3d72a  qwen2.5-7b-instruct-q4_k_m-00002-of-00002.gguf
+cd "<MODEL_DIR>" && shasum -a 256 -c "<MODEL_DIR>/SHA256SUMS"
+qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf: OK
+qwen2.5-7b-instruct-q4_k_m-00002-of-00002.gguf: OK
+docker exec foc-up-control-plane mkdir -p /models
+for f in qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf qwen2.5-7b-instruct-q4_k_m-00002-of-00002.gguf; do docker cp "<MODEL_DIR>/$f" foc-up-control-plane:/models/$f || exit 1; done
+docker exec foc-up-control-plane chmod -R a+rX /models
+docker exec -i foc-up-control-plane sh -c 'cd /models && sha256sum -c -' < "<MODEL_DIR>/SHA256SUMS"
+qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf: OK
+qwen2.5-7b-instruct-q4_k_m-00002-of-00002.gguf: OK
+exit 0
+total 4573320
+-rw-r--r-- 1 501 dialout 3993201344 Nov  4 02:52 qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf
+-rw-r--r-- 1 501 dialout  689872288 Nov  4 02:53 qwen2.5-7b-instruct-q4_k_m-00002-of-00002.gguf
+2026-11-05T03:59:40Z

@@ -1,0 +1,20 @@
+2026-11-05T04:00:45Z
+kubectl --context kind-foc-up create namespace foc-egress-baseline --dry-run=client -o yaml | kubectl --context kind-foc-up apply -f -
+namespace/foc-egress-baseline created
+kubectl --context kind-foc-up -n foc-egress-baseline delete job foc-egress-probe --ignore-not-found --wait
+sed -e 's|value: "http://llama-server:8080/health"|value: ""|' -e 's|value: "https://kubernetes.default.svc:443/healthz"|value: ""|' config/airgap/egress-probe.yaml | kubectl --context kind-foc-up -n foc-egress-baseline apply -f -
+job.batch/foc-egress-probe created
+egress probe: 2026-11-05T04:00:45Z; t is ms since the probe script started
+at-start t=80ms OPEN: https://1.1.1.1 (curl exit 0) 
+at-start t=162ms OPEN: https://8.8.8.8 (curl exit 0) 
+at-start t=352ms OPEN: https://example.com (curl exit 0) 
+at-start: egress open before the policy was in force for this pod (not counted; see docs/KNOWN-LIMITS.md)
+no policy sentinel (baseline run): no wait
+no control target (baseline run)
+after-wait t=483ms OPEN: https://1.1.1.1 (curl exit 0) 
+after-wait t=583ms OPEN: https://8.8.8.8 (curl exit 0) 
+after-wait t=660ms OPEN: https://example.com (curl exit 0) 
+RESULT: egress is NOT blocked
+namespace "foc-egress-baseline" deleted
+baseline: egress is open without the policy, as expected; the probe can detect it
+exit 0

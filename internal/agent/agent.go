@@ -38,10 +38,14 @@ import (
 	"github.com/AlexBahel/fleet-ops-copilot/internal/tracing"
 )
 
-// SystemPromptVersion names the SystemPrompt text. Evaluation results record
-// it with the prompt's SHA-256 (docs/DESIGN.md D46). v2 (2026-11-04) added the
-// last three sentences (P1-P3). Frozen until the model runs of record.
-const SystemPromptVersion = "v2"
+// SystemPromptVersion names what the model is told: the SystemPrompt text
+// and the tool descriptions foc-mcp serves. Evaluation results record it with
+// the prompt's SHA-256 and the tool list's (docs/DESIGN.md D46, D66).
+// v2 (2026-11-04) added the last three sentences (P1-P3). v3 (2026-11-05,
+// R46) keeps the v2 text and describes every namespace parameter with the
+// namespace in use (mcpserver.NamespaceDescription). Frozen until the model
+// runs of record.
+const SystemPromptVersion = "v3"
 
 // SystemPrompt is the instruction every backend receives.
 const SystemPrompt = `You are an operations assistant for a Swarmada robot fleet.
