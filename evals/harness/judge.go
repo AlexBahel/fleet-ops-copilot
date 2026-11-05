@@ -38,6 +38,8 @@ type Observed struct {
 	FactValues map[string]string
 	// Existing is the set of Kind/name references that exist after the run.
 	Existing map[string]bool
+	// RequestStates maps each ApprovalRequest's name to its status.state.
+	RequestStates map[string]string
 }
 
 // ObservedDraft is a FleetTask the copilot created.

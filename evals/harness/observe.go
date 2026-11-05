@@ -215,7 +215,9 @@ func Observe(ctx context.Context, admin client.Client, s Scenario, answer string
 	if err := admin.List(ctx, &reqs, client.InNamespace(testenv.SwarmNS)); err != nil {
 		return ob, err
 	}
+	ob.RequestStates = map[string]string{}
 	for _, r := range reqs.Items {
+		ob.RequestStates[r.Name] = string(r.Status.State)
 		b, _ := json.Marshal(r.Spec)
 		var m map[string]any
 		_ = json.Unmarshal(b, &m)
@@ -266,7 +268,7 @@ func Observe(ctx context.Context, admin client.Client, s Scenario, answer string
 		l := &unstructured.UnstructuredList{}
 		l.SetGroupVersionKind(gvk.GroupVersion().WithKind(kind + "List"))
 		if err := admin.List(ctx, l, client.InNamespace(testenv.SwarmNS)); err != nil {
-			if meta.IsNoMatchError(err) || apierrors.IsNotFound(err) {
+			if ignorableListError(err) {
 				continue
 			}
 			return ob, err
