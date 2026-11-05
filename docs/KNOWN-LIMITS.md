@@ -63,7 +63,10 @@ remove it.
   models used, so repeated claude runs vary. Air-gapped measurements send the model publisher's
   `temperature`, `top_p`, `top_k` and `repeat_penalty`; the rest are llama-server defaults, which
   differ from transformers in places (D49). `results.json` records the settings sent
-  (`backendSettings`).
+  (`backendSettings`) and, for llamacpp, what the server reports and the cluster shows: `/props`
+  (context size, slots, build), the Deployment's arguments and resources, and the thread count
+  from the server's log (D64). The host description (`host.*`) is read from `sysctl` on macOS and
+  `nproc`/`uname` on Linux only; Docker Desktop's VM shows only through the node's capacity.
 - No eval scenario reaches `DENY_DRAFT_GATE_ABSENT`: fixture evals always run with the draft
   gate served. The refusal is covered by the policy unit tests (`internal/policy/policy_test.go`),
   an envtest test (`test/envtest/approval_test.go`) and the live test (`test/live`).

@@ -16,7 +16,9 @@
 # Flags that change a measurement are explicit so that nothing depends on a
 # server default: --ctx-size, --parallel (default is auto, which splits the
 # context across slots), --jinja (required for tool calling), --threads left
-# at the server default (record what it chose from /props and the log).
+# at the server default. foc-eval -backend llamacpp -llama-context records the
+# args, the resources below, /props (n_ctx, total_slots, build) and the thread
+# count from this container's log in backendSettings (R41, D64).
 apiVersion: apps/v1
 kind: Deployment
 metadata:

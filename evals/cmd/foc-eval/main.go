@@ -26,7 +26,10 @@ limitations under the License.
 // environment) with -model and -effort; it is a measurement, so failed runs
 // are recorded, not fatal. With the -price-* flags it adds the cost.
 // -backend llamacpp calls llama-server at -llama-url (default
-// $FOC_LLAMACPP_URL); also a measurement, with no dollar cost.
+// $FOC_LLAMACPP_URL); also a measurement, with no dollar cost. It records
+// llama-server's GET /props (context size, slots, build) in backendSettings,
+// and with -llama-context the Deployment's arguments and resources, the
+// threads the server logged, and the node's capacity (ruling R41).
 package main
 
 import (
@@ -36,10 +39,12 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -69,6 +74,9 @@ func main() {
 	only := flag.String("only", "", "comma-separated scenario ids to run (default: all)")
 	liveCtx := flag.String("live-context", "", "run against this kubeconfig context instead of envtest (state is not loaded; see harness.LiveTarget)")
 	liveMCP := flag.String("live-mcp-url", "", "with -live-context: foc-mcp streamable HTTP endpoint")
+	llamaCtx := flag.String("llama-context", "", "llamacpp: kubeconfig context of the cluster running llama-server; its Deployment, pod log and node are recorded")
+	llamaNS := flag.String("llama-namespace", "foc-system", "llamacpp: namespace of the llama-server Deployment")
+	llamaDeploy := flag.String("llama-deployment", "llama-server", "llamacpp: name of the llama-server Deployment and its container")
 	var pr harness.Pricing
 	flag.Float64Var(&pr.InputPerMTok, "price-input", 0, "claude: USD per million input tokens")
 	flag.Float64Var(&pr.OutputPerMTok, "price-output", 0, "claude: USD per million output tokens")
@@ -95,6 +103,7 @@ func main() {
 			log.Fatal(err)
 		}
 		cfg.settings = c.Settings()
+		cfg.envExtra = hostHardware()
 		cfg.name = "claude:" + *model + " effort=" + *effort
 		cfg.factory = func(harness.Scenario) (llm.Backend, error) { return llm.NewClaude(*model, *effort) }
 		cfg.latencyScope = "Claude API (" + *model + ", effort " + *effort + ") from this machine, plus tool execution over MCP (streamable HTTP on loopback) against envtest; request sent until final answer"
@@ -119,6 +128,12 @@ func main() {
 		if l.RepeatPenalty != nil {
 			cfg.name += fmt.Sprintf(" repeat_penalty=%g", *l.RepeatPenalty)
 		}
+		srv, envExtra, err := llamaServerSettings(l.BaseURL, *llamaCtx, *llamaNS, *llamaDeploy)
+		if err != nil {
+			log.Fatal(err)
+		}
+		mergeInto(cfg.settings, srv)
+		cfg.envExtra = envExtra
 		cfg.factory = func(harness.Scenario) (llm.Backend, error) { return llm.NewLlamaCpp(*llamaURL, *model) }
 		cfg.latencyScope = "llama-server at " + l.BaseURL + " from this machine, plus tool execution over MCP (streamable HTTP on loopback) against envtest; request sent until final answer"
 	default:
@@ -135,6 +150,38 @@ func main() {
 	}
 }
 
+// llamaServerSettings returns the server-side settings for backendSettings
+// and the host and node descriptions for environment. /props must answer:
+// a measurement without the server's context size is not recorded.
+func llamaServerSettings(base, kubeCtx, ns, deploy string) (map[string]string, map[string]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	srv, err := llamaProps(ctx, &http.Client{Timeout: 20 * time.Second}, base)
+	if err != nil {
+		return nil, nil, err
+	}
+	env := hostHardware()
+	if kubeCtx == "" {
+		srv["server.deployment"] = "not read (no -llama-context)"
+		return srv, env, nil
+	}
+	cfg, err := config.GetConfigWithContext(kubeCtx)
+	if err != nil {
+		return nil, nil, err
+	}
+	cs, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		return nil, nil, err
+	}
+	d, node, err := llamaDeployment(ctx, cs, ns, deploy)
+	if err != nil {
+		return nil, nil, fmt.Errorf("-llama-context %s: %w", kubeCtx, err)
+	}
+	mergeInto(srv, d)
+	mergeInto(env, node)
+	return srv, env, nil
+}
+
 type runConfig struct {
 	scenarioDir, fixtureDir, out, tracePath, policyPath, only string
 	baseline                                                  string
@@ -145,6 +192,7 @@ type runConfig struct {
 	factory                                                   harness.BackendFactory
 	pricing                                                   *harness.Pricing
 	settings                                                  map[string]string
+	envExtra                                                  map[string]string // host and model node, model backends only
 	gate                                                      bool
 }
 
@@ -293,6 +341,7 @@ func run(c runConfig) error {
 			envInfo["apiServer"] = kind + v.GitVersion
 		}
 	}
+	mergeInto(envInfo, c.envExtra)
 	res := harness.Summarize(c.name, runs, envInfo, srs, c.latencyScope)
 	res.BackendSettings = c.settings
 	if c.pricing != nil {
