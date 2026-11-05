@@ -76,7 +76,8 @@ remove it.
   writable module copy and the step order worked. `make foc-live` passed every subtest of phase
   `webhooks`, including `requester-is-authenticated-not-asserted`, after a test fix (a closed MCP
   session reused across subtests). The two `make foc-up` timings and what bounds them are in
-  `docs/evidence/foc-up-2026-11-05/`; the full foc-up and foc-live run logs are not committed. After the webhook overlay
+  `docs/evidence/foc-up-2026-11-05/`, and the foc-live results in `docs/evidence/foc-live-2026-11-05/`;
+  the full run logs are not committed. After the webhook overlay
   replaces the quickstart's overlay, whether the simulated adapter stays connected has not been
   observed.
 - `foc-agent`, its web UI and `foc chat` have not run on a cluster or against a model, and whether the
@@ -216,9 +217,11 @@ remove it.
   out Swarmada's controllers, so the estop-actor annotation, which Swarmada's controller removes
   after sealing it (D33), stays on the zone in envtest.
 - **Live approval-path test** (`test/live`, D32) runs against Swarmada v0.4 with its webhooks
-  served (`config/controlstream-tls` applied over the quickstart). It has been run against a source
-  tree identical to Swarmada `558da47` before the tag (labelled `558da47`, D48); no run has
-  been made with the module resolved through the `go.mod` pin. To read Swarmada's
+  served (`config/controlstream-tls` applied over the quickstart). It has run against a source tree
+  identical to Swarmada `558da47` before the tag (labelled `558da47`, D48), and, through
+  `make foc-live` on the `make foc-up` stack, against `558da47` resolved through the `go.mod` pin:
+  every subtest of phase `webhooks` and `TestLiveSwarmadaAuditActor` passed on 2026-11-05 at copilot
+  `738f848` (`docs/evidence/foc-live-2026-11-05/`). To read Swarmada's
   safety audit log it starts an ephemeral busybox container in the manager pod that mounts the
   manager's `audit-log` volume read-only as user 65532; both names come from Swarmada's
   manifests and are not checked. The quickstart's own overlay serves no admission webhooks, and
