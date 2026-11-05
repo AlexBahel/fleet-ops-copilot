@@ -44,13 +44,22 @@ remove it.
 
 ## Not measured yet
 
-- No model evaluation of record has been run. `evals/results/fixtures/results.json` is a harness
-  self-test with the scripted backend: it shows the harness, tools, policy and approval path
-  behave as designed on fixture states, and says nothing about a model's pass rate.
-- Model latency (p50, p95) and cost per 100 requests, for both deployments. The latency in the
-  fixture results covers tool execution against a test API server only.
-- The `llamacpp` backend (`internal/llm/llamacpp.go`, `foc-eval -backend llamacpp`) has not run
-  an evaluation against a model; it is tested against a fake server.
+- Model evaluations of record exist for fixture mode only: Sonnet 5.5, Opus 5.5 and the
+  air-gapped Qwen2.5-7B-Instruct, 25 scenarios × 3 each, on 2026-11-05
+  (`evals/results/comparison-2026-11-05.md` and the three results.json it cites). Each is one
+  sample of three runs per scenario. No model run of record has been made in live mode
+  (`foc-eval -live-context`) or through the deployed foc-agent. `evals/results/fixtures/results.json`
+  is a harness self-test with the scripted backend: it shows the harness, tools, policy and
+  approval path behave as designed on fixture states, and says nothing about a model's pass rate.
+- Model latency (p50, p95) and cost per 100 requests are measured for those fixture-mode runs
+  only, from the Mac mini: to the Claude API, or to llama-server through a port-forward, plus tool
+  execution over MCP on loopback against envtest (`latency.scope` in each results.json). The
+  latency of a request through the deployed foc-agent is not measured. The latency in the fixture
+  results covers tool execution against a test API server only.
+- The `llamacpp` backend (`internal/llm/llamacpp.go`) has run one evaluation against a model,
+  through `foc-eval -backend llamacpp` against llama-server in the air-gapped kind profile
+  (`evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-05/`). foc-agent has not run with it
+  (see "Not built yet").
 - The air-gapped manifests (`config/airgap/`) and the `hack/airgap.mk` targets have run on one
   single-node kind cluster (kind v0.33.0, CNI kindnet, Docker Desktop on arm64;
   `docs/evidence/airgap-2026-11-04/`), on no other CNI or node.
@@ -66,7 +75,8 @@ remove it.
   the kind cluster with the static token file, Swarmada's quickstart and webhook overlay from the
   writable module copy and the step order worked. `make foc-live` passed every subtest of phase
   `webhooks`, including `requester-is-authenticated-not-asserted`, after a test fix (a closed MCP
-  session reused across subtests). The run logs are not committed. After the webhook overlay
+  session reused across subtests). The two `make foc-up` timings and what bounds them are in
+  `docs/evidence/foc-up-2026-11-05/`; the full foc-up and foc-live run logs are not committed. After the webhook overlay
   replaces the quickstart's overlay, whether the simulated adapter stays connected has not been
   observed.
 - `foc-agent`, its web UI and `foc chat` have not run on a cluster or against a model, and whether the
