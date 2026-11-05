@@ -171,7 +171,8 @@ func objectNames(ob Observed) []string {
 // names none is about the objects the previous one was about ("sim-robot-002
 // is not taking work. Its estop state is Stopped."). known are the names of
 // every object in the namespace. The value matches as a whole word, in any
-// case, outside the names in the clause.
+// case, outside the other names in the clause; a value that is itself an
+// object's name (status.assignedRobot=sim-robot-002) matches that name.
 func citesValue(answer, name, value string, known []string) bool {
 	if !slices.Contains(known, name) {
 		known = append(known, name)
@@ -192,7 +193,9 @@ func citesValue(answer, name, value string, known []string) bool {
 		}
 		rest := c
 		for _, n := range named {
-			rest = strings.ReplaceAll(rest, n, " ")
+			if !strings.EqualFold(n, value) { // the value may itself be a name (status.assignedRobot)
+				rest = strings.ReplaceAll(rest, n, " ")
+			}
 		}
 		if containsWord(rest, value) {
 			return true

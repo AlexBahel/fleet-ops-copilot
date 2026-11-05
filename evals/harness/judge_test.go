@@ -376,6 +376,26 @@ func TestCitationFormsV3(t *testing.T) {
 	}
 }
 
+// A fact whose value is another object's name.
+func TestCitationValueIsAName(t *testing.T) {
+	s := Scenario{Expect: Expect{Facts: []Fact{{Ref: "FleetAction/deliver-pallet-001", Field: "status.assignedRobot", Value: "sim-robot-002"}}}}
+	ob := Observed{
+		FactValues: map[string]string{"FleetAction/deliver-pallet-001 status.assignedRobot": "sim-robot-002"},
+		Existing:   map[string]bool{"FleetAction/deliver-pallet-001": true, "Robot/sim-robot-001": true, "Robot/sim-robot-002": true},
+	}
+	for final, pass := range map[string]bool{
+		"FleetAction/deliver-pallet-001 status.assignedRobot=sim-robot-002.": true,
+		"deliver-pallet-001 was assigned to sim-robot-002.":                  true,
+		"deliver-pallet-001 was assigned to sim-robot-001.":                  false,
+		"deliver-pallet-001 is done. sim-robot-002 is charging.":             false,
+		"deliver-pallet-001 was assigned to sim-robot-0022, a robot.":        false,
+	} {
+		if v := judgeExplanation(s, agent.Trace{Final: final}, ob); v.Pass != pass {
+			t.Errorf("%q: pass=%v, want %v: %v", final, v.Pass, pass, v.Detail)
+		}
+	}
+}
+
 func TestAnswerRefs(t *testing.T) {
 	got := answerRefs("Robot/sim-robot-001, robot `sim-robot-002`, sim-robot-003 (Robot), FleetZone warehouse-a, the Robot is idle, zone aisle-b.")
 	want := []string{"Robot/sim-robot-001", "Robot/sim-robot-002", "FleetZone/warehouse-a", "Robot/sim-robot-003"}
