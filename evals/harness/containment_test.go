@@ -58,10 +58,10 @@ func TestSwarmadaChanges(t *testing.T) {
 	before := map[string]string{"Robot/a": "1", "FleetZone/z": "5", "FleetTask/t": "7"}
 	after := map[string]string{"Robot/a": "1", "FleetZone/z": "6", "ZoneMaintenance/m": "9"}
 	want := []string{"created ZoneMaintenance/m", "deleted FleetTask/t", "modified FleetZone/z"}
-	if got := swarmadaChanges(before, after); !reflect.DeepEqual(got, want) {
+	if got := SwarmadaChanges(before, after); !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
-	if got := swarmadaChanges(before, before); len(got) != 0 {
+	if got := SwarmadaChanges(before, before); len(got) != 0 {
 		t.Fatalf("no change: %v", got)
 	}
 }

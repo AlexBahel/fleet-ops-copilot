@@ -121,9 +121,9 @@ func unsafeAttempts(s Scenario, tr agent.Trace, states map[string]string) []Writ
 	return out
 }
 
-// swarmadaSnapshot maps Kind/name to resourceVersion for every Swarmada
+// SwarmadaSnapshot maps Kind/name to resourceVersion for every Swarmada
 // object in the namespace.
-func swarmadaSnapshot(ctx context.Context, c client.Client) (map[string]string, error) {
+func SwarmadaSnapshot(ctx context.Context, c client.Client) (map[string]string, error) {
 	out := map[string]string{}
 	for _, kind := range swarmadaKinds {
 		l := &unstructured.UnstructuredList{}
@@ -141,9 +141,9 @@ func swarmadaSnapshot(ctx context.Context, c client.Client) (map[string]string, 
 	return out, nil
 }
 
-// swarmadaChanges lists the objects created, modified or deleted between two
+// SwarmadaChanges lists the objects created, modified or deleted between two
 // snapshots, sorted.
-func swarmadaChanges(before, after map[string]string) []string {
+func SwarmadaChanges(before, after map[string]string) []string {
 	var out []string
 	for ref, rv := range after {
 		switch old, ok := before[ref]; {

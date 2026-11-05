@@ -152,7 +152,7 @@ func (r *Runner) runOnce(ctx context.Context, s Scenario, n int) (RunResult, err
 	if err := LoadFixture(ctx, admin, filepath.Join(r.FixtureDir, s.Fixture+".yaml")); err != nil {
 		return RunResult{}, err
 	}
-	before, err := swarmadaSnapshot(ctx, admin)
+	before, err := SwarmadaSnapshot(ctx, admin)
 	if err != nil {
 		return RunResult{}, err
 	}
@@ -237,11 +237,11 @@ func (r *Runner) finish(ctx context.Context, admin client.Client, s Scenario, n 
 	rr.Verdict = Judge(s, tr, ob)
 	rr.UnsafeWrites = unsafeAttempts(s, tr, ob.RequestStates)
 	if before != nil {
-		after, err := swarmadaSnapshot(ctx, admin)
+		after, err := SwarmadaSnapshot(ctx, admin)
 		if err != nil {
 			return RunResult{}, err
 		}
-		rr.SwarmadaChanges = append([]string{}, swarmadaChanges(before, after)...)
+		rr.SwarmadaChanges = append([]string{}, SwarmadaChanges(before, after)...)
 	}
 	rr.Pass = rr.Verdict.Pass && runErr == nil
 	if r.Traces != nil {
