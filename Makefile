@@ -7,7 +7,7 @@ SETUP_ENVTEST_VERSION ?= v0.0.0-20260305142021-f9589b9f2b9d
 GO ?= go
 BIN := bin
 
-.PHONY: help build vet lint fmt test test-envtest eval-fixtures eval-baseline generate check-no-local all ci envtest-assets image deploy-kind test-live
+.PHONY: help build vet lint fmt test test-envtest eval-fixtures eval-baseline generate check-no-local all ci envtest-assets image deploy-kind test-live foc-up foc-down foc-live baseline-lowered
 
 help: ## List targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
@@ -83,6 +83,31 @@ deploy-kind: image ## Install CRDs, RBAC, admission policies, foc-mcp, foc-appro
 test-live: build ## Approval paths against a live cluster (hack/live-approval-path.sh sets the environment)
 	$(GO) test -tags live -count=1 -v -timeout 900s ./test/live/...
 
+# ---- foc-up: an empty machine to a running stack on kind --------------------
+# Needs Docker, kind, kubectl, helm, jq, openssl, python3 (for Swarmada's live
+# quickstart). Every command names the dedicated kubeconfig below and the
+# context kind-$(FOC_CLUSTER); ~/.kube/config is never read or written
+# (hack/lib/foc-guard.sh). FOC_UP_* variables (hack/foc-up.sh header) pass through
+# from the environment: FOC_UP_DRY_RUN=1, FOC_UP_TRACING=1, FOC_UP_ANTHROPIC_KEY_FILE.
+FOC_CLUSTER ?= foc-up
+FOC_UP_DIR ?= $(CURDIR)/local/foc-up
+FOC_KUBECONFIG ?= $(FOC_UP_DIR)/kubeconfig
+# Compared with the base revision: BASE=<revision> (default: merge base with origin/main).
+BASE ?=
+
+foc-up: ## kind cluster foc-up with person tokens, Swarmada quickstart at the go.mod pin, its webhooks, the chart, health checks; prints the elapsed time (FOC_UP_DRY_RUN=1 prints the plan)
+	CLUSTER=$(FOC_CLUSTER) KUBECONFIG=$(FOC_KUBECONFIG) FOC_UP_DIR=$(FOC_UP_DIR) hack/foc-up.sh
+
+foc-down: ## Remove the foc-up cluster, its kubeconfig and the people's tokens
+	CLUSTER=$(FOC_CLUSTER) KUBECONFIG=$(FOC_KUBECONFIG) FOC_UP_DIR=$(FOC_UP_DIR) hack/foc-down.sh
+
+foc-live: build ## Live approval paths on the foc-up stack, requests filed by sam's verified token (phase webhooks)
+	CLUSTER=$(FOC_CLUSTER) KUBECONFIG=$(FOC_KUBECONFIG) PHASE=webhooks WORK=$(FOC_UP_DIR)/live \
+		TOKENS_FILE=$(FOC_UP_DIR)/people/tokens.csv EVIDENCE_DIR=$(FOC_UP_DIR)/live hack/live-approval-path.sh
+
+baseline-lowered: ## Print a warning for every category evals/baseline.json lowers against BASE (what CI annotates)
+	$(GO) run ./scripts/baseline-lowered $(if $(BASE),-base $(BASE))
+
 # ---- Helm chart (charts/fleet-ops-copilot) -----------------------------------
 # kubeconform has no schema for CustomResourceDefinition, so the CRDs are left
 # out of chart-validate; chart-parity checks they are byte-identical to
@@ -91,21 +116,26 @@ CHART := charts/fleet-ops-copilot
 HELM ?= helm
 KUBECONFORM ?= kubeconform
 CHART_KUBE_VERSIONS ?= 1.30.0 1.37.0
+# The optional in-cluster trace backend (OpenTelemetry Collector + Jaeger), off by default.
+CHART_TRACING_SET := --set tracing.backend.enabled=true
 # RFC 5737 documentation addresses, used only to render the NetworkPolicy.
 CHART_NP_SET := --set networkPolicy.enabled=true --set 'networkPolicy.apiServer.cidrs={192.0.2.10/32,192.0.2.11/32}' --set 'networkPolicy.claudeApiEgress.cidrs={198.51.100.0/24}'
 
 .PHONY: chart-lint chart-validate chart-parity chart-check
 
-chart-lint: ## helm lint the chart (strict)
+chart-lint: ## helm lint the chart (strict), with the defaults and with the optional tracing backend and NetworkPolicy on
 	$(HELM) lint $(CHART) --namespace foc-system --strict
+	$(HELM) lint $(CHART) --namespace foc-system --strict $(CHART_TRACING_SET) $(CHART_NP_SET)
 
-chart-validate: ## Render the chart (defaults, and with NetworkPolicy) and schema-check it with kubeconform
+chart-validate: ## Render the chart (defaults, with NetworkPolicy, with the tracing backend) and schema-check it with kubeconform
 	@command -v $(KUBECONFORM) >/dev/null || { echo "kubeconform not found (go install github.com/yannh/kubeconform/cmd/kubeconform@v0.7.0)"; exit 1; }
 	@for v in $(CHART_KUBE_VERSIONS); do \
 		echo "== Kubernetes $$v, defaults"; \
 		$(HELM) template foc $(CHART) -n foc-system | $(KUBECONFORM) -strict -summary -kubernetes-version $$v - || exit 1; \
 		echo "== Kubernetes $$v, networkPolicy.enabled"; \
 		$(HELM) template foc $(CHART) -n foc-system $(CHART_NP_SET) | $(KUBECONFORM) -strict -summary -kubernetes-version $$v - || exit 1; \
+		echo "== Kubernetes $$v, tracing.backend.enabled with networkPolicy.enabled"; \
+		$(HELM) template foc $(CHART) -n foc-system $(CHART_TRACING_SET) $(CHART_NP_SET) | $(KUBECONFORM) -strict -summary -kubernetes-version $$v - || exit 1; \
 	done
 
 chart-parity: ## Check the chart's default render equals config/ (CRDs, RBAC, admission, deploy) and policies/default.yaml

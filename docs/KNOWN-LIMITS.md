@@ -9,19 +9,22 @@ remove it.
   allow-lists. The tool-use loop (`internal/agent`) offers every tool.
 - A login for the web UI (DESIGN D56). Without one, requests filed from the page are never
   approvable; `foc chat` is the client that files approvable requests.
-- A token-backed person identity on a cluster (ruling R43). On kind that is a static token file
-  for the fictional people (`--token-auth-file`, as envtest already uses); in production it is
-  OIDC. Neither is set up by any script or manifest yet, so on a kind cluster no person can be a
-  verified requester (a ServiceAccount token would authenticate as that ServiceAccount).
+- OIDC for people (ruling R43, production path). On kind the people authenticate with a static
+  token file (`hack/kind-people.sh`, test only, D60); the OIDC configuration is described in
+  `docs/RUNBOOK.md` and has not been set up or run anywhere. Requester authentication has not
+  seen an OIDC token (see "Not measured yet").
 - Conversation memory: each chat message is an independent agent run (D55). No streaming of
   answers: the page and `foc chat` wait for the whole run.
-- `make foc-up` (only its preflight, `scripts/foc-up-preflight.sh`, exists). The air-gapped
-  profile is not templated in the Helm chart; it is installed beside it from `config/airgap`
-  (`make deploy-airgap`), and neither it nor the chart runs foc-agent with `-backend llamacpp`.
-  `make deploy-kind` installs the plain manifests (`config/deploy`) on a kind cluster; the image
-  is built from binaries compiled on the host.
+- The air-gapped profile is not templated in the Helm chart; it is installed beside it from
+  `config/airgap` (`make deploy-airgap`), and neither it nor the chart runs foc-agent with
+  `-backend llamacpp`. `make deploy-kind` installs the plain manifests (`config/deploy`) on a kind
+  cluster; the image is built from binaries compiled on the host. `make foc-up` installs the
+  chart (cloud profile) and has not been run (see "Not measured yet").
 - Tracing: no stdout exporter and no OTLP/HTTP exporter (OTLP/gRPC only), and no spans in
-  `foc-approvals` for approval and execution (D54).
+  `foc-approvals` for approval and execution (D54). The chart's optional trace backend
+  (`tracing.backend.enabled`, D61) keeps traces in the Jaeger pod's memory only: a restart loses
+  them, and it is for development and demonstration, not a trace store. Its images must be
+  pullable by the nodes, so it is not part of the air-gapped profile.
 - More than one approver per request (`minApprovers`): one accepted decision approves.
 
 ## Not measured yet
@@ -36,8 +39,20 @@ remove it.
 - The air-gapped manifests (`config/airgap/`) and the `hack/airgap.mk` targets have run on one
   single-node kind cluster (kind v0.33.0, CNI kindnet, Docker Desktop on arm64;
   `docs/evidence/airgap-2026-11-04/`), on no other CNI or node.
-- The Helm chart (`charts/fleet-ops-copilot`), its cloud-profile NetworkPolicy (off by default) and
-  `docs/RUNBOOK.md` (draft) have not been installed or run on a cluster.
+- The Helm chart (`charts/fleet-ops-copilot`), its cloud-profile NetworkPolicy (off by default),
+  its optional tracing backend (OpenTelemetry Collector and Jaeger, off by default, D61) and
+  `docs/RUNBOOK.md` (draft) have not been installed or run on a cluster. The backend's pod
+  security settings (read-only root file system, non-root user) and probes are unverified against
+  the pinned images, and so is the Collector configuration against `otel/opentelemetry-collector:0.164.0`
+  beyond `helm lint` and kubeconform.
+- `make foc-up`, `make foc-down` and `make foc-live` (D59, D60) have been written, checked with a
+  dry run and with stubbed commands (`test/scripts`), and never run: not the timed run from an
+  empty machine, not the kind cluster with the static token file (its kubeadm patch was checked
+  only against kind v0.33.0's own generator, offline), not Swarmada's quickstart or webhook overlay
+  from the writable module copy, not the order of the steps against real rollouts. After the
+  webhook overlay replaces the quickstart's overlay, whether the simulated adapter stays connected
+  has not been observed. The verified-requester live run (`make foc-live`, including the new
+  subtest `requester-is-authenticated-not-asserted`) has not been run.
 - `foc-agent`, its web UI, `foc chat` and tracing have not run on a cluster, against a model, or
   against a real OTLP collector; they are tested with the scripted backend, envtest and an
   in-process OTLP receiver, and the page was checked once in a browser against a local test server.
@@ -57,8 +72,9 @@ remove it.
 
 - **The eval baseline is a file in the same repository (D58).** The gate compares each run with
   `evals/baseline.json` at the same commit, so a commit can lower the baseline and the gate then
-  passes; the lowered numbers show in that file's diff and are not blocked. Nothing compares the
-  baseline with the one on the base branch. The gate covers the scripted backend only (a harness
+  passes; the lowered numbers show in that file's diff and are not blocked. CI compares the file
+  with the base commit's and annotates every lowered category as a warning (D62), which does
+  not fail the run and which nobody has to read. The gate covers the scripted backend only (a harness
   self-test, not a model), and only the counts of scenarios and runs per category: a scenario
   replaced by another in the same category, or one edited to expect less, keeps the counts and
   passes. Branch protection that makes the `go` job a required check is a repository setting and
@@ -77,8 +93,12 @@ remove it.
   people `hack/kind-person.sh` creates authenticate with client certificates and have no bearer
   token, so a request they file (through `foc chat` or any other client) records
   `unverified:<name>` and can only be rejected. A verified requester needs a token-backed person
-  identity: a static token file on kind for the fictional people, OIDC in production (see "Not
-  built yet").
+  identity: on kind, the static token file for the fictional people (`hack/kind-people.sh`,
+  `make foc-up`, D60); in production, OIDC.
+- **The kind person tokens are not an identity system (D60).** A static token file has no expiry
+  and no rotation, and a change needs an API server restart. Anyone who can read
+  `local/foc-up/people/tokens.csv` (mode 600) or the node's `/etc/foc-people` can act as sam, dana
+  or eve on that cluster. It exists for fictional people on a local cluster, and no other.
 - **Requester tokens (D57).** The token reaches `foc-mcp` through `foc-agent` over plain HTTP
   inside the cluster, and both processes briefly hold a credential that is valid against the API
   server; `foc-mcp` uses it only for a `TokenReview` (default audiences) and keeps a SHA-256 of it

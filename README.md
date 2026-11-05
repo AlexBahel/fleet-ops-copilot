@@ -26,7 +26,8 @@ what is not built, not measured, or not enforced is listed in
 | `internal/tracing` | OpenTelemetry setup (OTLP/gRPC), redacting exporter, trace context over MCP `_meta` |
 | `config/` | CRDs, RBAC, ValidatingAdmissionPolicies, Deployments (`config/deploy`) |
 | `charts/fleet-ops-copilot` | Helm chart: the objects in `config/` plus an optional NetworkPolicy; `make chart-check` |
-| `scripts/` | `foc-up-preflight.sh` (cluster and Swarmada webhook checks), `chart-parity` (chart vs `config/`) |
+| `scripts/` | `foc-up-preflight.sh` (cluster and Swarmada webhook checks), `chart-parity` (chart vs `config/`), `baseline-lowered` (CI warning when `evals/baseline.json` is lowered) |
+| `hack/` | `foc-up.sh`, `foc-down.sh`, `kind-people.sh` (test-only person tokens), `kind/` (kind configuration), live-test scripts |
 | `docs/RUNBOOK.md`, `docs/architecture/` | Operations runbook (draft); architecture diagrams (D2 source and SVG) |
 | `evals/` | Evaluation harness, scenarios, fixtures (hand-written and captured live), results |
 | `test/live` | Approval paths and guardrails against a live Swarmada control plane |
@@ -48,6 +49,12 @@ Model evaluations call the Claude API and read `ANTHROPIC_API_KEY` from the envi
 go run -tags envtest ./evals/cmd/foc-eval -backend claude -model claude-sonnet-5-5 -runs 3 \
   -out evals/results/<date>-cloud-claude-sonnet-5-5/results.json
 ```
+
+`make foc-up` takes an empty machine to a running stack on a kind cluster `foc-up`: Swarmada's
+quickstart at the pinned commit, its webhooks on, the chart installed, the fictional people sam,
+dana and eve with test-only bearer tokens, health checks, and the elapsed time at the end
+(`FOC_UP_DRY_RUN=1 make foc-up` prints the plan; `make foc-live` runs `test/live`; `make foc-down`
+removes it). It has not been run yet; see [`docs/RUNBOOK.md`](docs/RUNBOOK.md), "Quick start".
 
 On a kind cluster named `foc-<name>` that runs Swarmada (for example its quickstart),
 `make deploy-kind KIND_CLUSTER=foc-<name>` installs the copilot, and

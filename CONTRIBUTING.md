@@ -24,7 +24,10 @@ All five must pass. `make help` lists every target.
 runs, passing runs). It fails when a category passes fewer runs than recorded or when the
 scenario count or a category's counts change. A change that adds, removes or moves a scenario
 runs `make eval-baseline` and commits the rewritten `evals/baseline.json` in the same commit;
-the scenario count is 25 (`docs/DESIGN.md` §4.2, D58).
+the scenario count is 25 (`docs/DESIGN.md` §4.2, D58). CI also prints a warning annotation for every
+category a change lowers in that file against its base commit (D62); `make baseline-lowered
+BASE=<revision>` shows the same locally. Lowering a category is allowed, and the warning asks the
+reviewer to look at it.
 
 ## Rules for changes
 

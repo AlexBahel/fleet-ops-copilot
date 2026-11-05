@@ -1,8 +1,9 @@
 # Fleet Ops Copilot — Runbook
 
 **Status: draft.** Written before the Helm chart has been installed on a cluster. Each command
-below follows the chart and the code on main; none of them has been run as a sequence. Items that
-depend on parts not built yet (the air-gapped profile in the chart) say so.
+below follows the chart and the code on main; none of them has been run as a sequence, and
+`make foc-up` (section 0) has not been run at all. Items that depend on parts not built yet (the
+air-gapped profile in the chart) say so.
 
 Conventions: every `kubectl` and `helm` command names its context explicitly. The examples use a
 kind cluster `foc-<name>`, context `kind-foc-<name>`, a kubeconfig file that holds only that
@@ -13,6 +14,43 @@ cluster (`$KUBECONFIG`), the copilot namespace `foc-system`, and the Swarmada na
 export KUBECONFIG=$PWD/local/foc-<name>.kubeconfig   # dedicated file, mode 600
 CTX=kind-foc-<name>
 ```
+
+## 0. Quick start on kind: `make foc-up`
+
+One command from an empty machine state to a running stack. Needs Docker (running), kind,
+kubectl, helm 3.8+, jq, openssl, curl, make, Go and python3 (Swarmada's live quickstart runs a
+simulated adapter). It uses its own kubeconfig, `local/foc-up/kubeconfig`, and never reads or
+writes `~/.kube/config`:
+
+```bash
+make foc-up                       # prints the plan's stages and, at the end, the elapsed time
+FOC_UP_DRY_RUN=1 make foc-up      # prints every command that would change anything, runs none
+FOC_UP_TRACING=1 make foc-up      # also installs the optional trace backend (section 8)
+make foc-down                     # removes cluster foc-up, its kubeconfig and the people's tokens
+```
+
+What it does, in order (each stage prints its elapsed time; the total is the last line):
+
+1. Creates the people's token file (section 7) and the kind cluster `foc-up` with that file wired
+   into the API server. Node image `kindest/node:v1.37.0`, pinned by digest.
+2. Checks that sam's, dana's and eve's tokens authenticate as sam, dana and eve. If the cluster
+   already existed without the token configuration this fails at once: run `make foc-down foc-up`.
+3. Runs Swarmada's warehouse quickstart (`examples/warehouse-quickstart/run.sh`, scenario
+   `healthy-fleet`, `FOC_UP_SCENARIO` to change it) from a writable copy of the module at the
+   commit `go.mod` pins, in `local/foc-up/swarmada`. It builds Swarmada's controller image and
+   leaves a simulated adapter and a port-forward running in the background; `make foc-down`
+   stops them.
+4. Turns on Swarmada's admission webhooks (`config/controlstream-tls`, section 6) and runs
+   `scripts/foc-up-preflight.sh` until it passes (up to 3 minutes).
+5. Builds the copilot image, loads it into the cluster, applies the CRDs and installs the chart
+   into `foc-system`; binds the people's roles in `warehouse-a`.
+6. Checks health: foc-mcp and foc-approvals rollouts, foc-mcp's `/healthz`, and, if the Secret
+   `fleet-ops-copilot-claude` exists, foc-agent. Without the Secret foc-agent does not start and
+   the script says so. To create it from a key file you hold (nothing calls the model):
+   `FOC_UP_ANTHROPIC_KEY_FILE=key.txt make foc-up`, or section 2.
+
+Then `make foc-live` runs the live approval paths with requests filed by sam's and dana's own
+tokens (verified requesters, section 7). It needs `bin/foc` (built by the target).
 
 ## 1. Install
 
@@ -61,6 +99,7 @@ Values worth setting (see `charts/fleet-ops-copilot/values.yaml`):
 | `llm.cloud.apiKeySecretRef` | `fleet-ops-copilot-claude` / `ANTHROPIC_API_KEY` | Existing Secret holding the Claude API key (section 2) |
 | `agent.enabled` | `true` | foc-agent Deployment and Service (model loop and web UI) |
 | `tracing.otlpEndpoint` | empty (off) | OTLP/gRPC collector for foc-agent and foc-mcp traces |
+| `tracing.backend.enabled` | `false` | Development trace backend (OpenTelemetry Collector + Jaeger) and its wiring; exclusive with `tracing.otlpEndpoint` (section 8) |
 | `networkPolicy.enabled` | `false` | Cloud-profile NetworkPolicy; needs `networkPolicy.apiServer.cidrs` |
 
 A cluster on which `make deploy-kind` already installed the plain manifests has the same objects
@@ -99,7 +138,9 @@ foc chat --context $CTX "put aisle B into maintenance after this wave"
 ```
 
 A kubeconfig user that authenticates with a client certificate (kind's default admin) has no bearer
-token, so its requests are unverified; `foc chat` says so. `foc chat` sends the token only over https or
+token, so its requests are unverified; `foc chat` says so. On a `make foc-up` cluster use a
+person's token kubeconfig: `KUBECONFIG=local/foc-up/persons/sam.kubeconfig foc chat --context
+sam@foc-up "..."` (section 7). `foc chat` sends the token only over https or
 to a loopback address. foc-mcp never stores, logs or traces the token; it keeps a SHA-256 of it for 30
 seconds as a cache key. Between foc-agent and foc-mcp the token travels in the cluster over plain HTTP.
 
@@ -271,3 +312,83 @@ ready endpoints behind their Service, and an answer from the FleetTask webhook t
 This overlay also switches Swarmada's ControlStream to mTLS; adapters then need a client
 certificate (Swarmada's `docs/adapters.md`). Running it on a shared or production cluster is a
 Swarmada operation, not a copilot one: follow Swarmada's documentation there.
+
+## 7. People and bearer tokens: kind and OIDC
+
+A request is approvable only if its requester is verified: the person's own bearer token, checked
+with a TokenReview (docs/DESIGN.md D57). A person who authenticates with a client certificate
+(kind's admin, `hack/kind-person.sh`) has no bearer token and files `unverified:<name>` requests
+that can only be rejected. Two ways to give people tokens:
+
+### On kind: a static token file (test only, R43)
+
+`make foc-up` makes the fictional people **sam** (group `supervisors`; `fleetops:approver`,
+`swarmada:operator`), **dana** (`fleet-ops`; `fleetops:approver`, `swarmada:fleet-manager`) and
+**eve** (`auditors`; `fleetops:approver`), the same as envtest's. `hack/kind-people.sh gen` writes
+`local/foc-up/people/tokens.csv` (mode 600, a new random token per cluster), the kind
+configuration mounts it into the node and gives it to the API server (`--token-auth-file`), and
+`hack/kind-people.sh kubeconfig` writes `local/foc-up/persons/<name>.kubeconfig`, context
+`<name>@foc-up`, holding the person's token. The token is never printed or put on a command line.
+
+```bash
+KUBECONFIG=local/foc-up/persons/sam.kubeconfig kubectl --context sam@foc-up auth whoami
+KUBECONFIG=local/foc-up/persons/sam.kubeconfig bin/foc chat --context sam@foc-up "put aisle B into maintenance"
+KUBECONFIG=local/foc-up/persons/dana.kubeconfig bin/foc approve <request> -n warehouse-a --context dana@foc-up
+```
+
+This is not an identity system: a static token never expires, cannot be revoked without
+restarting the API server, and is readable by anyone who can read the file or the node. Use it on
+a local kind cluster with fictional people, nowhere else. To add a person, edit the table in
+`hack/kind-people.sh` and `internal/testenv` together (a test compares them) and recreate the
+cluster.
+
+### In production: OIDC
+
+Not set up or run by anything in this repository. The shape, for a cluster whose API server you
+configure (managed clusters have their own OIDC integration; follow the provider's documentation):
+
+1. Point the API server at the identity provider: `--oidc-issuer-url`, `--oidc-client-id`,
+   `--oidc-username-claim` (for example `email`), `--oidc-groups-claim`, and prefixes
+   (`--oidc-username-prefix=oidc:` keeps provider names from colliding with cluster users). On
+   newer Kubernetes versions the same is an `AuthenticationConfiguration` file; use the one your
+   version documents.
+2. Bind roles to the prefixed names, for example
+   `kubectl -n warehouse-a create rolebinding approver-alice --clusterrole=fleetops:approver --user=oidc:alice@example.test`.
+   The username the API server reports is what the copilot records as `requestedFor` and
+   `decidedBy`; self-approval is refused by comparing them.
+3. People log in with an exec credential plugin in their kubeconfig (for example `kubelogin`),
+   which returns the ID token. `foc chat` sends the token an exec plugin returns, only over https
+   or to a loopback address; `foc approve` and `kubectl` use the same kubeconfig user.
+4. foc-mcp verifies the token with a TokenReview with the API server's default audiences. That has
+   been tested with envtest's static tokens and TokenRequest tokens only, **not with an OIDC
+   token** (docs/KNOWN-LIMITS.md). Try a request as a person and check `spec.requestedFor` on the
+   ApprovalRequest before relying on it.
+5. ID tokens are short-lived. A long `foc chat` session may need a fresh token; foc-mcp caches a
+   review for 30 seconds by the token's SHA-256 and never stores the token.
+
+## 8. Read the traces (optional backend)
+
+foc-agent and foc-mcp export one trace per operator request when they have an OTLP/gRPC endpoint:
+spans `foc.request`, `llm.chat` (tokens, latency), `tool.call`, `mcp.tool` and `policy.decide`,
+joined across MCP by W3C trace context (D54). No prompt, answer, tool argument or result text is in
+a span, and a redacting exporter masks configured secrets and token patterns before export.
+
+Use your own collector with `--set tracing.otlpEndpoint=<host:port>`, or install the chart's
+development backend, an OpenTelemetry Collector in front of Jaeger v2 (in-memory store, off by
+default, D61):
+
+```bash
+helm --kube-context $CTX upgrade --install foc charts/fleet-ops-copilot -n foc-system \
+  --reuse-values --set tracing.backend.enabled=true      # leave tracing.otlpEndpoint empty
+kubectl --context $CTX -n foc-system rollout status deploy/foc-otel-collector deploy/foc-jaeger
+kubectl --context $CTX -n foc-system port-forward svc/foc-jaeger 16686:16686
+# open http://127.0.0.1:16686/ , service foc-agent, operation foc.request
+```
+
+Both Services are ClusterIP and the UI has no login: reach it only through the port-forward.
+Traces live in the Jaeger pod's memory (the image's default of 100000 traces) and are lost when it
+restarts. The images (`otel/opentelemetry-collector`, `jaegertracing/jaeger`, pinned by digest in
+`values.yaml`) must be pullable by the nodes; they are not part of the air-gapped profile. With
+`networkPolicy.enabled` the chart opens exactly foc-mcp/foc-agent to the Collector and the
+Collector to Jaeger. The backend has not been installed on a cluster yet.
+
