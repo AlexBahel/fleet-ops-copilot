@@ -1,0 +1,124 @@
+{{- include "foc.validate" . }}
+{{- if .Values.tracing.backend.enabled }}
+# Optional trace backend (tracing.backend.enabled, off by default): foc-agent
+# and foc-mcp send OTLP/gRPC to the OpenTelemetry Collector, which forwards it
+# to Jaeger v2. Jaeger runs the all-in-one configuration built into its image
+# (in-memory store, OTLP receiver on 4317, UI on 16686), so there is no Jaeger
+# config to keep in step with the image. Both Services are ClusterIP; the UI is
+# reached with kubectl port-forward. Neither pod receives a Kubernetes API
+# token. Not installed on a cluster yet (docs/KNOWN-LIMITS.md).
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: foc-otel-collector
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "foc.workloadLabels" (dict "name" "foc-otel-collector" "root" .) | nindent 4 }}
+data:
+  config.yaml: |
+    {{- include "foc.otelCollectorConfig" . | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: foc-otel-collector
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "foc.workloadLabels" (dict "name" "foc-otel-collector" "root" .) | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: foc-otel-collector}
+  template:
+    metadata:
+      labels:
+        {{- include "foc.workloadLabels" (dict "name" "foc-otel-collector" "root" .) | nindent 8 }}
+      annotations:
+        checksum/config: {{ include "foc.otelCollectorConfig" . | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: otel-collector
+          image: {{ .Values.tracing.backend.collector.image }}
+          args: [--config=/etc/otelcol/config.yaml]
+          ports: [{name: otlp-grpc, containerPort: 4317}]
+          readinessProbe: {tcpSocket: {port: otlp-grpc}, periodSeconds: 5}
+          livenessProbe: {tcpSocket: {port: otlp-grpc}, periodSeconds: 10, initialDelaySeconds: 10}
+          {{- with .Values.tracing.backend.collector.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts:
+            - {name: config, mountPath: /etc/otelcol, readOnly: true}
+      volumes:
+        - name: config
+          configMap: {name: foc-otel-collector}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: foc-otel-collector
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "foc.workloadLabels" (dict "name" "foc-otel-collector" "root" .) | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector: {app.kubernetes.io/name: foc-otel-collector}
+  ports: [{name: otlp-grpc, port: 4317, targetPort: otlp-grpc}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: foc-jaeger
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "foc.workloadLabels" (dict "name" "foc-jaeger" "root" .) | nindent 4 }}
+spec:
+  replicas: 1
+  # In-memory store: a second replica would hold a different set of traces.
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app.kubernetes.io/name: foc-jaeger}
+  template:
+    metadata:
+      labels:
+        {{- include "foc.workloadLabels" (dict "name" "foc-jaeger" "root" .) | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: jaeger
+          image: {{ .Values.tracing.backend.jaeger.image }}
+          ports:
+            - {name: otlp-grpc, containerPort: 4317}
+            - {name: ui, containerPort: 16686}
+          readinessProbe: {tcpSocket: {port: ui}, periodSeconds: 5}
+          livenessProbe: {tcpSocket: {port: ui}, periodSeconds: 10, initialDelaySeconds: 15}
+          {{- with .Values.tracing.backend.jaeger.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: foc-jaeger
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "foc.workloadLabels" (dict "name" "foc-jaeger" "root" .) | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector: {app.kubernetes.io/name: foc-jaeger}
+  ports:
+    - {name: otlp-grpc, port: 4317, targetPort: otlp-grpc}
+    - {name: ui, port: 16686, targetPort: ui}
+{{- end }}

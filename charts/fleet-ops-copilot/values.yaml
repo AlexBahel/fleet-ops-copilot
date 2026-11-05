@@ -60,6 +60,31 @@ agent:
 # OTEL_EXPORTER_OTLP_HEADERS from a Secret; the chart does not template them.
 tracing:
   otlpEndpoint: ""
+  # Optional in-cluster trace backend for development and demonstrations: an
+  # OpenTelemetry Collector (OTLP/gRPC in, OTLP/gRPC out) in front of Jaeger
+  # v2 with its in-memory store. Off by default; nothing below is rendered
+  # unless enabled is true. When enabled, foc-agent and foc-mcp export to the
+  # Collector (foc-otel-collector:4317) and otlpEndpoint must stay empty (the
+  # render fails if both are set). Read the traces with
+  #   kubectl --context <ctx> -n foc-system port-forward svc/foc-jaeger 16686:16686
+  # and open http://127.0.0.1:16686/. Both Services are ClusterIP. Traces are
+  # kept in the Jaeger pod's memory only (the image's default of 100000
+  # traces) and are lost when it restarts. Neither pod gets a Kubernetes API
+  # token. Span attributes are redacted in foc-agent and foc-mcp before export
+  # (docs/DESIGN.md D54). Images are pinned by tag and digest; they must be
+  # pullable by the nodes (this is not part of the air-gapped profile).
+  backend:
+    enabled: false
+    collector:
+      image: otel/opentelemetry-collector:0.164.0@sha256:28b6d41ac51bff6b41ba5e8fe503569ffb9d6a1ea90f7a78419e86f34e44f750
+      resources:
+        requests: {cpu: 50m, memory: 64Mi}
+        limits: {memory: 256Mi}
+    jaeger:
+      image: jaegertracing/jaeger:2.22.0@sha256:836b967b5abcf1f7758066aa6b348619267a2f1459f72d472840570f9bd88a17
+      resources:
+        requests: {cpu: 100m, memory: 256Mi}
+        limits: {memory: 768Mi}
 
 # Model backend profile.
 llm:

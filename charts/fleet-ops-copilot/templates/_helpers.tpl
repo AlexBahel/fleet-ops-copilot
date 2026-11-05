@@ -44,6 +44,45 @@ comes from an existing Secret; the chart never holds its value.
 {{- end -}}
 
 {{/*
+The OTLP/gRPC endpoint foc-agent and foc-mcp export to: the in-cluster
+Collector when tracing.backend.enabled, otherwise tracing.otlpEndpoint (empty:
+tracing off).
+*/}}
+{{- define "foc.otlpEndpoint" -}}
+{{- if .Values.tracing.backend.enabled -}}
+foc-otel-collector:4317
+{{- else -}}
+{{ .Values.tracing.otlpEndpoint }}
+{{- end -}}
+{{- end -}}
+
+{{/* config.yaml of the in-cluster OpenTelemetry Collector (templates/tracing-backend.yaml). */}}
+{{- define "foc.otelCollectorConfig" -}}
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 200
+    spike_limit_mib: 50
+  batch: {}
+exporters:
+  otlp:
+    endpoint: foc-jaeger:4317
+    tls:
+      insecure: true
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp]
+{{- end -}}
+
+{{/*
 Render-time checks. Called from every template file so `helm template -s`
 on a single file still fails on a bad configuration.
 */}}
@@ -68,6 +107,9 @@ on a single file still fails on a bad configuration.
 {{- if not (has . $.Values.swarmadaNamespaces) -}}
 {{- fail (printf "the policy file lists namespace %q, which is not in swarmadaNamespaces: foc-mcp and foc-approvals would have no RoleBinding there" .) -}}
 {{- end -}}
+{{- end -}}
+{{- if and .Values.tracing.backend.enabled .Values.tracing.otlpEndpoint -}}
+{{- fail "tracing.backend.enabled and tracing.otlpEndpoint are both set: the in-cluster backend is the exporter's endpoint, so leave tracing.otlpEndpoint empty (or turn the backend off to use your own collector)" -}}
 {{- end -}}
 {{- if and .Values.networkPolicy.enabled (not .Values.networkPolicy.apiServer.cidrs) -}}
 {{- fail "networkPolicy.enabled needs networkPolicy.apiServer.cidrs (the API server endpoint and Service address); without them foc-mcp and foc-approvals cannot reach the API server" -}}

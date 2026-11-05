@@ -67,6 +67,29 @@
           "description": "OTLP/gRPC collector: host:port, http://host:port or https://host:port; empty disables tracing",
           "type": "string",
           "pattern": "^$|^(https?://)?[A-Za-z0-9.-]+:[0-9]{1,5}/?$"
+        },
+        "backend": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {"type": "boolean"},
+            "collector": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "image": {"type": "string", "minLength": 1},
+                "resources": {"type": "object"}
+              }
+            },
+            "jaeger": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "image": {"type": "string", "minLength": 1},
+                "resources": {"type": "object"}
+              }
+            }
+          }
         }
       }
     },

@@ -10,7 +10,9 @@ foc-agent does not start until Secret {{ .Values.llm.cloud.apiKeySecretRef.name 
 {{- end }}
 Swarmada namespaces: {{ join ", " .Values.swarmadaNamespaces }}
 Model profile: {{ .Values.llm.profile }} ({{ .Values.llm.cloud.model }}); API key reference: Secret {{ .Values.llm.cloud.apiKeySecretRef.name }}, key {{ .Values.llm.cloud.apiKeySecretRef.key }}.
-Tracing: {{ if .Values.tracing.otlpEndpoint }}OTLP {{ .Values.tracing.otlpEndpoint }}{{ else }}off{{ end }}.
+Tracing: {{ if .Values.tracing.backend.enabled }}in-cluster backend (OpenTelemetry Collector -> Jaeger, in-memory store). Read traces with:
+  kubectl --context <context> -n {{ .Release.Namespace }} port-forward svc/foc-jaeger 16686:16686
+  then open http://127.0.0.1:16686/{{ else if include "foc.otlpEndpoint" . }}OTLP {{ include "foc.otlpEndpoint" . }}{{ else }}off{{ end }}.
 NetworkPolicy: {{ if .Values.networkPolicy.enabled }}enabled{{ else }}disabled{{ end }}.
 
 Drafts are refused (DENY_DRAFT_GATE_ABSENT) unless Swarmada's FleetTask

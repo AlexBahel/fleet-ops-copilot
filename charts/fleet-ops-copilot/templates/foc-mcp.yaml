@@ -34,7 +34,7 @@ spec:
             - -audit={{ .Values.audit.dir }}/foc-mcp.jsonl
             - -namespace={{ first .Values.swarmadaNamespaces }}
             - -listen=:{{ .Values.mcp.port }}
-            {{- with .Values.tracing.otlpEndpoint }}
+            {{- with include "foc.otlpEndpoint" . }}
             - -otlp-endpoint={{ . }}
             {{- end }}
           env:

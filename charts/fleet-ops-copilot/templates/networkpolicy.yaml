@@ -129,6 +129,82 @@ spec:
         - {protocol: TCP, port: {{ . }}}
         {{- end }}
 {{- end }}
+{{- if .Values.tracing.backend.enabled }}
+---
+# In-cluster trace backend (tracing.backend.enabled): foc-agent and foc-mcp ->
+# the Collector, the Collector -> Jaeger. Each hop needs the egress rule on the
+# sender and the ingress rule on the receiver, because the default-deny policy
+# selects every pod in the namespace. The Jaeger UI is reached with
+# kubectl port-forward, which is normally not subject to NetworkPolicy.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: foc-otel-collector-ingress
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "foc.chartLabels" . | nindent 4 }}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: foc-otel-collector}}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - {key: app.kubernetes.io/name, operator: In, values: [foc-mcp, foc-agent]}
+      ports:
+        - {protocol: TCP, port: 4317}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: foc-otlp-egress-collector
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "foc.chartLabels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchExpressions:
+      - {key: app.kubernetes.io/name, operator: In, values: [foc-mcp, foc-agent]}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: foc-otel-collector}}
+      ports:
+        - {protocol: TCP, port: 4317}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: foc-otel-collector-egress-jaeger
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "foc.chartLabels" . | nindent 4 }}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: foc-otel-collector}}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: foc-jaeger}}
+      ports:
+        - {protocol: TCP, port: 4317}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: foc-jaeger-ingress
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "foc.chartLabels" . | nindent 4 }}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: foc-jaeger}}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: foc-otel-collector}}
+      ports:
+        - {protocol: TCP, port: 4317}
+{{- end }}
 {{- with .Values.networkPolicy.otlpEgress.to }}
 ---
 # foc-agent and foc-mcp -> OTLP collector.

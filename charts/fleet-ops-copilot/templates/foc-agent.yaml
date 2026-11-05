@@ -39,7 +39,7 @@ spec:
             - -mcp-url=http://foc-mcp:{{ .Values.mcp.port }}/mcp
             - -namespaces={{ join "," .Values.swarmadaNamespaces }}
             - -max-concurrent={{ .Values.agent.maxConcurrent }}
-            {{- with .Values.tracing.otlpEndpoint }}
+            {{- with include "foc.otlpEndpoint" . }}
             - -otlp-endpoint={{ . }}
             {{- end }}
           env:
