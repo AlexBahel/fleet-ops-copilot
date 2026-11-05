@@ -60,9 +60,18 @@ in-namespace control request succeeds and every external target (two IP
 addresses and one name) is unreachable. `make verify-egress-baseline` runs the
 same probe in a namespace without the policy, where it must report open egress;
 without that result a passing probe does not show that the probe works.
-On kind's default CNI a new pod's egress was open for up to about 1.2 s after
-its container started, so the probe, which makes its requests at once, fails
-there (`docs/KNOWN-LIMITS.md`).
+The probe first makes one attempt at each external target at pod start and
+prints it without counting it; then it waits until the policy is in force for
+its own pod (a connection to the API server, which the policy denies it, is
+refused or times out; up to 60 s, exit 3 otherwise); then the control; then
+the attempt that decides. On kind's default CNI a new pod's egress was open for
+up to about 1.2 s after its container started, so the at-start line there
+reports open egress (`docs/KNOWN-LIMITS.md`, D63). The claim is therefore:
+egress denied except the Kubernetes API and cluster DNS for the copilot
+components, none for the model server, once the policy is in force for the
+pod. Where a pod must not have that window, use a CNI whose documentation says
+it enforces policy before the pod's containers start, and check it with
+`make verify-egress`; this repository has not checked which CNIs do.
 
 ## Make targets (kind clusters named `foc-*` only)
 

@@ -2,19 +2,36 @@
 # the cluster. The Job SUCCEEDS when every attempt is blocked, and FAILS when
 # any is answered, so "Complete" is the evidence that egress is denied.
 #
+# Order (R40):
+#   1. at start: one attempt at each external target, printed and NOT counted.
+#      On some CNIs a new pod's egress is open until its policy is programmed
+#      (kindnet: up to ~1.2 s, docs/KNOWN-LIMITS.md); this line shows it.
+#   2. wait until the policy is in force for this pod: POLICY_SENTINEL_URL is
+#      a cluster address the policy denies to this pod (the API server, which
+#      only foc-mcp, foc-approvals and foc-agent may reach). The probe polls it
+#      every ~1 s for up to POLICY_WAIT_SECONDS until the connection is refused
+#      or times out (curl exit 7 or 28; a DNS failure does not count).
+#   3. control: CONTROL_URL (in-namespace, allowed) must answer.
+#   4. after the wait: one attempt at each external target. Only this decides.
+#
 # Exit codes of the script:
-#   0  control target reachable (when CONTROL_URL is set) and every external
-#      target unreachable (curl exit 6 no DNS answer, 7 no connection, 28 timeout)
-#   1  an external target answered, or the connection got further than TCP
-#      (any other curl exit, e.g. 35 TLS failure, means the path is open)
+#   0  policy in force, control reachable (when CONTROL_URL is set) and every
+#      external target unreachable after the wait (curl exit 6 no DNS answer,
+#      7 no connection, 28 timeout)
+#   1  an external target answered after the wait, or the connection got
+#      further than TCP (any other curl exit, e.g. 35 TLS failure, means the
+#      path is open)
 #   2  the control target was unreachable: the probe cannot tell "blocked" from
 #      "probe broken", so the result does not count
+#   3  the sentinel stayed reachable for POLICY_WAIT_SECONDS: the policy did not
+#      come into force for this pod (or does not deny the sentinel)
 #
 # The control is in-namespace traffic that the policy allows (llama-server
 # /health). It makes a pass mean "external blocked while internal works".
-# Run it again in a namespace without the policy and without CONTROL_URL
-# (make verify-egress-baseline): it must then fail with exit 1, which shows the
-# probe does detect open egress from this machine's network.
+# Run it again in a namespace without the policy, without CONTROL_URL and
+# without POLICY_SENTINEL_URL (make verify-egress-baseline): it must then fail
+# with exit 1, which shows the probe does detect open egress from this
+# machine's network. With no sentinel there is no wait.
 #
 # No metadata.namespace on purpose: apply it with -n. The pod uses the
 # llama.cpp server image (the image contains curl) so that no further image
@@ -40,11 +57,51 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
             - {name: CONTROL_URL, value: "http://llama-server:8080/health"}
+            - {name: POLICY_SENTINEL_URL, value: "https://kubernetes.default.svc:443/healthz"}
+            - {name: POLICY_WAIT_SECONDS, value: "60"}
             - {name: EXTERNAL_URLS, value: "https://1.1.1.1 https://8.8.8.8 https://example.com"}
           command: [sh, -c]
           args:
             - |
-              echo "egress probe: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+              t0=$(date +%s%N)
+              ms() { echo $(( ($(date +%s%N) - t0) / 1000000 )); }
+              # external PHASE: one attempt per target; prints one line each,
+              # returns 1 if any target is open.
+              external() {
+                any=0
+                for u in $EXTERNAL_URLS; do
+                  curl -sS --connect-timeout 5 --max-time 8 -o /dev/null "$u" 2>/tmp/err
+                  rc=$?
+                  case "$rc" in
+                    6|7|28) echo "$1 t=$(ms)ms blocked: $u (curl exit $rc)" ;;
+                    *) echo "$1 t=$(ms)ms OPEN: $u (curl exit $rc) $(cat /tmp/err)"; any=1 ;;
+                  esac
+                done
+                return $any
+              }
+              echo "egress probe: $(date -u +%Y-%m-%dT%H:%M:%SZ); t is ms since the probe script started"
+              if external at-start; then
+                echo "at-start: all external targets blocked (not counted)"
+              else
+                echo "at-start: egress open before the policy was in force for this pod (not counted; see docs/KNOWN-LIMITS.md)"
+              fi
+              if [ -n "${POLICY_SENTINEL_URL:-}" ]; then
+                deadline=$(( POLICY_WAIT_SECONDS * 1000 ))
+                while :; do
+                  curl -sS -k --connect-timeout 1 --max-time 2 -o /dev/null "$POLICY_SENTINEL_URL" 2>/dev/null
+                  rc=$?
+                  case "$rc" in
+                    7|28) echo "policy in force: t=$(ms)ms sentinel $POLICY_SENTINEL_URL denied (curl exit $rc)"; break ;;
+                  esac
+                  if [ "$(ms)" -ge "$deadline" ]; then
+                    echo "POLICY NOT IN FORCE: sentinel $POLICY_SENTINEL_URL still reachable after ${POLICY_WAIT_SECONDS}s (curl exit $rc)"
+                    exit 3
+                  fi
+                  sleep 1
+                done
+              else
+                echo "no policy sentinel (baseline run): no wait"
+              fi
               if [ -n "${CONTROL_URL:-}" ]; then
                 code=$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' "$CONTROL_URL")
                 rc=$?
@@ -52,20 +109,11 @@ spec:
                   echo "CONTROL FAILED: $CONTROL_URL curl exit $rc http $code (is llama-server Ready?)"
                   exit 2
                 fi
-                echo "control ok: $CONTROL_URL http $code"
+                echo "control ok: t=$(ms)ms $CONTROL_URL http $code"
               else
                 echo "no control target (baseline run)"
               fi
-              open=0
-              for u in $EXTERNAL_URLS; do
-                curl -sS --connect-timeout 5 --max-time 8 -o /dev/null "$u" 2>/tmp/err
-                rc=$?
-                case "$rc" in
-                  6|7|28) echo "blocked: $u (curl exit $rc)" ;;
-                  *) echo "OPEN: $u (curl exit $rc) $(cat /tmp/err)"; open=1 ;;
-                esac
-              done
-              if [ "$open" -ne 0 ]; then echo "RESULT: egress is NOT blocked"; exit 1; fi
+              if ! external after-wait; then echo "RESULT: egress is NOT blocked"; exit 1; fi
               echo "RESULT: all external targets blocked"
           securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
           volumeMounts:

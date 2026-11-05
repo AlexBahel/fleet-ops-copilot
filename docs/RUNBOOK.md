@@ -226,6 +226,13 @@ make verify-egress-baseline KIND_CLUSTER=foc-<name>   # must report open egress
 make verify-egress    KIND_CLUSTER=foc-<name>         # must report every external target blocked
 ```
 
+`make verify-egress` prints an `at-start` line (not counted), the time the policy came into force
+for the probe pod, and the `after-wait` line that decides. On kind's default CNI the `at-start`
+line reports open egress: a new pod's egress was open for up to about 1.2 s after its container
+started (docs/KNOWN-LIMITS.md, D63). If a pod must not have that window, use a CNI whose own
+documentation says it enforces NetworkPolicy before the pod's containers start, and run the probe
+there.
+
 Do not enable the chart's cloud NetworkPolicy and the air-gapped egress policy together without
 reading both: NetworkPolicies are additive, so the cloud policy's Claude API rule would reopen an
 egress path the air-gapped profile is meant to close.

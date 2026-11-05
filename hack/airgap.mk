@@ -67,7 +67,7 @@ deploy-airgap: ## Apply llama-server and the egress NetworkPolicies to kind clus
 		$(KCTL) -n $(AIRGAP_NS) rollout status deploy/foc-mcp deploy/foc-approvals --timeout=180s; \
 	else echo "foc-mcp/foc-approvals not deployed (make deploy-kind): API access under the policy not exercised"; fi
 
-verify-egress: ## Run the egress probe Job in foc-system: passes only if every external target is blocked and the in-namespace control works
+verify-egress: ## Egress probe Job in foc-system: records egress at pod start, waits until the policy is in force, then passes only if every external target is blocked and the in-namespace control works
 	$(require_foc_cluster)
 	$(KCTL) -n $(AIRGAP_NS) delete job foc-egress-probe --ignore-not-found --wait
 	$(KCTL) -n $(AIRGAP_NS) apply -f config/airgap/egress-probe.yaml
@@ -77,13 +77,14 @@ verify-egress: ## Run the egress probe Job in foc-system: passes only if every e
 		if [ "$$s" = 1 ]; then ok=1; break; fi; \
 		if [ -n "$$f" ] && [ "$$f" != 0 ]; then break; fi; sleep 3; done; \
 	$(KCTL) -n $(AIRGAP_NS) logs job/foc-egress-probe; \
-	if [ $$ok = 1 ]; then echo "verify-egress: PASS (external blocked, control reachable)"; else echo "verify-egress: FAIL"; exit 1; fi
+	if [ $$ok = 1 ]; then echo "verify-egress: PASS (after the policy was in force: external blocked, control reachable; the at-start line is not counted)"; else echo "verify-egress: FAIL"; exit 1; fi
 
 verify-egress-baseline: ## Same probe in a namespace WITHOUT the policy: must report open egress (shows the probe detects it from this network)
 	$(require_foc_cluster)
 	$(KCTL) create namespace foc-egress-baseline --dry-run=client -o yaml | $(KCTL) apply -f -
 	$(KCTL) -n foc-egress-baseline delete job foc-egress-probe --ignore-not-found --wait
-	sed 's|value: "http://llama-server:8080/health"|value: ""|' config/airgap/egress-probe.yaml | $(KCTL) -n foc-egress-baseline apply -f -
+	sed -e 's|value: "http://llama-server:8080/health"|value: ""|' -e 's|value: "https://kubernetes.default.svc:443/healthz"|value: ""|' config/airgap/egress-probe.yaml | $(KCTL) -n foc-egress-baseline apply -f -
+	@# No control and no policy sentinel: no policy here, so no wait (R40).
 	@res=unfinished; for i in $$(seq 1 60); do \
 		s="$$($(KCTL) -n foc-egress-baseline get job foc-egress-probe -o jsonpath='{.status.succeeded}')"; \
 		f="$$($(KCTL) -n foc-egress-baseline get job foc-egress-probe -o jsonpath='{.status.failed}')"; \

@@ -128,11 +128,18 @@ remove it.
   or retention yet. In `config/deploy` the files are on `emptyDir` volumes and are lost when a
   pod is replaced. A failed Event write is recorded in the JSONL file only.
 
-- **Egress in the air-gapped profile** (`config/airgap/networkpolicy.yaml`, D50), measured on
-  kind's default CNI (`docs/evidence/airgap-2026-11-04/`): a new pod's egress was open for up to
-  about 1.2 s after its container started, then denied. The committed egress probe makes its
-  requests in that window, so `make verify-egress` fails there; started 10 s later, the same probe
-  passes. Whether a connection opened in the window survives was not tested. Cluster DNS answered
+- **Egress in the air-gapped profile** (`config/airgap/networkpolicy.yaml`, D50, D63) is denied,
+  except the Kubernetes API and cluster DNS for the copilot components and nothing for the model
+  server, **once the policy is in force for the pod**. Measured on kind's default CNI, kindnet
+  (`docs/evidence/airgap-2026-11-04/egress-startup-window.log`): a new pod's egress was open for
+  up to about 1.2 s after its container started (blocked from 1230 ms and 1191 ms in two runs),
+  then denied. The egress probe therefore records egress at pod start (not counted), waits until
+  a connection its policy denies inside the cluster fails, and decides on the attempt after that
+  (D63); the at-start line shows the window where it exists. Nothing in the copilot waits for the
+  policy before opening connections, so a process could reach the internet in that window. Whether
+  a connection opened in the window survives was not tested. Which CNIs enforce a policy from pod
+  start has not been checked here; for a site that needs it, choose a CNI whose own documentation
+  says so and run `make verify-egress` there. Cluster DNS answered
   queries for external names in kind (CoreDNS forwards to the host). `kubectl port-forward`
   reaches `llama-server` regardless of its ingress policy; RBAC (`pods/portforward`) governs it.
   NetworkPolicy does not govern image pulls, which the node makes; no image is pulled at runtime
