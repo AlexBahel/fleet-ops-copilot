@@ -74,6 +74,9 @@ type Trace struct {
 	Started     time.Time `json:"started"`
 	Ended       time.Time `json:"ended"`
 	LatencyMs   float64   `json:"latencyMs"`
+	// TraceID is the OpenTelemetry trace of this request (hex), empty when
+	// the Loop has no Tracer or a no-op one.
+	TraceID string `json:"traceID,omitempty"`
 }
 
 // Loop runs one backend against one MCP session.
@@ -97,6 +100,9 @@ func (l *Loop) Run(ctx context.Context, operator, sessionID, prompt string) (tr 
 		tracing.AttrOperator.String(operator), tracing.AttrSession.String(sessionID),
 		tracing.AttrBackend.String(l.Backend.Name()), tracing.AttrPromptChars.Int(len(prompt)),
 	))
+	if sc := span.SpanContext(); sc.HasTraceID() {
+		tr.TraceID = sc.TraceID().String()
+	}
 	defer func() {
 		tr.Ended = time.Now()
 		tr.LatencyMs = float64(tr.Ended.Sub(tr.Started).Microseconds()) / 1000

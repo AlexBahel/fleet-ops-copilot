@@ -117,6 +117,9 @@ func TestLoopTraceAcrossMCPAndPolicy(t *testing.T) {
 	}
 
 	spans := mem.GetSpans()
+	if res.TraceID == "" || res.TraceID != spans[0].SpanContext.TraceID().String() {
+		t.Fatalf("Trace.TraceID %q, spans in trace %s", res.TraceID, spans[0].SpanContext.TraceID())
+	}
 	byName := map[string][]tracetest.SpanStub{}
 	for _, s := range spans {
 		byName[s.Name] = append(byName[s.Name], s)
@@ -250,8 +253,12 @@ func TestLoopWithoutTracerAddsNoMeta(t *testing.T) {
 	}
 	defer closeFn()
 	be := &llm.Scripted{Steps: []llm.Step{{Calls: []llm.ToolCall{call("1", "echo", map[string]any{"text": "x"})}}, {Final: "ok"}}}
-	if _, err := (&Loop{Backend: be, Session: cs}).Run(ctx, "sam", "s1", "x"); err != nil {
+	res, err := (&Loop{Backend: be, Session: cs}).Run(ctx, "sam", "s1", "x")
+	if err != nil {
 		t.Fatal(err)
+	}
+	if res.TraceID != "" {
+		t.Fatalf("TraceID %q without a Tracer", res.TraceID)
 	}
 	seen := sp.meta
 	_, tp := seen["traceparent"]

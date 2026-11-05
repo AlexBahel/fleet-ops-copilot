@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"go.opentelemetry.io/otel/trace"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -62,6 +63,9 @@ type Runner struct {
 	Traces io.Writer
 	// Live, when set, runs against a live cluster instead of Env (see LiveTarget).
 	Live *LiveTarget
+	// AgentTracer and MCPTracer, when set, trace each run as foc-agent and
+	// the in-process foc-mcp would (internal/tracing). nil records nothing.
+	AgentTracer, MCPTracer trace.Tracer
 }
 
 // LiveTarget is a live cluster whose namespace already holds the scenario's
@@ -93,10 +97,12 @@ type RunResult struct {
 	ToolCalls []string  `json:"toolCalls"`
 	Usage     llm.Usage `json:"usage"`
 	// StopReasons are the backend's per-turn stop reasons (claude only).
-	StopReasons []string    `json:"stopReasons,omitempty"`
-	Turns       int         `json:"turns"`
-	Error       string      `json:"error,omitempty"`
-	Trace       agent.Trace `json:"-"`
+	StopReasons []string `json:"stopReasons,omitempty"`
+	Turns       int      `json:"turns"`
+	Error       string   `json:"error,omitempty"`
+	// TraceID is the run's OpenTelemetry trace (foc-eval -otlp-endpoint).
+	TraceID string      `json:"traceID,omitempty"`
+	Trace   agent.Trace `json:"-"`
 }
 
 // ScenarioResult aggregates the runs of one scenario.
@@ -150,6 +156,7 @@ func (r *Runner) runOnce(ctx context.Context, s Scenario, n int) (RunResult, err
 		Identity: testenv.MCPUser, DefaultNamespace: testenv.SwarmNS,
 		Events: &audit.EventSink{C: mcpClient, Scheme: scheme, Component: "foc-mcp", Red: redact.New()},
 		Authn:  &authn.TokenReviewer{C: mcpClient},
+		Tracer: r.MCPTracer,
 	}
 	// The operator authenticates as in a deployment (R39): foc-mcp is served
 	// over streamable HTTP on loopback, and the client sends a bearer token
@@ -172,7 +179,7 @@ func (r *Runner) runOnce(ctx context.Context, s Scenario, n int) (RunResult, err
 	if err != nil {
 		return RunResult{}, err
 	}
-	loop := &agent.Loop{Backend: be, Session: cs}
+	loop := &agent.Loop{Backend: be, Session: cs, Tracer: r.AgentTracer}
 	tr, runErr := loop.Run(ctx, s.Operator, fmt.Sprintf("eval-%s-%d", s.ID, n), s.Prompt)
 	return r.finish(ctx, admin, s, n, tr, runErr)
 }
@@ -191,7 +198,7 @@ func (r *Runner) runLive(ctx context.Context, s Scenario, n int) (RunResult, err
 	if err != nil {
 		return RunResult{}, err
 	}
-	loop := &agent.Loop{Backend: be, Session: cs}
+	loop := &agent.Loop{Backend: be, Session: cs, Tracer: r.AgentTracer}
 	tr, runErr := loop.Run(ctx, s.Operator, fmt.Sprintf("eval-%s-%d", s.ID, n), s.Prompt)
 	rr, err := r.finish(ctx, r.Live.Admin, s, n, tr, runErr)
 	if err != nil {
@@ -201,7 +208,7 @@ func (r *Runner) runLive(ctx context.Context, s Scenario, n int) (RunResult, err
 }
 
 func (r *Runner) finish(ctx context.Context, admin client.Client, s Scenario, n int, tr agent.Trace, runErr error) (RunResult, error) {
-	rr := RunResult{Run: n, LatencyMs: tr.LatencyMs, ToolCalls: tr.ToolCalls(), Usage: tr.Usage, StopReasons: tr.StopReasons, Turns: tr.Turns, Trace: tr}
+	rr := RunResult{Run: n, LatencyMs: tr.LatencyMs, ToolCalls: tr.ToolCalls(), Usage: tr.Usage, StopReasons: tr.StopReasons, Turns: tr.Turns, TraceID: tr.TraceID, Trace: tr}
 	if runErr != nil {
 		rr.Error = runErr.Error()
 	}

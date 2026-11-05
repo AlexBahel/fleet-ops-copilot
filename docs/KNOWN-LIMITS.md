@@ -21,7 +21,8 @@ remove it.
   cluster; the image is built from binaries compiled on the host. `make foc-up` installs the
   chart (cloud profile) and has not been run (see "Not measured yet").
 - Tracing: no stdout exporter and no OTLP/HTTP exporter (OTLP/gRPC only), and no spans in
-  `foc-approvals` for approval and execution (D54). The chart's optional trace backend
+  `foc-approvals` for approval and execution (D54). `foc-eval -otlp-endpoint` (D65) traces the
+  agent loop and an in-process foc-mcp, not the deployed processes. The chart's optional trace backend
   (`tracing.backend.enabled`, D61) keeps traces in the Jaeger pod's memory only: a restart loses
   them, and it is for development and demonstration, not a trace store. Its images must be
   pullable by the nodes, so it is not part of the air-gapped profile.

@@ -46,6 +46,7 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -55,7 +56,9 @@ import (
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/llm"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/policy"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/redact"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/testenv"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/tracing"
 )
 
 func main() {
@@ -74,6 +77,7 @@ func main() {
 	only := flag.String("only", "", "comma-separated scenario ids to run (default: all)")
 	liveCtx := flag.String("live-context", "", "run against this kubeconfig context instead of envtest (state is not loaded; see harness.LiveTarget)")
 	liveMCP := flag.String("live-mcp-url", "", "with -live-context: foc-mcp streamable HTTP endpoint")
+	otlp := flag.String("otlp-endpoint", "", "OTLP/gRPC collector (host:port, http:// or https://): trace each run as services foc-eval-agent and foc-eval-mcp; the trace ID goes into results.json and traces.jsonl. Empty: no tracing")
 	llamaCtx := flag.String("llama-context", "", "llamacpp: kubeconfig context of the cluster running llama-server; its Deployment, pod log and node are recorded")
 	llamaNS := flag.String("llama-namespace", "foc-system", "llamacpp: namespace of the llama-server Deployment")
 	llamaDeploy := flag.String("llama-deployment", "llama-server", "llamacpp: name of the llama-server Deployment and its container")
@@ -88,7 +92,7 @@ func main() {
 	if *traces == "" {
 		*traces = filepath.Join(filepath.Dir(*out), "traces.jsonl")
 	}
-	cfg := runConfig{scenarioDir: *scenarios, fixtureDir: *fixtures, runs: *runs, out: *out, tracePath: *traces, policyPath: *policyPath, baseline: *baselinePath, updateBaseline: *updateBaseline, only: *only, liveCtx: *liveCtx, liveMCP: *liveMCP}
+	cfg := runConfig{scenarioDir: *scenarios, fixtureDir: *fixtures, runs: *runs, out: *out, tracePath: *traces, policyPath: *policyPath, baseline: *baselinePath, updateBaseline: *updateBaseline, only: *only, liveCtx: *liveCtx, liveMCP: *liveMCP, otlp: *otlp}
 	switch *backend {
 	case "scripted":
 		cfg.name, cfg.factory = "scripted", harness.ScriptedFactory
@@ -187,6 +191,7 @@ type runConfig struct {
 	baseline                                                  string
 	updateBaseline                                            bool
 	liveCtx, liveMCP                                          string
+	otlp                                                      string
 	runs                                                      int
 	name, latencyScope                                        string
 	factory                                                   harness.BackendFactory
@@ -324,6 +329,27 @@ func run(c runConfig) error {
 	}
 	defer func() { _ = tf.Close() }()
 	r := &harness.Runner{Env: env, Policy: pol, FixtureDir: fixtureDir, Backend: c.factory, Runs: runs, Live: live, Traces: tf}
+	if c.otlp != "" {
+		red := redact.FromEnv()
+		for _, t := range []struct {
+			service string
+			dst     *trace.Tracer
+		}{{"foc-eval-agent", &r.AgentTracer}, {"foc-eval-mcp", &r.MCPTracer}} {
+			tp, shutdown, err := tracing.Setup(ctx, tracing.Config{Endpoint: c.otlp, ServiceName: t.service, Redactor: red})
+			if err != nil {
+				return err
+			}
+			defer func() {
+				sctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				if err := shutdown(sctx); err != nil {
+					log.Printf("tracing: flushing %s: %v", t.service, err)
+				}
+			}()
+			*t.dst = tracing.Tracer(tp)
+		}
+		fmt.Printf("tracing: OTLP %s (services foc-eval-agent, foc-eval-mcp)\n", red.String(c.otlp))
+	}
 	srs, err := r.Run(ctx, scs)
 	if err != nil {
 		return err
@@ -342,6 +368,9 @@ func run(c runConfig) error {
 		}
 	}
 	mergeInto(envInfo, c.envExtra)
+	if c.otlp != "" {
+		envInfo["tracing"] = "OTLP/gRPC export on (services foc-eval-agent, foc-eval-mcp)"
+	}
 	res := harness.Summarize(c.name, runs, envInfo, srs, c.latencyScope)
 	res.BackendSettings = c.settings
 	if c.pricing != nil {
