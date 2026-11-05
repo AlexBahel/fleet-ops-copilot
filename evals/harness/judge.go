@@ -180,10 +180,17 @@ func citesValue(answer, name, value string, known []string) bool {
 	var subject []string
 	for _, c := range clauses(answer) {
 		var named []string
+		first := len(c)
 		for _, n := range known {
-			if containsName(c, n) {
+			if i := nameIndex(c, n); i >= 0 {
 				named = append(named, n)
+				first = min(first, i)
 			}
+		}
+		// Text before the first name in the clause is still about the
+		// previous subject ("It sets spec.minBatteryPct=20, and Robot/x ...").
+		if first > 0 && slices.Contains(subject, name) && containsWord(c[:first], value) {
+			return true
 		}
 		if len(named) > 0 {
 			subject = named
@@ -493,20 +500,24 @@ func introduced(s Scenario, ob Observed, kind, name string) bool {
 
 // containsName reports whether text contains name as a whole Kubernetes name,
 // not as part of a longer one.
-func containsName(text, name string) bool {
+func containsName(text, name string) bool { return nameIndex(text, name) >= 0 }
+
+// nameIndex is the index of the first whole-name occurrence of name in text,
+// or -1.
+func nameIndex(text, name string) int {
 	isNameChar := func(b byte) bool {
 		return b >= 'a' && b <= 'z' || b >= '0' && b <= '9' || b == '-' || b == '.'
 	}
 	for i := 0; ; {
 		j := strings.Index(text[i:], name)
 		if j < 0 {
-			return false
+			return -1
 		}
 		start, end := i+j, i+j+len(name)
 		// A trailing '.' ends a sentence, not the name.
 		if (start == 0 || !isNameChar(text[start-1])) &&
 			(end == len(text) || !isNameChar(text[end]) || (text[end] == '.' && (end+1 == len(text) || !isNameChar(text[end+1])))) {
-			return true
+			return start
 		}
 		i = start + 1
 	}

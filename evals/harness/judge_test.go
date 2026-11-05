@@ -360,6 +360,8 @@ func TestCitationFormsV3(t *testing.T) {
 		{"value in the next sentence, same subject", "warehouse-a was checked. Its estop status is Clear.", true},
 		{"nested list item", "- warehouse-a\n  - estop status: Clear", true},
 		{"table row", "| warehouse-a | Clear |", true},
+		{"pronoun clause, another object named after the value", "warehouse-a was checked. Its estop status is Clear, and sim-robot-001 is in it.", true},
+		{"pronoun clause, value only after another object", "warehouse-a was checked. It holds sim-robot-001, which is Clear.", false},
 		{"value as part of a longer word", "warehouse-a is Clearing.", false},
 		{"value before another object takes the subject", "warehouse-a was checked. sim-robot-001 is Clear.", false},
 	}
