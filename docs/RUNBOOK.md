@@ -1,8 +1,8 @@
 # Fleet Ops Copilot — Runbook
 
-**Status: draft.** Written before the Helm chart has been installed on a cluster. Each command
-below follows the chart and the code on main; none of them has been run as a sequence, and
-`make foc-up` (section 0) has not been run at all. Items that depend on parts not built yet (the
+**Status: draft.** Each command below follows the chart and the code on main. `make foc-up`
+(section 0, with the trace backend of section 8) has run on one kind cluster (2026-11-05); the
+other sections have not been run as a sequence. Items that depend on parts not built yet (the
 air-gapped profile in the chart) say so.
 
 Conventions: every `kubectl` and `helm` command names its context explicitly. The examples use a
@@ -401,5 +401,10 @@ Traces live in the Jaeger pod's memory (the image's default of 100000 traces) an
 restarts. The images (`otel/opentelemetry-collector`, `jaegertracing/jaeger`, pinned by digest in
 `values.yaml`) must be pullable by the nodes; they are not part of the air-gapped profile. With
 `networkPolicy.enabled` the chart opens exactly foc-mcp/foc-agent to the Collector and the
-Collector to Jaeger. The backend has not been installed on a cluster yet.
+Collector to Jaeger. With the backend on, the Collector's own egress policy (Jaeger's OTLP port and
+cluster DNS only) is rendered also without `networkPolicy.enabled`, so the Collector can reach
+Jaeger beside the air-gapped policy of `config/airgap` (D68). That policy does not open
+foc-mcp/foc-agent → Collector: under `config/airgap` their egress is the API server and DNS, so
+their spans do not reach the Collector there. The backend ran on a `make foc-up` cluster on
+2026-11-05 (`docs/evidence/airgap-2026-11-05/`), before D68.
 

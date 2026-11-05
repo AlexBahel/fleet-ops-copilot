@@ -124,9 +124,10 @@ CHART_NP_SET := --set networkPolicy.enabled=true --set 'networkPolicy.apiServer.
 
 .PHONY: chart-lint chart-validate chart-parity chart-check
 
-chart-lint: ## helm lint the chart (strict), with the defaults and with the optional tracing backend and NetworkPolicy on
+chart-lint: ## helm lint the chart (strict): defaults, tracing backend with NetworkPolicy, tracing backend alone
 	$(HELM) lint $(CHART) --namespace foc-system --strict
 	$(HELM) lint $(CHART) --namespace foc-system --strict $(CHART_TRACING_SET) $(CHART_NP_SET)
+	$(HELM) lint $(CHART) --namespace foc-system --strict $(CHART_TRACING_SET)
 
 chart-validate: ## Render the chart (defaults, with NetworkPolicy, with the tracing backend) and schema-check it with kubeconform
 	@command -v $(KUBECONFORM) >/dev/null || { echo "kubeconform not found (go install github.com/yannh/kubeconform/cmd/kubeconform@v0.7.0)"; exit 1; }
@@ -135,6 +136,8 @@ chart-validate: ## Render the chart (defaults, with NetworkPolicy, with the trac
 		$(HELM) template foc $(CHART) -n foc-system | $(KUBECONFORM) -strict -summary -kubernetes-version $$v - || exit 1; \
 		echo "== Kubernetes $$v, networkPolicy.enabled"; \
 		$(HELM) template foc $(CHART) -n foc-system $(CHART_NP_SET) | $(KUBECONFORM) -strict -summary -kubernetes-version $$v - || exit 1; \
+		echo "== Kubernetes $$v, tracing.backend.enabled without networkPolicy (as beside config/airgap)"; \
+		$(HELM) template foc $(CHART) -n foc-system $(CHART_TRACING_SET) | $(KUBECONFORM) -strict -summary -kubernetes-version $$v - || exit 1; \
 		echo "== Kubernetes $$v, tracing.backend.enabled with networkPolicy.enabled"; \
 		$(HELM) template foc $(CHART) -n foc-system $(CHART_TRACING_SET) $(CHART_NP_SET) | $(KUBECONFORM) -strict -summary -kubernetes-version $$v - || exit 1; \
 	done

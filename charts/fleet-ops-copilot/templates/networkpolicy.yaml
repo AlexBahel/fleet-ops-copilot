@@ -134,8 +134,10 @@ spec:
 # In-cluster trace backend (tracing.backend.enabled): foc-agent and foc-mcp ->
 # the Collector, the Collector -> Jaeger. Each hop needs the egress rule on the
 # sender and the ingress rule on the receiver, because the default-deny policy
-# selects every pod in the namespace. The Jaeger UI is reached with
-# kubectl port-forward, which is normally not subject to NetworkPolicy.
+# selects every pod in the namespace. The Collector's egress policy is rendered
+# whenever the backend is on, also without networkPolicy.enabled (end of this
+# file). The Jaeger UI is reached with kubectl port-forward, which is normally
+# not subject to NetworkPolicy.
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -170,22 +172,6 @@ spec:
   egress:
     - to:
         - podSelector: {matchLabels: {app.kubernetes.io/name: foc-otel-collector}}
-      ports:
-        - {protocol: TCP, port: 4317}
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: foc-otel-collector-egress-jaeger
-  namespace: {{ .Release.Namespace }}
-  labels:
-    {{- include "foc.chartLabels" . | nindent 4 }}
-spec:
-  podSelector: {matchLabels: {app.kubernetes.io/name: foc-otel-collector}}
-  policyTypes: [Egress]
-  egress:
-    - to:
-        - podSelector: {matchLabels: {app.kubernetes.io/name: foc-jaeger}}
       ports:
         - {protocol: TCP, port: 4317}
 ---
@@ -228,4 +214,37 @@ spec:
         - {protocol: TCP, port: {{ . }}}
         {{- end }}
 {{- end }}
+{{- end }}
+{{- if .Values.tracing.backend.enabled }}
+---
+# The Collector's egress, rendered whenever tracing.backend.enabled, with or
+# without networkPolicy.enabled: Jaeger's OTLP port in this namespace and
+# cluster DNS (to resolve foc-jaeger), nothing else. Without it, a namespace
+# whose egress is otherwise denied (the air-gapped policy in config/airgap
+# allows every pod but llama-server DNS only) cuts the Collector off from
+# Jaeger once its connection is renewed: measured on kindnet, the policy
+# applies to new connections only (docs/KNOWN-LIMITS.md).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: foc-otel-collector-egress-jaeger
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "foc.chartLabels" . | nindent 4 }}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: foc-otel-collector}}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: foc-jaeger}}
+      ports:
+        - {protocol: TCP, port: 4317}
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: {{ .Values.networkPolicy.dns.namespace }}}}
+          podSelector:
+            matchLabels:
+              {{- toYaml .Values.networkPolicy.dns.podLabels | nindent 14 }}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
 {{- end }}

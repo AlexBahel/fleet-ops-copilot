@@ -19,13 +19,19 @@ remove it.
   `config/airgap` (`make deploy-airgap`), and neither it nor the chart runs foc-agent with
   `-backend llamacpp`. `make deploy-kind` installs the plain manifests (`config/deploy`) on a kind
   cluster; the image is built from binaries compiled on the host. `make foc-up` installs the
-  chart (cloud profile) and has not been run (see "Not measured yet").
+  chart (cloud profile); it has run on one machine (see "Not measured yet").
 - Tracing: no stdout exporter and no OTLP/HTTP exporter (OTLP/gRPC only), and no spans in
   `foc-approvals` for approval and execution (D54). `foc-eval -otlp-endpoint` (D65) traces the
   agent loop and an in-process foc-mcp, not the deployed processes. The chart's optional trace backend
   (`tracing.backend.enabled`, D61) keeps traces in the Jaeger pod's memory only: a restart loses
   them, and it is for development and demonstration, not a trace store. Its images must be
-  pullable by the nodes, so it is not part of the air-gapped profile.
+  pullable by the nodes, so it is not part of the air-gapped profile. With the backend on, the
+  chart renders the Collector's egress to Jaeger's OTLP port and DNS also without
+  `networkPolicy.enabled` (D68); **tracing beside the air-gapped policy is verified by template
+  only** (helm lint, kubeconform), not on a cluster, until the next cluster run. Beside
+  `config/airgap`, foc-mcp's and foc-agent's own spans still cannot reach the Collector (their
+  egress there is the API server and DNS). On kindnet a NetworkPolicy applies to new connections
+  only (see "Egress in the air-gapped profile").
 - More than one approver per request (`minApprovers`): one accepted decision approves.
 
 ## Not measured yet
@@ -40,25 +46,27 @@ remove it.
 - The air-gapped manifests (`config/airgap/`) and the `hack/airgap.mk` targets have run on one
   single-node kind cluster (kind v0.33.0, CNI kindnet, Docker Desktop on arm64;
   `docs/evidence/airgap-2026-11-04/`), on no other CNI or node.
-- The Helm chart (`charts/fleet-ops-copilot`), its cloud-profile NetworkPolicy (off by default),
-  its optional tracing backend (OpenTelemetry Collector and Jaeger, off by default, D61) and
-  `docs/RUNBOOK.md` (draft) have not been installed or run on a cluster. The backend's pod
-  security settings (read-only root file system, non-root user) and probes are unverified against
-  the pinned images, and so is the Collector configuration against `otel/opentelemetry-collector:0.164.0`
-  beyond `helm lint` and kubeconform.
-- `make foc-up`, `make foc-down` and `make foc-live` (D59, D60) have been written, checked with a
-  dry run and with stubbed commands (`test/scripts`), and never run: not the timed run from an
-  empty machine, not the kind cluster with the static token file (its kubeadm patch was checked
-  only against kind v0.33.0's own generator, offline), not Swarmada's quickstart or webhook overlay
-  from the writable module copy, not the order of the steps against real rollouts. After the
-  webhook overlay replaces the quickstart's overlay, whether the simulated adapter stays connected
-  has not been observed. The verified-requester live run (`make foc-live`, including the new
-  subtest `requester-is-authenticated-not-asserted`) has not been run.
-- `foc-agent`, its web UI, `foc chat` and tracing have not run on a cluster, against a model, or
-  against a real OTLP collector; they are tested with the scripted backend, envtest and an
+- The Helm chart (`charts/fleet-ops-copilot`) with its optional tracing backend (OpenTelemetry
+  Collector and Jaeger, D61) has been installed by `make foc-up` on one single-node kind cluster
+  (2026-11-05, `docs/evidence/airgap-2026-11-05/`): both backend pods became ready with the pod
+  security settings and probes as rendered, and the Collector received OTLP and exported it to
+  Jaeger. Its cloud-profile NetworkPolicy (off by default) has never been applied to a cluster,
+  and `docs/RUNBOOK.md` (draft) has not been run as a sequence beyond section 0.
+- `make foc-up`, `make foc-down` and `make foc-live` (D59, D60) have run on one machine only
+  (Mac mini, Docker Desktop, kind v0.33.0, 2026-11-05): `make foc-up` twice from no cluster, each
+  time with Docker's image and build caches already filled, so a cold machine has not been timed;
+  the kind cluster with the static token file, Swarmada's quickstart and webhook overlay from the
+  writable module copy and the step order worked. `make foc-live` passed every subtest of phase
+  `webhooks`, including `requester-is-authenticated-not-asserted`, after a test fix (a closed MCP
+  session reused across subtests). The run logs are not committed. After the webhook overlay
+  replaces the quickstart's overlay, whether the simulated adapter stays connected has not been
+  observed.
+- `foc-agent`, its web UI and `foc chat` have not run on a cluster or against a model, and whether the
+  deployed foc-mcp's spans reached the chart's Collector was not checked (the traces of 2026-11-05
+  came from `foc-eval -otlp-endpoint`, D65); they are tested with the scripted backend, envtest and an
   in-process OTLP receiver, and the page was checked once in a browser against a local test server.
-  Requester authentication (D57) has been tested only with envtest's static person tokens and
-  TokenRequest ServiceAccount tokens, not with OIDC tokens or exec-plugin credentials. The chart is checked with `helm lint --strict`,
+  Requester authentication (D57) has been tested only with static person tokens (envtest, and
+  kind through `make foc-live`) and TokenRequest ServiceAccount tokens, not with OIDC tokens or exec-plugin credentials. The chart is checked with `helm lint --strict`,
   kubeconform and `make chart-parity` (its default render equals `config/`).
 - Claude sampling is at the API's defaults (D43): the Claude API rejects `temperature` on the
   models used, so repeated claude runs vary. Air-gapped measurements send the model publisher's
