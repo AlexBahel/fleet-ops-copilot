@@ -403,8 +403,10 @@ restarts. The images (`otel/opentelemetry-collector`, `jaegertracing/jaeger`, pi
 `networkPolicy.enabled` the chart opens exactly foc-mcp/foc-agent to the Collector and the
 Collector to Jaeger. With the backend on, the Collector's own egress policy (Jaeger's OTLP port and
 cluster DNS only) is rendered also without `networkPolicy.enabled`, so the Collector can reach
-Jaeger beside the air-gapped policy of `config/airgap` (D68). That policy does not open
-foc-mcp/foc-agent → Collector: under `config/airgap` their egress is the API server and DNS, so
-their spans do not reach the Collector there. The backend ran on a `make foc-up` cluster on
-2026-11-05 (`docs/evidence/airgap-2026-11-05/`), before D68.
+Jaeger beside the air-gapped policy of `config/airgap` (D68). foc-mcp/foc-agent → Collector is
+opened beside `config/airgap` by `config/airgap/networkpolicy-tracing.yaml`, which
+`make deploy-airgap` applies when `deploy/foc-otel-collector` exists (install the chart with the
+backend first), and in the chart only with `networkPolicy.enabled` (D69). Both rules are
+template-verified only, until the next cluster run. The backend ran on a `make foc-up` cluster
+on 2026-11-05 (`docs/evidence/airgap-2026-11-05/`), before D68 and D69.
 

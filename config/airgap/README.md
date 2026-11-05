@@ -19,6 +19,7 @@ values to try, not measured ones.
 | `llama-storage-hostpath.yaml` | PersistentVolume (`hostPath: /models`) and the claim `llama-models` |
 | `llama-server.yaml` | Deployment (with an init check for the model files) and Service `llama-server:8080` |
 | `networkpolicy.yaml` | Egress policies for the namespace, ingress policy for `llama-server` |
+| `networkpolicy-tracing.yaml` | With the chart's trace backend only: `foc-mcp`, `foc-agent` → the Collector's OTLP port (D69) |
 | `egress-probe.yaml` | Job that must be unable to reach hosts outside the cluster |
 
 ## Image
@@ -45,7 +46,9 @@ their tag; `make load-llama-image` pulls by digest, so the tag cannot drift.
 Together the policies allow, for egress, only cluster DNS in `kube-system` (every
 pod except `llama-server`), the Kubernetes API server (`foc-mcp`,
 `foc-approvals`, `foc-agent`), `llama-server` port 8080 (`foc-agent`,
-`foc-egress-probe`) and `foc-mcp` port 8080 (`foc-agent`). `llama-server` may
+`foc-egress-probe`) and `foc-mcp` port 8080 (`foc-agent`); with the chart's trace backend
+installed, `make deploy-airgap` also applies `networkpolicy-tracing.yaml`: the Collector's port
+4317 (`foc-mcp`, `foc-agent`; template-verified only). `llama-server` may
 open no connection at all. Ingress to `llama-server` is limited to `foc-agent`
 and `foc-egress-probe`. Measured on a kind cluster:
 `docs/evidence/airgap-2026-11-04/`.

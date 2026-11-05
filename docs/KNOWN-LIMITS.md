@@ -29,9 +29,12 @@ remove it.
   chart renders the Collector's egress to Jaeger's OTLP port and DNS also without
   `networkPolicy.enabled` (D68); **tracing beside the air-gapped policy is verified by template
   only** (helm lint, kubeconform), not on a cluster, until the next cluster run. Beside
-  `config/airgap`, foc-mcp's and foc-agent's own spans still cannot reach the Collector (their
-  egress there is the API server and DNS). On kindnet a NetworkPolicy applies to new connections
-  only (see "Egress in the air-gapped profile").
+  `config/airgap`, foc-mcp's and foc-agent's export to the Collector's OTLP port is opened by
+  `config/airgap/networkpolicy-tracing.yaml`, which `make deploy-airgap` applies only when the
+  Collector is installed (D69); the chart opens the same port only with `networkPolicy.enabled`.
+  Both are template-verified only, until the next cluster run. On kindnet a NetworkPolicy applies
+  to new connections only (see "Egress in the air-gapped profile"): a pod started before the
+  rule existed keeps its old connections, so restart foc-mcp and foc-agent after applying it.
 - More than one approver per request (`minApprovers`): one accepted decision approves.
 
 ## Not measured yet

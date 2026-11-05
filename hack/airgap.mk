@@ -49,7 +49,7 @@ load-llama-model: ## Copy the GGUF shards from MODEL_DIR into /models on the kin
 	docker exec $(KIND_NODE) chmod -R a+rX /models
 	docker exec -i $(KIND_NODE) sh -c 'cd /models && sha256sum -c -' < "$(MODEL_SUMS)"
 
-deploy-airgap: ## Apply llama-server and the egress NetworkPolicies to kind cluster KIND_CLUSTER (foc-*); restarts foc-mcp/foc-approvals to exercise API access
+deploy-airgap: ## Apply llama-server and the egress NetworkPolicies to kind cluster KIND_CLUSTER (foc-*), plus the OTLP rule if the chart's trace backend is installed; restarts foc-mcp/foc-approvals
 	$(require_foc_cluster)
 	@mkdir -p $(BIN)/airgap
 	$(KCTL) apply -f config/airgap/llama-storage-hostpath.yaml -f config/airgap/llama-server.yaml
@@ -61,6 +61,10 @@ deploy-airgap: ## Apply llama-server and the egress NetworkPolicies to kind clus
 	sed -e "s|192\.0\.2\.10/32|$$ep/32|" -e "s|192\.0\.2\.11/32|$$svc/32|" config/airgap/networkpolicy.yaml > $(BIN)/airgap/networkpolicy.rendered.yaml; \
 	if grep -q 'cidr: 192\.0\.2\.' $(BIN)/airgap/networkpolicy.rendered.yaml; then echo "placeholder address left in the rendered policy"; exit 1; fi; \
 	$(KCTL) apply -f $(BIN)/airgap/networkpolicy.rendered.yaml
+	@# With the chart's trace backend: foc-mcp/foc-agent -> Collector OTLP (D69).
+	@if $(KCTL) -n $(AIRGAP_NS) get deploy/foc-otel-collector >/dev/null 2>&1; then \
+		$(KCTL) apply -f config/airgap/networkpolicy-tracing.yaml; \
+	else echo "no foc-otel-collector in $(AIRGAP_NS) (tracing.backend.enabled off): networkpolicy-tracing.yaml not applied"; fi
 	@# Established API connections can outlive a wrong address; new pods cannot.
 	@if $(KCTL) -n $(AIRGAP_NS) get deploy/foc-mcp deploy/foc-approvals >/dev/null 2>&1; then \
 		$(KCTL) -n $(AIRGAP_NS) rollout restart deploy/foc-mcp deploy/foc-approvals && \
