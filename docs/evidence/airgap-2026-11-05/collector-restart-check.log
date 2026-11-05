@@ -1,0 +1,42 @@
+# Collector restart check, 2026-11-05T05:08:13Z, cluster foc-up, copilot 6087e7b
+# The air-gapped policy foc-airgap-egress (created 04:00:00Z) allows the Collector pod DNS only; Jaeger's OTLP port is not allowed.
+== Collector pod before the restart
+foc-otel-collector-6c785c68d-bq6vm started 2026-11-05T03:55:19Z
+foc-airgap-egress created 2026-11-05T04:00:00Z
+== 1. trace through the Collector whose connection to Jaeger was opened before the policy
+05:08:36Z scripted zone-02-stop trace 81b36f19f766fb8936f4d2e37371fb1d sent to the Collector via port-forward: spans in Jaeger = 9
+== 2. rollout restart deploy/foc-otel-collector at 05:08:43Z
+deployment.apps/foc-otel-collector restarted
+Waiting for deployment "foc-otel-collector" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "foc-otel-collector" rollout to finish: 1 old replicas are pending termination...
+deployment "foc-otel-collector" successfully rolled out
+foc-otel-collector-6c785c68d-bq6vm Running started 2026-11-05T03:55:19Z
+foc-otel-collector-c5f748c69-bczcj Running started 2026-11-05T05:08:43Z
+== 3. trace through the restarted Collector (its connection to Jaeger is new, made under the policy)
+05:09:43Z scripted zone-02-stop trace 4fca20f735b3c666c454c090b7570b0a sent to the Collector via port-forward: spans in Jaeger = 0
+== 4. Collector log (export side)
+2026-11-05T05:08:44.107Z	warn	builders/builders.go:40	"otlp" alias is deprecated; use "otlp_grpc" instead	{"resource": {"service.instance.id": "e855411e-3542-455d-a7df-af5aeb8b5ab5", "service.name": "otelcol", "service.version": "0.164.0"}, "otelcol.component.id": "otlp", "otelcol.component.kind": "
+2026-11-05T05:08:44.110Z	info	service@v0.164.0/service.go:256	Everything is ready. Begin running and processing data.	{"resource": {"service.instance.id": "e855411e-3542-455d-a7df-af5aeb8b5ab5", "service.name": "otelcol", "service.version": "0.164.0"}}
+2026-11-05T05:09:04.124Z	warn	grpc@v1.84.0/clientconn.go:1533	[core] [Channel #1 SubChannel #4] grpc: addrConn.createTransport failed to connect to {Addr: "10.96.59.120:4317", ServerName: "foc-jaeger:4317", }. Err: connection error: desc = "transport: Error while dialing: dial tcp 10.96.59.120:4317:
+2026-11-05T05:09:21.956Z	info	internal/retry_sender.go:136	Exporting failed. Will retry the request after interval.	{"resource": {"service.instance.id": "e855411e-3542-455d-a7df-af5aeb8b5ab5", "service.name": "otelcol", "service.version": "0.164.0"}, "otelcol.component.id": "otlp", "otelcol.componen
+2026-11-05T05:09:25.126Z	warn	grpc@v1.84.0/clientconn.go:1533	[core] [Channel #1 SubChannel #4] grpc: addrConn.createTransport failed to connect to {Addr: "10.96.59.120:4317", ServerName: "foc-jaeger:4317", }. Err: connection error: desc = "transport: Error while dialing: dial tcp 10.96.59.120:4317:
+2026-11-05T05:09:27.552Z	info	internal/retry_sender.go:136	Exporting failed. Will retry the request after interval.	{"resource": {"service.instance.id": "e855411e-3542-455d-a7df-af5aeb8b5ab5", "service.name": "otelcol", "service.version": "0.164.0"}, "otelcol.component.id": "otlp", "otelcol.componen
+2026-11-05T05:09:36.332Z	info	internal/retry_sender.go:136	Exporting failed. Will retry the request after interval.	{"resource": {"service.instance.id": "e855411e-3542-455d-a7df-af5aeb8b5ab5", "service.name": "otelcol", "service.version": "0.164.0"}, "otelcol.component.id": "otlp", "otelcol.componen
+2026-11-05T05:09:42.014Z	info	internal/retry_sender.go:136	Exporting failed. Will retry the request after interval.	{"resource": {"service.instance.id": "e855411e-3542-455d-a7df-af5aeb8b5ab5", "service.name": "otelcol", "service.version": "0.164.0"}, "otelcol.component.id": "otlp", "otelcol.componen
+   3 dial tcp 10.96.59.120:4317: i/o timeout
+   4 dial tcp 10.96.59.120:4317: i/o timeout\
+== 5a. new connection from the Collector pod's network namespace (ephemeral container, image ghcr.io/ggml-org/llama.cpp:server-b12004, IfNotPresent) at 05:09:56Z
+000 http://foc-jaeger.foc-system:16686/ curl exit 28 after 5015 ms
+000 http://foc-jaeger.foc-system:4317/ curl exit 28 after 5011 ms
+== 5b. control: same requests from a pod in namespace foc-cc-control (no NetworkPolicy) at 05:10:07Z
+200 http://foc-jaeger.foc-system:16686/ curl exit 0 after 5 ms
+000 http://foc-jaeger.foc-system:4317/ curl exit 1 after 2 ms
+(curl exit 1 on 4317 from the control pod: TCP connected, plain HTTP is not gRPC; exit 28 is a timeout)
+
+== Result
+On kindnet the policy applied to new connections only. The Collector pod started 03:55:19Z and opened
+its gRPC connection to foc-jaeger:4317 before foc-airgap-egress was created (04:00:00Z); its log shows
+no reconnect after 03:55:24Z. That connection kept delivering spans for at least 68.6 minutes after the
+policy (step 1, 05:08:36Z; also every PILOT and record-run trace in between). After a restart, the
+Collector's new connection timed out (steps 3, 4) and a new connection from its network namespace timed
+out (5a), while the same requests from a namespace without a policy reached Jaeger (5b).

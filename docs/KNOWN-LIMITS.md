@@ -145,8 +145,16 @@ remove it.
   then denied. The egress probe therefore records egress at pod start (not counted), waits until
   a connection its policy denies inside the cluster fails, and decides on the attempt after that
   (D63); the at-start line shows the window where it exists. Nothing in the copilot waits for the
-  policy before opening connections, so a process could reach the internet in that window. Whether
-  a connection opened in the window survives was not tested. Which CNIs enforce a policy from pod
+  policy before opening connections, so a process could reach the internet in that window.
+  **On kindnet the policy applies to new connections only:** a connection opened before the policy
+  existed kept working after it. Measured 2026-11-05: the trace Collector's gRPC connection to
+  Jaeger, opened before `foc-airgap-egress` was created, carried spans for at least 68.6 minutes
+  under a policy that allows the Collector only DNS; after a restart its new connection, and a new
+  connection from its network namespace, timed out, while a pod without a policy still reached
+  Jaeger (`docs/evidence/airgap-2026-11-05/collector-restart-check.log`). So a connection opened in
+  a new pod's start-up window, or by any pod before the policy is applied, can outlive the policy:
+  apply the policy before the workloads start, or restart every pod in `foc-system` after applying
+  it (`make deploy-airgap` restarts foc-mcp and foc-approvals only). Other CNIs were not tested. Which CNIs enforce a policy from pod
   start has not been checked here; for a site that needs it, choose a CNI whose own documentation
   says so and run `make verify-egress` there. Cluster DNS answered
   queries for external names in kind (CoreDNS forwards to the host). `kubectl port-forward`
