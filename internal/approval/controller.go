@@ -357,23 +357,34 @@ func (r *Reconciler) observeActivation(ctx context.Context, req *focv1.ApprovalR
 		return reconcile.Result{}, err
 	}
 	activator, ref := "unknown", ""
+	msg := "activation observed: " + OutsideFocActivate
 	if rec != nil {
 		activator, ref = rec.Spec.DecidedBy, rec.Name
+		msg = "activation observed (performed by " + activator + ", not by the copilot)"
 	}
 	detail := map[string]any{"target": "FleetTask/" + t.Name, "phase": string(t.Status.Phase), "approvedBy": req.Status.DecidedBy, "activatedBy": activator, "activationRef": ref}
-	msg := "activation observed (performed by " + activator + ", not by the copilot)"
 	if len(others) > 0 {
 		detail["otherActivationRecords"] = others
 		msg += fmt.Sprintf("; %d earlier Activation record(s) by %s", len(others), strings.Join(others, ", "))
 	}
+	logMsg, evMsg := "spec.draft is false; activation was performed outside the copilot",
+		fmt.Sprintf("FleetTask/%s left Draft after approval by %s, activated by %s; the copilot did not perform the activation", t.Name, req.Status.DecidedBy, activator)
+	if rec == nil {
+		logMsg = "spec.draft is false; " + OutsideFocActivate
+		evMsg = fmt.Sprintf("FleetTask/%s left Draft after approval by %s; %s", t.Name, req.Status.DecidedBy, OutsideFocActivate)
+	}
 	r.log(audit.Entry{Kind: audit.KindActivationObserved, Actor: activator, Namespace: req.Namespace, Object: "ApprovalRequest/" + req.Name, SessionID: req.Spec.SessionID,
-		Message: "spec.draft is false; activation was performed outside the copilot", Detail: detail})
-	r.event(ctx, req, corev1.EventTypeNormal, "ActivationObserved", fmt.Sprintf("FleetTask/%s left Draft after approval by %s, activated by %s; the copilot did not perform the activation", t.Name, req.Status.DecidedBy, activator))
+		Message: logMsg, Detail: detail})
+	r.event(ctx, req, corev1.EventTypeNormal, "ActivationObserved", evMsg)
 	return reconcile.Result{}, r.setStatus(ctx, req, func(s *focv1.ApprovalRequestStatus) {
 		s.State, s.ExecutedAt, s.Target, s.ActivatedBy, s.ActivationRef = focv1.StateExecuted, &now, &target, activator, ref
 		s.Message = msg
 	})
 }
+
+// OutsideFocActivate is what foc-approvals records when a draft left Draft
+// with no Activation record, e.g. after a plain kubectl patch (R72).
+const OutsideFocActivate = "activated outside foc activate; activator not recorded"
 
 // activationRecord returns the most recent Activation ApprovalDecision for
 // an approved ActivateTask request, made no earlier than the approval, and

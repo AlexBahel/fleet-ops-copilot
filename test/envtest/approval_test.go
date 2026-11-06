@@ -320,13 +320,17 @@ func TestApprovalPathDraftAndActivation(t *testing.T) {
 	if err := mergePatch(t, asPerson(t, "eve"), &task, map[string]any{"spec": map[string]any{"draft": false}}); err == nil {
 		t.Fatal("eve activated the draft")
 	}
-	// dana runs the instruction (the same merge patch) with her own credentials.
+	// dana activates with a plain kubectl-style merge patch, not foc activate:
+	// it works, and is recorded as such (R72).
 	if err := mergePatch(t, asPerson(t, "dana"), &task, map[string]any{"spec": map[string]any{"draft": false}}); err != nil {
 		t.Fatalf("dana's activation refused: %v", err)
 	}
 	r = waitState(t, name, focv1.StateExecuted)
 	if r.Status.DecidedBy != "dana" || r.Status.Target == nil || r.Status.Target.Name != "move-to-staging" {
 		t.Fatalf("status %+v", r.Status)
+	}
+	if r.Status.ActivatedBy != "unknown" || r.Status.ActivationRef != "" || !strings.Contains(r.Status.Message, approval.OutsideFocActivate) {
+		t.Fatalf("plain patch: activatedBy %q ref %q message %q", r.Status.ActivatedBy, r.Status.ActivationRef, r.Status.Message)
 	}
 	// Activating again is refused: the task is no longer a draft.
 	again, err := h.activate(ctx, sess, tools.ActivateTaskInput{TaskName: "move-to-staging"})
