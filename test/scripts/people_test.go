@@ -433,3 +433,29 @@ func TestFocUpDefaultDirectoryIsOutsideRepo(t *testing.T) {
 		t.Errorf("tokens.csv not under %s: %v\n%s", want, err, out)
 	}
 }
+
+// R59: a real foc-up run stops at the tools stage, before any cluster
+// command, when the Python the quickstart will use cannot import grpc.
+func TestFocUpStopsWhenQuickstartPythonLacksGrpc(t *testing.T) {
+	e := newEnv(t)
+	for _, name := range []string{"docker", "helm", "jq", "openssl"} {
+		stub := "#!/bin/sh\necho \"" + name + " $*\" >> '" + e.calls + "'\nexit 0\n"
+		if err := os.WriteFile(filepath.Join(e.stubs, name), []byte(stub), 0o700); err != nil { //nolint:gosec // G306: executable stub in t.TempDir()
+			t.Fatal(err)
+		}
+	}
+	py := "#!/bin/sh\necho \"python3 $*\" >> '" + e.calls + "'\necho \"ModuleNotFoundError: No module named 'grpc'\" >&2\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(e.stubs, "python3"), []byte(py), 0o700); err != nil { //nolint:gosec // G306: executable stub in t.TempDir()
+		t.Fatal(err)
+	}
+	out, err := e.runScript(t, "hack/foc-up.sh", map[string]string{"CLUSTER": "foc-test-1", "KUBECONFIG": e.dedicated(t), "FOC_UP_DIR": t.TempDir()})
+	if err == nil || !strings.Contains(out, "cannot import grpc and google.protobuf") || !strings.Contains(out, "pip install grpcio protobuf") {
+		t.Fatalf("want a stop naming the missing packages, got err=%v\n%s", err, out)
+	}
+	calls := readFile(t, e.calls)
+	for _, l := range strings.Split(strings.TrimSpace(calls), "\n") {
+		if !strings.HasPrefix(l, "python3 ") {
+			t.Errorf("a command ran before the stop: %s", l)
+		}
+	}
+}

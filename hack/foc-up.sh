@@ -105,6 +105,20 @@ if [[ -n "$missing" ]]; then
     fail "missing tools:$missing"
   fi
 fi
+# R59: the quickstart's simulated adapter runs on this host with the first
+# python3 (else python) on PATH, as its run.sh picks it, and imports grpc and
+# google.protobuf. Check that interpreter now, before anything is created.
+py="$(command -v python3 || command -v python || true)"
+if [[ -n "$py" ]] && ! "$py" -c 'import grpc, google.protobuf' >/dev/null 2>&1; then
+  pymsg="the Swarmada quickstart's simulated adapter runs with $py, which cannot import grpc and google.protobuf. Put a Python with grpcio and protobuf first on PATH, for example: python3 -m venv ~/foc-venv && ~/foc-venv/bin/pip install grpcio protobuf && export PATH=\"\$HOME/foc-venv/bin:\$PATH\"; then run make foc-up again"
+  if [[ "$DRY" == 1 ]]; then
+    echo "  [dry-run] python check (a real run stops here): $pymsg"
+  else
+    fail "$pymsg"
+  fi
+elif [[ -n "$py" ]]; then
+  echo "  quickstart python: $py (imports grpc and google.protobuf)"
+fi
 if [[ "$DRY" != 1 ]]; then
   docker info >/dev/null 2>&1 || fail "the Docker daemon is not reachable"
   gowork="$(go env GOWORK)"
