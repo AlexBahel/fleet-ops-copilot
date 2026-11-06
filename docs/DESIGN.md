@@ -279,6 +279,7 @@ ValidatingAdmissionPolicies (CEL, Kubernetes ≥ 1.30):
 |---|---|---|
 | `fleetops-foc-approvals-drafts-only` | `CREATE`/`UPDATE`/`DELETE fleettasks` by `foc-approvals` | `CREATE` with `spec.draft == true` and the label `fleetops.alexbahel.github.io/created-by: foc-approvals` |
 | `fleetops-foc-approvals-dry-run-only` | `CREATE`/`UPDATE`/`DELETE fleetactions` by `foc-approvals` | `CREATE` with `request.dryRun == true`; nothing else (D76) |
+| `fleetops-activated-by` | `UPDATE fleettasks` that sets or changes the annotation `fleetops.alexbahel.github.io/activated-by` | the annotation's value equal to the authenticated user's name (D79) |
 | `fleetops-foc-approvals-zone-stop-only` | `fleetzones` writes by `foc-approvals` | `UPDATE` adding `swarmada.io/estop-triggered` where it was absent; besides it, only what Swarmada's estop-actor mutation adds (`swarmada.io/estop-actor`, the `swarmada.io/estop-in-force` finalizer); `spec`, labels, other annotations and other finalizers unchanged |
 | `fleetops-decisions` | `CREATE`/`UPDATE approvaldecisions` | `CREATE` by a non-ServiceAccount with `decidedBy` and `decidedByGroups` equal to the authenticated user's; no update |
 | `fleetops-requests` | `CREATE approvalrequests` | `spec.requestedBy` equal to the creating identity, so a hand-made request cannot name someone else as requester |
@@ -341,7 +342,7 @@ attempt after the wait.
 
 ### 3.10 Guided task requests (rulings R62–R68)
 
-Status: proposed 2026-11-06 (FOC-8), not approved; nothing in §3.10 is built.
+Status: approved 2026-11-06 with ruling R69 (FOC-8).
 
 A person asks for work in plain language. The copilot asks at most two short questions, shows a
 preview with the checks it ran, and files a request only after the person confirms that preview.
@@ -384,8 +385,8 @@ Swarmada can report a result (C1) changes one line of the preview and nothing in
 The loader validates the file when `foc-agent` starts and refuses to start on any error: unknown
 keys, a kind with no Swarmada mapping or a mapping to a type outside `api/v1`, a class other than
 `a` or `b`, `resultReported: true` on a class (b) kind, a tree deeper than two questions before the
-preview, a choice list that does not end with "Something else — describe it" (or "Something else"
-on the inspect question, below), a question with more than four choices besides that one, a
+preview, a choice list that does not end with "Something else — describe it" (the inspect
+question included, R69), a question with more than four choices besides that one, a
 reference to an undefined kind or field, or a default for a field the kind does not have.
 
 #### 3.10.2 Dialogue rules (R64, D71)
@@ -412,14 +413,15 @@ model does not write the question, the choices or the preview.
 5. **Combine small details** into one question where the catalogue says so (deliver asks "from
    where to where" as one question with pairs; zone maintenance asks mode and start together).
 6. **Defaults are shown in the preview, not asked**: priority `Normal`, any eligible robot,
-   failure handling report only, Swarmada `onFailure: Alert` (no automatic retry), start when
-   activated, a generated draft name.
+   failure handling report only, Swarmada's own retry (`onFailure: Requeue`, shown as "retries up
+   to 3 times, then alerts"; "alert on first failure" is available through "Change something",
+   R69), start when activated, a generated draft name.
 7. **At most two questions before the preview.** The engine counts them in the dialogue state and,
    once two have been asked, returns the preview with defaults for what is still open. A required
    field with no default is then shown in the preview as missing; that preview cannot be
    confirmed, and its choices are to supply the item or cancel.
 8. **Inspect's first question is exactly** "What should the robot inspect? 1 Damage · 2 Location ·
-   3 Both · 4 Something else". The second, when needed, is where (waypoints).
+   3 Both · 4 Something else — describe it" (R69). The second, when needed, is where (waypoints).
 
 Failure handling is always offered, inside the preview's confirmation choices (§3.10.5): report
 only, or prepare a follow-up request if the task fails. A follow-up is never filed automatically
@@ -470,8 +472,10 @@ Swarmada filter number), alternatives, and the list of checks not made. Checks, 
 - **policy**: the policy engine's decision on the request (a refusal is a blocker).
 
 `SwarmadaConfig` (namespace stop, `maxPendingActionsPerZone`) is read under R66: its schema has no
-secret-typed field (Secret references name public-key material only), and the code reads only
-those two items (D80). If the read is refused, the output lists "namespace-wide stop and Pending
+secret-typed field (Secret references name public-key material only). It is read only in code,
+never through a model-facing tool; the reader projects the namespace-stop markers and
+`maxPendingActionsPerZone` and drops the rest of the object at once; the object is never logged or
+traced (D80, R69). The ServiceAccount can still read the whole object (KNOWN-LIMITS). If the read is refused, the output lists "namespace-wide stop and Pending
 cap not checked". The per-instance `validate_action` of the adapter cannot be observed by any
 client before assignment and is always listed as not checked (draft 5: C5, BACKLOG-v4).
 
@@ -534,8 +538,10 @@ foc-mcp holds no create permission of any kind (D25 unchanged).
 
 #### 3.10.8 Failure handling and follow-up (D78)
 
-Both options set `onFailure: Alert` on every member (no automatic retry by Swarmada) and
-`failurePolicy: FailFast`. After the activation is observed, `foc-approvals` keeps watching the
+Both options leave Swarmada's bounded retry in place: every member is created with
+`onFailure: Requeue` (the controller's defaults, 3 retries 30 s apart, then `Alert` behaviour),
+shown in the preview as "retries up to 3 times, then alerts", unless the person chose "alert on
+first failure" (`onFailure: Alert`) through "Change something" (R69); `failurePolicy: FailFast`. After the activation is observed, `foc-approvals` keeps watching the
 task until it is terminal and records `status.outcome` (task phase, the failed member and its
 `failureReason`) and an Event. With `PrepareFollowUp` it also records `status.followUp`: the same
 kind and fields, as a proposal. `foc chat --follow-up <request>` opens a conversation that starts
@@ -543,13 +549,18 @@ at that proposal's preview; it is filed only after a confirmation, like any othe
 
 #### 3.10.9 `foc activate` (D79)
 
-`foc activate <request>` reads the `ActivateTask` request with the caller's kubeconfig, requires
-state `Approved` and the caller (SelfSubjectReview) to be its `decidedBy`, runs the same
-`check_task` evaluation with the caller's read permissions (a read the caller lacks is listed as
-not checked), refuses on a blocker, and then sends one JSON patch to the FleetTask:
-`test /spec/draft == true`, `replace /spec/draft false`. It prints the API server and namespace as
-`foc approve` does. It replaces the `kubectl patch` instruction; Swarmada's webhook still authorizes
-the activation against the caller's own `activate` verb, and `foc-approvals` observes it as before.
+`foc activate <request>` reads the `ActivateTask` request with the caller's kubeconfig and requires
+state `Approved`. Any person Swarmada allows to activate may run it (R69): the CLI refuses a
+ServiceAccount caller (SelfSubjectReview) up front, and Swarmada's own `activate` check decides for
+everyone else. It runs the same `check_task` evaluation with the caller's read permissions (a read
+the caller lacks is listed as not checked), refuses on a blocker, and then sends one JSON patch to
+the FleetTask: `test /spec/draft == true`, `replace /spec/draft false`, and the annotation
+`fleetops.alexbahel.github.io/activated-by: <caller>`. A ValidatingAdmissionPolicy
+(`fleetops-activated-by`) admits that annotation only with the authenticated user's name, so it
+cannot name someone else. `foc-approvals` observes the activation as before and records the
+activator from the annotation in its `activation_observed` audit line and Event; an activation made
+without `foc activate` is recorded with the activator unknown. It prints the API server and
+namespace as `foc approve` does, and replaces the `kubectl patch` instruction.
 
 ## 4. Evaluation plan
 
@@ -658,6 +669,12 @@ quickstart itself writes some status by hand (see "Honest notes — what's real 
   (BACKLOG-v4 J1–J3), scenario S1 fixed, P1 closed by the location field, the new scenarios, and the
   catalogue SHA-256. `results.json` records all of them; results on v3 and v4 are not comparable,
   and the three model runs of record are repeated on v4.
+- **v4 is a different architecture, not only a different surface (R69).** The model is no longer
+  offered a write tool, so it cannot attempt a write; filing is a step of foc-agent after the
+  person's confirmation (D74). The unsafe-write containment metric (D67) changes meaning: on v3 it
+  counted the model's write attempts in runs that expected none; on v4 it counts requests filed by
+  foc-agent in such runs, i.e. a confirmation the scenario did not expect. Any comparison table that
+  sets v3 and v4 results side by side says so in its header.
 
 ## 5. Packaging
 
@@ -787,12 +804,12 @@ policies/          default policy files
 | D73 | `check_task`: a read-only foc-mcp tool returning `likely feasible` or `blocked` (never "guaranteed"), blockers, warnings, alternatives and the checks not made; it evaluates the RFC §9.4.2 candidate filters that reads can evaluate, the adapter catalog, zone state, location, dependencies, timing and the policy decision. Named blockers `CHARGE_BELOW_BATTERY_FLOOR` and `NO_CARRYING_ROBOT`. The evaluation is one package (`internal/feasibility`) used by foc-mcp, foc-approvals and `foc activate`. A test fails when RFC §9.4.2's numbered filter list or Swarmada's filter constants differ from the list it was written against | R62 a, R65, owner's instruction on phase 0 (2026-11-06). The adapter's per-instance `validate_action` is not observable before assignment and is always reported as not checked; a Swarmada eligibility dry run is proposed for draft 5 (BACKLOG-v4, R62 b). |
 | D74 | Every request is filed only after a preview the requester confirmed: foc-agent stores the preview (id = SHA-256 of the canonical parameters and the catalogue's SHA-256), matches the person's next message against the confirmation choices itself, and calls the request tool with the stored parameters, the preview id and `_meta` `fleetops.alexbahel.github.io/confirmedPreview`. The model is no longer offered the `request_*` tools. foc-mcp refuses a call without the confirmation (`DENY_NOT_CONFIRMED`) or with a different id (`DENY_PREVIEW_MISMATCH`), as hard invariants | R64. What is approved must be what the person saw; making the filing a deterministic step of foc-agent, keyed on the person's own reply, removes the model from the write path entirely. Applies to all four request types. Another MCP client asserts the confirmation itself (KNOWN-LIMITS). |
 | D75 | Conversation state in foc-agent memory: 128-bit random id returned only to the client and stored as its SHA-256; owner = the requester foc-mcp verified (new `whoami` tool, not offered to the model); continued only when id and owner both match; last 16 messages, 16 KiB, no tool results; TTL 30 minutes; 5 per owner, 1000 in total; lost on restart; the chart refuses more than one foc-agent replica. `foc chat` keeps the id per context (mode 600 file) until `--new`; the web page keeps it in memory. Replaces D55's "no history across messages" | R64. A two-question dialogue needs state across messages; binding it to the verified requester keeps one person from continuing another's. Keeping TokenReview in foc-mcp avoids giving foc-agent a new permission. |
-| D76 | Execution re-check of a `DraftTask` (R65): foc-approvals re-runs `check_task` on fresh state and dry-runs the FleetTask and each member as a FleetAction (`dryRun: All`) immediately before the real create; any blocker or refusal fails the request with `DENY_CHECK_FAILED` or `DENY_SWARMADA_REFUSED` and Swarmada's message, recorded in `status.executionChecks`. foc-approvals gets `create` on `fleetactions`, admitted for dry runs only by the ValidatingAdmissionPolicy `fleetops-foc-approvals-dry-run-only` (`request.dryRun == true`). foc-mcp holds no create permission | Owner's ruling R65, 2026-11-06: D25 stays absolute. A FleetTask dry run reaches Swarmada's flow, binding and producer-contract checks only; the catalog check and the Pending cap run on FleetAction create (inventory §3). The API server authorizes a dry run like the real request, so the dry-run-only policy is what keeps the new permission from writing. |
+| D76 | Execution re-check of a `DraftTask` (R65); envtest shows a non-dry-run FleetAction create by foc-approvals is refused and that foc-mcp has no create on any Swarmada resource (R69): foc-approvals re-runs `check_task` on fresh state and dry-runs the FleetTask and each member as a FleetAction (`dryRun: All`) immediately before the real create; any blocker or refusal fails the request with `DENY_CHECK_FAILED` or `DENY_SWARMADA_REFUSED` and Swarmada's message, recorded in `status.executionChecks`. foc-approvals gets `create` on `fleetactions`, admitted for dry runs only by the ValidatingAdmissionPolicy `fleetops-foc-approvals-dry-run-only` (`request.dryRun == true`). foc-mcp holds no create permission | Owner's ruling R65, 2026-11-06: D25 stays absolute. A FleetTask dry run reaches Swarmada's flow, binding and producer-contract checks only; the catalog check and the Pending cap run on FleetAction create (inventory §3). The API server authorizes a dry run like the real request, so the dry-run-only policy is what keeps the new permission from writing. |
 | D77 | `ApprovalRequest` additions (v1alpha1, additive): per draft action `location {zone, waypoint, x, y}`, `route[]`, `instruction`, `lookFor[]`, `customType`, `robotSelector`, `onFailure`; per draft `repeat` (loop `Times`, or `Forever` with a bound); `spec.preview` (id, catalogue version and SHA-256, kind, interpretation, instruction, `resultReported`, failure handling, confirmed at); `spec.checks` (verdict and each check when filed); `status.executionChecks`, `status.outcome`, `status.followUp`. The executor builds each member's payload from these fields (`{"waypoint", "x", "y", "lookFor", "instruction", "route"}` at this site) and a patrol as `spec.flow` loop over a sequence of Patrol members | The request must carry everything the task needs to run (BACKLOG-v4 P1: no waypoint field) and the evidence of what was checked. Typed fields keep the requests panel's "exact write" (D53) readable; the payload is built only by the executor. |
-| D78 | Failure handling: both options set `onFailure: Alert` and `failurePolicy: FailFast`. After activation foc-approvals watches the task to a terminal phase and records `status.outcome`; with `PrepareFollowUp` it also records a proposed follow-up, which `foc chat --follow-up <request>` turns into a preview that needs a confirmation like any other request | R64: report only, or prepare a follow-up request, never automatic. Swarmada's default `Requeue` retries without a person; `Alert` keeps the decision with people. |
-| D79 | `foc activate <request>` replaces the `kubectl patch` instruction: with the caller's kubeconfig it requires an `Approved` `ActivateTask` request decided by the caller, re-runs the feasibility evaluation with the caller's reads, refuses on a blocker, and sends one JSON patch that tests `spec.draft == true` and sets it false | R63. The approver still activates with their own credentials and Swarmada still authorizes `activate`; the command adds the checks and fails if the task changed. |
-| D80 | foc-mcp (and foc-approvals) may `get`,`list` `swarmadaconfigs`; the code reads only the namespace-stop annotation and marker and `spec.scheduling.maxPendingActionsPerZone` | Owner's ruling R66, 2026-11-06, conditional on SwarmadaConfig holding no secret material. Checked at the pin (`api/v1/swarmadaconfig_types.go`): no secret-typed field; `signing.trustRoots[].secretRef` and `signing.rekorPublicKey` are references (Secret name and key) to PEM public keys; `telemetry.sink.endpoint` and `signing.rekorUrl` are free strings that could carry credentials if an operator put them in a URL. Without the grant, `check_task` reports "namespace-wide stop and Pending cap not checked". |
-| D81 | Eval surface v4: prompt v4, judge v4 (BACKLOG-v4 J1–J3), S1 fixed, P1 closed, multi-turn scenarios with a scripted human responder, judge criterion 5 (dialogue) with a negative control per check, harness execution for executor re-check scenarios, the catalogue SHA-256 and the metrics `dialogue.questionsPerTask`, `capViolations`, `stallsAfterActivationProxy` (§4.4). Results on v3 and v4 are not comparable | Owner's ruling R68, 2026-11-06: batch the v4 backlog into this surface change, so the three models are re-run once. |
+| D78 | Failure handling: members keep Swarmada's default `onFailure: Requeue` (3 retries, then alert), shown as "retries up to 3 times, then alerts", or `Alert` on first failure when the person changes it; `failurePolicy: FailFast`. After activation foc-approvals watches the task to a terminal phase and records `status.outcome`; with `PrepareFollowUp` it also records a proposed follow-up, which `foc chat --follow-up <request>` turns into a preview that needs a confirmation like any other request | R64: report only, or prepare a follow-up request, never automatic. Owner's ruling R69 (2026-11-06) keeps Swarmada's bounded retry as the default; the follow-up request, not the retry, is what is never automatic. |
+| D79 | `foc activate <request>` replaces the `kubectl patch` instruction: with the caller's kubeconfig it requires an `Approved` `ActivateTask` request, refuses a ServiceAccount caller, re-runs the feasibility evaluation with the caller's reads, refuses on a blocker, and sends one JSON patch that tests `spec.draft == true`, sets it false and sets `fleetops.alexbahel.github.io/activated-by` to the caller; the admission policy `fleetops-activated-by` admits that annotation only with the authenticated user's name; foc-approvals records the activator in its audit line | R63; owner's ruling R69 (2026-11-06): any person Swarmada allows to activate, never a ServiceAccount, Swarmada's own check decides, the activator is recorded. Before, the copilot could not tell who activated (KNOWN-LIMITS). |
+| D80 | foc-mcp (and foc-approvals) may `get`,`list` `swarmadaconfigs`, read only in code and never through a model-facing tool; the reader projects the namespace-stop annotation and marker and `spec.scheduling.maxPendingActionsPerZone` and drops the rest; the object is never logged or traced | Owner's ruling R66, 2026-11-06, conditional on SwarmadaConfig holding no secret material. Checked at the pin (`api/v1/swarmadaconfig_types.go`): no secret-typed field; `signing.trustRoots[].secretRef` and `signing.rekorPublicKey` are references (Secret name and key) to PEM public keys; `telemetry.sink.endpoint` and `signing.rekorUrl` are free strings that could carry credentials if an operator put them in a URL. Without the grant, `check_task` reports "namespace-wide stop and Pending cap not checked". Owner's ruling R69 keeps the grant with these limits; KNOWN-LIMITS says the ServiceAccount can read the whole object. |
+| D81 | Eval surface v4: prompt v4, judge v4 (BACKLOG-v4 J1–J3), S1 fixed, P1 closed, multi-turn scenarios with a scripted human responder, judge criterion 5 (dialogue) with a negative control per check, harness execution for executor re-check scenarios, the catalogue SHA-256 and the metrics `dialogue.questionsPerTask`, `capViolations`, `stallsAfterActivationProxy` (§4.4). Results on v3 and v4 are not comparable; v4 is a different architecture (the model cannot attempt a write) and the unsafe-write metric changes meaning, which every comparison table states (R69) | Owner's ruling R68, 2026-11-06: batch the v4 backlog into this surface change, so the three models are re-run once. |
 | D82 | `make foc-up`'s preflight resolves the Python the quickstart will run (`python3`, else `python`, on `PATH`, as `run.sh` does) and stops before creating anything if it cannot `import grpc` and `google.protobuf`, saying which interpreter and how to provide them | Owner's ruling R59, found 2026-11-05: the quickstart's simulated adapter runs on the host with that Python and imports `grpc`; the preflight makes a missing package a clear stop at the start instead of a failure later in the run. |
 | D83 | The Dockerfile copies the binaries with `COPY --chmod=0755`; a test builds the binaries under umask 077, builds the image, and runs each binary in it as user 65532 (`-h`, exit status checked) | Owner's ruling R60, found 2026-11-05: a plain `COPY` keeps the mode the host build gave the files, which depends on the builder's umask, so whether user 65532 can run them depended on the machine that built the image. |
 
