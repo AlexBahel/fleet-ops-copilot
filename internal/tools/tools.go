@@ -49,6 +49,10 @@ type Session struct {
 	Verified bool
 	// Unverified is why the requester is not verified; empty when verified.
 	Unverified string
+	// ConfirmedPreview is the preview id the client says the requester
+	// confirmed (_meta, never a tool argument; D74). Empty for a call that
+	// carries no confirmation.
+	ConfirmedPreview string
 }
 
 // Service runs the tools against a Kubernetes client.

@@ -68,8 +68,9 @@ func TestRequesterFromBearerTokenNotMeta(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer func() { _ = cs.Close() }()
+		id, _ := tools.PreviewIDFor(tools.ZoneStopInput{ZoneName: "aisle-b", Reason: "spill"})
 		res, err := cs.CallTool(ctx, &mcp.CallToolParams{
-			Meta: mcp.Meta{MetaOperator: operator, MetaSession: session},
+			Meta: mcp.Meta{MetaOperator: operator, MetaSession: session, MetaConfirmedPreview: id},
 			Name: "request_zone_stop", Arguments: map[string]any{"zoneName": "aisle-b", "reason": "spill"},
 		})
 		if err != nil || res.IsError {
@@ -94,6 +95,48 @@ func TestRequesterFromBearerTokenNotMeta(t *testing.T) {
 		if got := file(tc.token, tc.operator, "s-"+strings.ReplaceAll(tc.name, " ", "-")[:8]); got != tc.want {
 			t.Errorf("%s: requestedFor %q, want %q", tc.name, got, tc.want)
 		}
+	}
+}
+
+// D74 over MCP: without the confirmation in _meta, or with the id of another
+// preview, nothing is filed.
+func TestRequestNeedsConfirmedPreview(t *testing.T) {
+	p, err := policy.Load("../../policies/default.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	zone := &swarmv1.FleetZone{ObjectMeta: metav1.ObjectMeta{Name: "aisle-b", Namespace: "warehouse-a"}}
+	c := fake.NewClientBuilder().WithScheme(fleet.NewScheme()).WithObjects(zone).Build()
+	svc := &tools.Service{C: c, Engine: policy.New(p), Identity: "system:serviceaccount:foc-system:foc-mcp", DefaultNamespace: "warehouse-a",
+		Authn: tokens{"sam-token": "sam"}}
+	ts := httptest.NewServer(Handler(New(svc)))
+	defer ts.Close()
+	ctx := context.Background()
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "t"}, nil).Connect(ctx, ClientTransport(ts.URL, "sam-token"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = cs.Close() }()
+	other, _ := tools.PreviewIDFor(tools.ZoneStopInput{ZoneName: "aisle-b", Reason: "another reason"})
+	for meta, want := range map[string]string{"": "DENY_NOT_CONFIRMED", other: "DENY_PREVIEW_MISMATCH"} {
+		m := mcp.Meta{MetaSession: "s-confirm"}
+		if meta != "" {
+			m[MetaConfirmedPreview] = meta
+		}
+		res, err := cs.CallTool(ctx, &mcp.CallToolParams{Meta: m, Name: "request_zone_stop", Arguments: map[string]any{"zoneName": "aisle-b", "reason": "spill"}})
+		if err != nil || res.IsError {
+			t.Fatalf("call: %v %+v", err, res)
+		}
+		b, _ := json.Marshal(res.StructuredContent)
+		var out tools.RequestResult
+		_ = json.Unmarshal(b, &out)
+		if !out.Refused || out.Code != want || out.Created != "" {
+			t.Fatalf("meta %q: %+v, want refusal %s", meta, out, want)
+		}
+	}
+	var list focv1.ApprovalRequestList
+	if err := c.List(ctx, &list); err != nil || len(list.Items) != 0 {
+		t.Fatalf("%d requests filed, err %v", len(list.Items), err)
 	}
 }
 

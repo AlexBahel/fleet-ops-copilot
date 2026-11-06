@@ -44,6 +44,10 @@ import (
 const (
 	MetaSession  = "fleetops.alexbahel.github.io/session"
 	MetaOperator = "fleetops.alexbahel.github.io/operator"
+	// MetaConfirmedPreview carries the id of the preview the requester
+	// confirmed. foc-agent sets it, never the model, and only on the call it
+	// makes after the person's confirmation (D74).
+	MetaConfirmedPreview = "fleetops.alexbahel.github.io/confirmedPreview"
 )
 
 // Version is reported to MCP clients.
@@ -54,10 +58,24 @@ var (
 	ReadTools = []string{
 		"list_robots", "get_robot", "list_fleet_tasks", "get_fleet_task", "list_fleet_actions", "get_fleet_action",
 		"list_zones", "get_zone", "list_zone_maintenances", "list_discovered_robots", "list_fleet_adapters",
-		"list_task_triggers", "get_events", "get_request",
+		"list_task_triggers", "get_events", "get_request", "check_task", "whoami",
 	}
 	RequestTools = []string{"request_draft_task", "request_activate_task", "request_zone_maintenance", "request_zone_stop"}
+	// NotForModel are served to foc-agent but never offered to a model: the
+	// request tools, which foc-agent calls itself after a confirmation
+	// (D74), and whoami (D75).
+	NotForModel = append(append([]string{}, RequestTools...), "whoami")
 )
+
+// ForModel reports whether a served tool may be offered to a model.
+func ForModel(name string) bool {
+	for _, n := range NotForModel {
+		if n == name {
+			return false
+		}
+	}
+	return true
+}
 
 // session builds the tool session of one call: the session id from _meta,
 // and the requester from the HTTP Authorization header (TokenReview through
@@ -73,6 +91,9 @@ func session(ctx context.Context, svc *tools.Service, req *mcp.CallToolRequest) 
 		}
 		if v, ok := req.Params.Meta[MetaOperator].(string); ok {
 			asserted = v
+		}
+		if v, ok := req.Params.Meta[MetaConfirmedPreview].(string); ok {
+			s.ConfirmedPreview = v
 		}
 	}
 	if req != nil && req.Extra != nil && req.Extra.Header != nil {
@@ -185,8 +206,8 @@ func add[In, Out any](srv *mcp.Server, svc *tools.Service, tr trace.Tracer, name
 func New(svc *tools.Service) *mcp.Server {
 	srv := mcp.NewServer(&mcp.Implementation{Name: "fleet-ops-copilot", Version: Version}, &mcp.ServerOptions{
 		Instructions: "Tools for a Swarmada robot fleet. Read tools return Swarmada API fields by JSON path; cite them. " +
-			"Write tools never change running work: request_draft_task creates a FleetTask held as a draft, and the other request_* tools " +
-			"create an ApprovalRequest that a named person decides. There is no tool to clear a stop, release or resume a robot, delete, or approve.",
+			"The request_* tools create an ApprovalRequest that a named person decides, and only for a preview the requester confirmed; " +
+			"none changes running work. There is no tool to clear a stop, release or resume a robot, delete, or approve.",
 	})
 	tr := tracing.OrNoop(svc.Tracer)
 	add(srv, svc, tr, "list_robots", "List Robots with phase, estop state, health, battery, zone and capabilities.", true, svc.ListRobots)
@@ -203,6 +224,8 @@ func New(svc *tools.Service) *mcp.Server {
 	add(srv, svc, tr, "list_task_triggers", "List TaskTriggers (RFC-0003) and the drafts they produced.", true, svc.ListTaskTriggers)
 	add(srv, svc, tr, "get_events", "Get Kubernetes Events for one object.", true, svc.GetEvents)
 	add(srv, svc, tr, "get_request", "Get one ApprovalRequest and its state.", true, svc.GetRequest)
+	add(srv, svc, tr, "check_task", "Check a request against current fleet state without filing it: an eligible robot now (Swarmada's candidate filters that a read can evaluate), zone state, location, dependencies, timing and policy. Returns 'likely feasible' or 'blocked', blockers, warnings, alternatives and what was not checked; never a guarantee.", true, svc.CheckTask)
+	add(srv, svc, tr, "whoami", "The requester as foc-mcp authenticated this call. Used by foc-agent, not offered to a model.", true, svc.Whoami)
 
 	add(srv, svc, tr, "request_draft_task", "Create a FleetTask held as a draft (spec.draft: true). Nothing is dispatched; a person must activate it.", false, svc.RequestDraftTask)
 	add(srv, svc, tr, "request_activate_task", "Ask a named person to activate a draft FleetTask. Creates an ApprovalRequest only.", false, svc.RequestActivateTask)
@@ -253,14 +276,22 @@ func ListTools(ctx context.Context, srv *mcp.Server) ([]*mcp.Tool, error) {
 	return res.Tools, nil
 }
 
-// ToolsDigest is the SHA-256 of the tool list srv serves (name, description
-// and input schema of each tool, sorted by name): what the model is told
+// ToolsDigest is the SHA-256 of the tools srv serves that a model is offered
+// (name, description and input schema of each, sorted by name), together
+// with extra tools the agent adds (propose_task): what the model is told
 // besides the system prompt. Evaluation results record it (R46).
-func ToolsDigest(ctx context.Context, srv *mcp.Server) (string, error) {
-	tl, err := ListTools(ctx, srv)
+func ToolsDigest(ctx context.Context, srv *mcp.Server, extra ...*mcp.Tool) (string, error) {
+	served, err := ListTools(ctx, srv)
 	if err != nil {
 		return "", err
 	}
+	var tl []*mcp.Tool
+	for _, t := range served {
+		if ForModel(t.Name) {
+			tl = append(tl, t)
+		}
+	}
+	tl = append(tl, extra...)
 	type entry struct {
 		Name        string `json:"name"`
 		Description string `json:"description"`

@@ -17,6 +17,7 @@ limitations under the License.
 package tools
 
 import (
+	"strconv"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -146,6 +147,7 @@ type FleetTaskView struct {
 	Phase         string           `json:"status.phase,omitempty"`
 	ActionSummary string           `json:"status.actionSummary,omitempty"`
 	CreatedBy     string           `json:"createdBy,omitempty"`
+	CreatedAt     string           `json:"metadata.creationTimestamp,omitempty"`
 	Members       []TaskMemberView `json:"members"`
 	Conditions    []ConditionView  `json:"status.conditions,omitempty"`
 }
@@ -155,6 +157,7 @@ func taskView(t *swarmv1.FleetTask, createdByLabel string) FleetTaskView {
 		Name: t.Name, Namespace: t.Namespace, Draft: t.Spec.Draft, DesiredState: string(t.Spec.DesiredState),
 		FailurePolicy: string(t.Spec.FailurePolicy), Phase: string(t.Status.Phase), ActionSummary: t.Status.ActionSummary,
 		CreatedBy: t.Labels[createdByLabel], Conditions: conds(t.Status.Conditions),
+		CreatedAt: ts(&t.CreationTimestamp),
 	}
 	st := map[string]swarmv1.FleetTaskActionStatus{}
 	for _, s := range t.Status.Actions {
@@ -203,18 +206,18 @@ func actionView(a *swarmv1.FleetAction) FleetActionView {
 
 // ZoneView is a FleetZone.
 type ZoneView struct {
-	Name                string   `json:"name"`
-	Namespace           string   `json:"namespace"`
-	DisplayName         string   `json:"spec.displayName,omitempty"`
-	ParentZone          string   `json:"spec.parentZone,omitempty"`
-	MaxConcurrentRobots int32    `json:"spec.maxConcurrentRobots"`
-	Waypoints           []string `json:"spec.waypoints,omitempty"`
-	EstopStatus         string   `json:"status.estopStatus"`
-	EstopAnnotation     string   `json:"estopTriggeredAnnotation,omitempty"`
-	LastEstopAt         string   `json:"status.lastEstopAt,omitempty"`
-	RobotCount          int32    `json:"status.robotCount"`
-	IsLeaf              bool     `json:"status.isLeaf"`
-	ChildZones          []string `json:"status.childZones,omitempty"`
+	Name                string         `json:"name"`
+	Namespace           string         `json:"namespace"`
+	DisplayName         string         `json:"spec.displayName,omitempty"`
+	ParentZone          string         `json:"spec.parentZone,omitempty"`
+	MaxConcurrentRobots int32          `json:"spec.maxConcurrentRobots"`
+	Waypoints           []WaypointView `json:"spec.waypoints,omitempty"`
+	EstopStatus         string         `json:"status.estopStatus"`
+	EstopAnnotation     string         `json:"estopTriggeredAnnotation,omitempty"`
+	LastEstopAt         string         `json:"status.lastEstopAt,omitempty"`
+	RobotCount          int32          `json:"status.robotCount"`
+	IsLeaf              bool           `json:"status.isLeaf"`
+	ChildZones          []string       `json:"status.childZones,omitempty"`
 }
 
 func zoneView(z *swarmv1.FleetZone, estopAnnotation string) ZoneView {
@@ -228,9 +231,17 @@ func zoneView(z *swarmv1.FleetZone, estopAnnotation string) ZoneView {
 		v.EstopStatus = "Clear" // RFC-0001: empty is treated as Clear (fleetzone_types.go)
 	}
 	for _, w := range z.Spec.Waypoints {
-		v.Waypoints = append(v.Waypoints, w.Name)
+		v.Waypoints = append(v.Waypoints, WaypointView{Name: w.Name, X: strconv.FormatFloat(w.X, 'f', -1, 64), Y: strconv.FormatFloat(w.Y, 'f', -1, 64)})
 	}
 	return v
+}
+
+// WaypointView is a named pose of a FleetZone (spec.waypoints[]), with its
+// coordinates as decimal strings, as a request carries them.
+type WaypointView struct {
+	Name string `json:"name"`
+	X    string `json:"x"`
+	Y    string `json:"y"`
 }
 
 // ZoneMaintenanceView is a ZoneMaintenance.

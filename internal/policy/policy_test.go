@@ -72,7 +72,7 @@ func TestDecide(t *testing.T) {
 		{"draft without actions", Request{Op: OpDraftTask, Namespace: "warehouse-a", DraftTask: &DraftTaskParams{Name: "x", Draft: true}}, served, Deny, CodeMalformed},
 		{"draft critical priority", Request{Op: OpDraftTask, Namespace: "warehouse-a", DraftTask: &DraftTaskParams{Name: "x", Draft: true, Actions: []DraftAction{{Name: "a", Type: "Navigate", Priority: "Critical"}}}}, served, Deny, CodeField},
 		{"draft external executor", Request{Op: OpDraftTask, Namespace: "warehouse-a", DraftTask: &DraftTaskParams{Name: "x", Draft: true, Actions: []DraftAction{{Name: "a", Type: "External", Executor: true}}}}, served, Deny, CodeField},
-		{"draft type not allowed", Request{Op: OpDraftTask, Namespace: "warehouse-a", DraftTask: &DraftTaskParams{Name: "x", Draft: true, Actions: []DraftAction{{Name: "a", Type: "Custom"}}}}, served, Deny, CodeField},
+		{"draft type not allowed", Request{Op: OpDraftTask, Namespace: "warehouse-a", DraftTask: &DraftTaskParams{Name: "x", Draft: true, Actions: []DraftAction{{Name: "a", Type: "External"}}}}, served, Deny, CodeField},
 		{"draft session limit", Request{Op: OpDraftTask, Namespace: "warehouse-a", DraftTask: goodDraft()}, Snapshot{DraftGateServed: true, DraftsThisSession: 5}, Deny, CodeDraftLimit},
 		{"draft default priority is Normal", Request{Op: OpDraftTask, Namespace: "warehouse-a", DraftTask: &DraftTaskParams{Name: "x", Draft: true, Actions: []DraftAction{{Name: "a", Type: "Patrol"}}}}, served, RequireApproval, CodeApprovalRequired},
 
@@ -228,5 +228,19 @@ func TestParseRejects(t *testing.T) {
 		} else if !strings.Contains(err.Error(), "polic") && !strings.Contains(err.Error(), "duration") {
 			t.Errorf("%s: unhelpful error %v", name, err)
 		}
+	}
+}
+
+// D74 is a hard invariant compiled in: no confirmation, or a confirmation of
+// another preview, refuses whatever the policy file says.
+func TestConfirmation(t *testing.T) {
+	if d := Confirmation("", "abc"); d == nil || d.Code != CodeNotConfirmed {
+		t.Fatalf("no confirmation: %+v", d)
+	}
+	if d := Confirmation("abd", "abc"); d == nil || d.Code != CodePreviewMismatch {
+		t.Fatalf("mismatch: %+v", d)
+	}
+	if d := Confirmation("abc", "abc"); d != nil {
+		t.Fatalf("match: %+v", d)
 	}
 }

@@ -64,7 +64,12 @@ const (
 	CodeRequestNotPending      Code = "DENY_NOT_PENDING"
 	CodeApproverMismatch       Code = "DENY_DECIDER_MISMATCH"
 	CodeRequesterUnverified    Code = "DENY_REQUESTER_UNVERIFIED"
-	CodeApprovalAccepted       Code = "ALLOW_APPROVAL"
+	// Guided requests (DESIGN.md §3.10, D74, D76).
+	CodeNotConfirmed     Code = "DENY_NOT_CONFIRMED"
+	CodePreviewMismatch  Code = "DENY_PREVIEW_MISMATCH"
+	CodeCheckFailed      Code = "DENY_CHECK_FAILED"
+	CodeSwarmadaRefused  Code = "DENY_SWARMADA_REFUSED"
+	CodeApprovalAccepted Code = "ALLOW_APPROVAL"
 )
 
 // UnverifiedPrefix marks a requester (spec.requestedFor) whose identity no
@@ -401,6 +406,22 @@ func (e *Engine) decideZoneStop(r Request, s Snapshot) Decision {
 		return deny(CodeAlreadyStopped, "FleetZone %q already has an active estop (status.estopStatus=%q); no new request", p.ZoneName, s.ZoneEstopStatus)
 	}
 	return needApproval("a zone estop stops every robot in the zone tree; a named person must approve")
+}
+
+// Confirmation is the hard invariant of D74: a request is filed only with a
+// preview the requester confirmed, whose id (want) the caller recomputed from
+// the request's own parameters. confirmed is the id the client sent as
+// confirmed; it is never a tool argument the model writes. nil means filed.
+func Confirmation(confirmed, want string) *Decision {
+	switch {
+	case confirmed == "":
+		d := deny(CodeNotConfirmed, "no confirmed preview: a request is filed only after the requester confirms its preview")
+		return &d
+	case confirmed != want:
+		d := deny(CodePreviewMismatch, "the confirmed preview (%.12s) is not this request (%.12s): its parameters differ from what the requester saw", confirmed, want)
+		return &d
+	}
+	return nil
 }
 
 // Principal is an authenticated identity.

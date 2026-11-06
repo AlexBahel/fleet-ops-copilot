@@ -7,8 +7,10 @@ namespaces:
   - warehouse-a
 draftTask:
   # Swarmada FleetAction spec.type values the copilot may draft. External
-  # (dispatch to a ComputeEndpoint) is left out.
-  allowedActionTypes: [Navigate, PickUp, DropOff, Patrol, Charge, Clean]
+  # (dispatch to a ComputeEndpoint) is left out. Custom carries a verb the
+  # site's adapter catalog lists (the site catalogue's survey: explore-floor);
+  # check_task refuses a verb no adapter lists.
+  allowedActionTypes: [Navigate, PickUp, DropOff, Patrol, Charge, Clean, Custom]
   # Critical can preempt other work at a shared resource; left to people.
   allowedPriorities: [High, Normal, Low]
   maxActions: 10

@@ -19,6 +19,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel/trace"
@@ -29,6 +30,8 @@ import (
 
 	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/audit"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/draft"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/feasibility"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/policy"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/tracing"
@@ -82,13 +85,22 @@ func needSession(sess Session) *policy.Decision {
 
 // DraftActionInput is one member of a drafted FleetTask.
 type DraftActionInput struct {
-	Name                 string   `json:"name" jsonschema:"member name, unique in the task"`
-	Type                 string   `json:"type" jsonschema:"FleetAction spec.type: Navigate, PickUp, DropOff, Patrol, Charge or Clean"`
-	Zone                 string   `json:"zone,omitempty" jsonschema:"FleetZone the action runs in"`
-	Priority             string   `json:"priority,omitempty" jsonschema:"High, Normal or Low (default Normal)"`
-	RequiredCapabilities []string `json:"requiredCapabilities,omitempty" jsonschema:"capability names a robot must have Active"`
-	PreferredRobot       string   `json:"preferredRobot,omitempty" jsonschema:"a scheduling preference, not a binding"`
-	DependsOn            []string `json:"dependsOn,omitempty" jsonschema:"member names that must reach Succeeded first"`
+	Name                 string          `json:"name" jsonschema:"member name, unique in the task"`
+	Type                 string          `json:"type" jsonschema:"FleetAction spec.type: Navigate, PickUp, DropOff, Patrol, Charge, Clean or Custom"`
+	CustomType           string          `json:"customType,omitempty" jsonschema:"the verb of a Custom action"`
+	Zone                 string          `json:"zone,omitempty" jsonschema:"FleetZone the action runs in (default: the location's zone)"`
+	Location             *LocationInput  `json:"location,omitempty" jsonschema:"where the action takes place"`
+	Route                []LocationInput `json:"route,omitempty" jsonschema:"ordered stops (patrol); one member per stop"`
+	LookFor              []string        `json:"lookFor,omitempty" jsonschema:"what an inspection is about"`
+	Instruction          string          `json:"instruction,omitempty" jsonschema:"the requester's own words, verbatim"`
+	Priority             string          `json:"priority,omitempty" jsonschema:"High, Normal or Low (default Normal)"`
+	RequiredCapabilities []string        `json:"requiredCapabilities,omitempty" jsonschema:"capability names a robot must have Active"`
+	PreferredRobot       string          `json:"preferredRobot,omitempty" jsonschema:"a scheduling preference, not a binding"`
+	RobotSelector        string          `json:"robotSelector,omitempty" jsonschema:"pins the action to this robot"`
+	Dock                 string          `json:"dock,omitempty" jsonschema:"charging dock or waypoint (Charge)"`
+	Bounds               string          `json:"bounds,omitempty" jsonschema:"area of a survey"`
+	OnFailure            string          `json:"onFailure,omitempty" jsonschema:"Requeue (default: retries up to 3 times, then alerts) or Alert"`
+	DependsOn            []string        `json:"dependsOn,omitempty" jsonschema:"member names that must reach Succeeded first"`
 }
 
 // DraftTaskInput is the input of request_draft_task.
@@ -97,32 +109,78 @@ type DraftTaskInput struct {
 	Name      string             `json:"name" jsonschema:"FleetTask name (DNS-1123 subdomain)"`
 	Purpose   string             `json:"purpose" jsonschema:"one sentence shown to the person who reviews the draft"`
 	Actions   []DraftActionInput `json:"actions" jsonschema:"the task's members"`
+	Repeat    int32              `json:"repeat,omitempty" jsonschema:"rounds to run the members in order (patrol)"`
+	Preview   *PreviewInput      `json:"preview,omitempty"`
+}
+
+// confirmed applies the D74 invariant: the request is filed only when the
+// client confirmed a preview whose id equals the id of this request.
+func confirmed(sess Session, in any) (focv1.ApprovalRequestSpec, *policy.Decision) {
+	_, spec, err := SpecFor(in)
+	if err != nil {
+		d := policy.Decision{Effect: policy.Deny, Code: policy.CodeMalformed, Message: err.Error()}
+		return spec, &d
+	}
+	if d := policy.Confirmation(sess.ConfirmedPreview, PreviewID(spec)); d != nil {
+		return spec, d
+	}
+	return spec, nil
+}
+
+// checkAtFiling runs check_task's evaluation on current state. A blocked
+// request is not filed (DENY_CHECK_FAILED); otherwise the checks it passed
+// are recorded in spec.checks (D77).
+func (s *Service) checkAtFiling(ctx context.Context, ns string, p feasibility.Proposal) (*focv1.ChecksRecord, *policy.Decision) {
+	snap := feasibility.Load(ctx, s.C, ns, s.now())
+	rep := feasibility.Evaluate(p, snap)
+	rec := &focv1.ChecksRecord{Verdict: rep.Verdict, CheckedAt: metav1.NewTime(s.now().UTC().Truncate(time.Second)), Checks: rep.Records()}
+	if rep.Verdict == feasibility.Blocked {
+		var why []string
+		for _, b := range rep.Blockers {
+			why = append(why, b.Code+": "+b.Reason)
+		}
+		d := policy.Decision{Effect: policy.Deny, Code: policy.CodeCheckFailed, Message: "check_task on current state: " + strings.Join(why, "; ")}
+		return rec, &d
+	}
+	return rec, nil
+}
+
+func (s *Service) refuse(ctx context.Context, sess Session, tool string, r policy.Request, d policy.Decision) RequestResult {
+	_, span := tracing.OrNoop(s.Tracer).Start(ctx, tracing.SpanPolicy, trace.WithAttributes(
+		tracing.AttrToolName.String(tool), tracing.AttrPolicyOp.String(string(r.Op)), tracing.AttrNamespace.String(r.Namespace),
+		tracing.AttrPolicyEffect.String(string(d.Effect)), tracing.AttrPolicyCode.String(string(d.Code)),
+	))
+	span.End()
+	s.record(audit.Entry{Kind: audit.KindPolicyDecision, Actor: sess.Operator, SessionID: sess.ID, Tool: tool, Namespace: r.Namespace, Code: string(d.Code), Message: d.Message, Detail: map[string]any{"effect": string(d.Effect)}})
+	return refused(d)
 }
 
 // RequestDraftTask asks a named person to approve creating a FleetTask held
 // as a draft (spec.draft: true). foc-mcp writes nothing to Swarmada: on
 // approval, foc-approvals creates the draft (DESIGN.md D25), and a draft
-// dispatches nothing until a person activates it.
+// dispatches nothing until a person activates it. The request is filed only
+// with a confirmed preview (D74) and when check_task finds no blocker.
 func (s *Service) RequestDraftTask(ctx context.Context, sess Session, in DraftTaskInput) (RequestResult, error) {
 	ns := s.ns(in.Namespace)
 	s.record(audit.Entry{Kind: audit.KindToolCall, Actor: sess.Operator, SessionID: sess.ID, Tool: "request_draft_task", Namespace: ns, Object: "FleetTask/" + in.Name})
 	if d := needSession(sess); d != nil {
 		return refused(*d), nil
 	}
-	if d := s.outOfScope(ctx, sess, "request_draft_task", policy.Request{Op: policy.OpDraftTask, Namespace: ns, DraftTask: &policy.DraftTaskParams{Name: in.Name, Draft: true}}); d != nil {
+	pr := policy.Request{Op: policy.OpDraftTask, Namespace: ns, DraftTask: &policy.DraftTaskParams{Name: in.Name, Draft: true}}
+	if d := s.outOfScope(ctx, sess, "request_draft_task", pr); d != nil {
 		return refused(*d), nil
+	}
+	reqSpec, d := confirmed(sess, in)
+	if d != nil {
+		return s.refuse(ctx, sess, "request_draft_task", pr, *d), nil
 	}
 	if errs := validation.IsDNS1123Subdomain(in.Name); len(errs) > 0 {
 		return refused(policy.Decision{Effect: policy.Deny, Code: policy.CodeMalformed, Message: fmt.Sprintf("task name %q: %v", in.Name, errs)}), nil
 	}
+	spec := reqSpec.DraftTask
 	params := &policy.DraftTaskParams{Name: in.Name, Draft: true}
-	spec := &focv1.DraftTaskParams{TaskName: in.Name, Purpose: in.Purpose}
-	for _, a := range in.Actions {
+	for _, a := range spec.Actions {
 		params.Actions = append(params.Actions, policy.DraftAction{Name: a.Name, Type: a.Type, Priority: a.Priority, Zone: a.Zone})
-		spec.Actions = append(spec.Actions, focv1.DraftAction{
-			Name: a.Name, Type: a.Type, Zone: a.Zone, Priority: a.Priority,
-			RequiredCapabilities: a.RequiredCapabilities, PreferredRobot: a.PreferredRobot, DependsOn: a.DependsOn,
-		})
 	}
 	snap, err := fleet.TaskSnapshot(ctx, s.C, ns, in.Name)
 	if err != nil {
@@ -137,18 +195,28 @@ func (s *Service) RequestDraftTask(ctx context.Context, sess Session, in DraftTa
 	if snap.DraftsThisSession, err = fleet.CountSessionDraftRequests(ctx, s.C, ns, sess.ID); err != nil {
 		return RequestResult{}, err
 	}
-	d := s.decide(ctx, sess, "request_draft_task", policy.Request{Op: policy.OpDraftTask, Namespace: ns, SessionID: sess.ID, DraftTask: params}, snap)
-	if d.Effect != policy.RequireApproval {
-		return refused(d), nil
+	d2 := s.decide(ctx, sess, "request_draft_task", policy.Request{Op: policy.OpDraftTask, Namespace: ns, SessionID: sess.ID, DraftTask: params}, snap)
+	if d2.Effect != policy.RequireApproval {
+		return refused(d2), nil
 	}
-	return s.createRequest(ctx, sess, ns, d, focv1.ApprovalRequestSpec{Type: focv1.RequestDraftTask, DraftTask: spec},
-		"a person with create on fleettasks runs: foc approve <request>; foc-approvals then creates the draft, which dispatches nothing until it is activated (request_activate_task)")
+	task, err := draft.Task(ns, spec)
+	if err != nil {
+		return refused(policy.Decision{Effect: policy.Deny, Code: policy.CodeMalformed, Message: err.Error()}), nil
+	}
+	checks, d := s.checkAtFiling(ctx, ns, feasibility.Proposal{Task: task, Creating: true})
+	if d != nil {
+		return s.refuse(ctx, sess, "request_draft_task", pr, *d), nil
+	}
+	reqSpec.Checks = checks
+	return s.createRequest(ctx, sess, ns, d2, reqSpec,
+		"a person with create on fleettasks runs: foc approve <request>; foc-approvals then re-checks the fleet and creates the draft, which dispatches nothing until it is activated (request_activate_task)")
 }
 
 // ActivateTaskInput is the input of request_activate_task.
 type ActivateTaskInput struct {
-	Namespace string `json:"namespace,omitempty"`
-	TaskName  string `json:"taskName" jsonschema:"the draft FleetTask to activate"`
+	Namespace string        `json:"namespace,omitempty"`
+	TaskName  string        `json:"taskName" jsonschema:"the draft FleetTask to activate"`
+	Preview   *PreviewInput `json:"preview,omitempty"`
 }
 
 // RequestActivateTask asks a person to activate a draft.
@@ -158,8 +226,13 @@ func (s *Service) RequestActivateTask(ctx context.Context, sess Session, in Acti
 	if d := needSession(sess); d != nil {
 		return refused(*d), nil
 	}
-	if d := s.outOfScope(ctx, sess, "request_activate_task", policy.Request{Op: policy.OpActivateTask, Namespace: ns, ActivateTask: &policy.ActivateTaskParams{TaskName: in.TaskName}}); d != nil {
+	pr := policy.Request{Op: policy.OpActivateTask, Namespace: ns, ActivateTask: &policy.ActivateTaskParams{TaskName: in.TaskName}}
+	if d := s.outOfScope(ctx, sess, "request_activate_task", pr); d != nil {
 		return refused(*d), nil
+	}
+	reqSpec, d := confirmed(sess, in)
+	if d != nil {
+		return s.refuse(ctx, sess, "request_activate_task", pr, *d), nil
 	}
 	snap, err := fleet.TaskSnapshot(ctx, s.C, ns, in.TaskName)
 	if err != nil {
@@ -168,24 +241,30 @@ func (s *Service) RequestActivateTask(ctx context.Context, sess Session, in Acti
 	if snap.DraftGateServed, _, err = fleet.DraftGate(ctx, s.C); err != nil {
 		return RequestResult{}, err
 	}
-	d := s.decide(ctx, sess, "request_activate_task", policy.Request{Op: policy.OpActivateTask, Namespace: ns, ActivateTask: &policy.ActivateTaskParams{TaskName: in.TaskName}}, snap)
-	if d.Effect != policy.RequireApproval {
-		return refused(d), nil
+	d2 := s.decide(ctx, sess, "request_activate_task", pr, snap)
+	if d2.Effect != policy.RequireApproval {
+		return refused(d2), nil
 	}
-	return s.createRequest(ctx, sess, ns, d, focv1.ApprovalRequestSpec{Type: focv1.RequestActivateTask, ActivateTask: &focv1.ActivateTaskParams{TaskName: in.TaskName}},
-		"a person with patch and activate on this fleettask runs: foc approve <request>; once approved they run the printed command themselves. The copilot never activates; it records the activation when it sees it")
+	checks, d := s.checkAtFiling(ctx, ns, feasibility.Proposal{ActivateTask: in.TaskName})
+	if d != nil {
+		return s.refuse(ctx, sess, "request_activate_task", pr, *d), nil
+	}
+	reqSpec.Checks = checks
+	return s.createRequest(ctx, sess, ns, d2, reqSpec,
+		"a person with patch and activate on this fleettask runs: foc approve <request>; once approved, a person Swarmada allows to activate runs foc activate <request>. The copilot never activates; it records the activation when it sees it")
 }
 
 // ZoneMaintenanceInput is the input of request_zone_maintenance.
 type ZoneMaintenanceInput struct {
-	Namespace                     string `json:"namespace,omitempty"`
-	ScopeType                     string `json:"scopeType,omitempty" jsonschema:"Zone (default) or Namespace"`
-	ZoneName                      string `json:"zoneName,omitempty" jsonschema:"FleetZone name; required for scope Zone"`
-	Mode                          string `json:"mode,omitempty" jsonschema:"Graceful (default: robots finish current actions) or Immediate"`
-	Reason                        string `json:"reason" jsonschema:"why maintenance is needed"`
-	ScheduledStart                string `json:"scheduledStart,omitempty" jsonschema:"RFC 3339 start time; empty means on approval"`
-	AutoResumeAfterMinutes        int32  `json:"autoResumeAfterMinutes,omitempty" jsonschema:"must be 0: the copilot never schedules robots to resume"`
-	RequireEstopClearBeforeResume *bool  `json:"requireEstopClearBeforeResume,omitempty" jsonschema:"must not be false"`
+	Namespace                     string        `json:"namespace,omitempty"`
+	ScopeType                     string        `json:"scopeType,omitempty" jsonschema:"Zone (default) or Namespace"`
+	ZoneName                      string        `json:"zoneName,omitempty" jsonschema:"FleetZone name; required for scope Zone"`
+	Mode                          string        `json:"mode,omitempty" jsonschema:"Graceful (default: robots finish current actions) or Immediate"`
+	Reason                        string        `json:"reason" jsonschema:"why maintenance is needed"`
+	ScheduledStart                string        `json:"scheduledStart,omitempty" jsonschema:"RFC 3339 start time; empty means on approval"`
+	AutoResumeAfterMinutes        int32         `json:"autoResumeAfterMinutes,omitempty" jsonschema:"must be 0: the copilot never schedules robots to resume"`
+	RequireEstopClearBeforeResume *bool         `json:"requireEstopClearBeforeResume,omitempty" jsonschema:"must not be false"`
+	Preview                       *PreviewInput `json:"preview,omitempty"`
 }
 
 // RequestZoneMaintenance asks a person to approve a ZoneMaintenance.
@@ -195,45 +274,43 @@ func (s *Service) RequestZoneMaintenance(ctx context.Context, sess Session, in Z
 	if d := needSession(sess); d != nil {
 		return refused(*d), nil
 	}
-	if d := s.outOfScope(ctx, sess, "request_zone_maintenance", policy.Request{Op: policy.OpZoneMaintenance, Namespace: ns, ZoneMaintenance: &policy.ZoneMaintenanceParams{ScopeType: in.ScopeType, ZoneName: in.ZoneName, Mode: in.Mode, Reason: in.Reason}}); d != nil {
+	pr := policy.Request{Op: policy.OpZoneMaintenance, Namespace: ns, ZoneMaintenance: &policy.ZoneMaintenanceParams{ScopeType: in.ScopeType, ZoneName: in.ZoneName, Mode: in.Mode, Reason: in.Reason}}
+	if d := s.outOfScope(ctx, sess, "request_zone_maintenance", pr); d != nil {
 		return refused(*d), nil
 	}
-	if in.ScopeType == "" {
-		in.ScopeType = "Zone"
-	}
-	if in.Mode == "" {
-		in.Mode = "Graceful"
-	}
-	var start *metav1.Time
-	if in.ScheduledStart != "" {
-		t, err := time.Parse(time.RFC3339, in.ScheduledStart)
-		if err != nil {
-			return refused(policy.Decision{Effect: policy.Deny, Code: policy.CodeMalformed, Message: "scheduledStart must be RFC 3339"}), nil
+	reqSpec, d := confirmed(sess, in)
+	if d != nil {
+		if d.Code == policy.CodeMalformed {
+			return refused(*d), nil
 		}
-		mt := metav1.NewTime(t)
-		start = &mt
+		return s.refuse(ctx, sess, "request_zone_maintenance", pr, *d), nil
 	}
-	snap, err := fleet.ZoneSnapshot(ctx, s.C, ns, in.ZoneName)
+	p := reqSpec.ZoneMaintenance
+	snap, err := fleet.ZoneSnapshot(ctx, s.C, ns, p.ZoneName)
 	if err != nil {
 		return RequestResult{}, err
 	}
-	d := s.decide(ctx, sess, "request_zone_maintenance", policy.Request{Op: policy.OpZoneMaintenance, Namespace: ns, ZoneMaintenance: &policy.ZoneMaintenanceParams{
-		ScopeType: in.ScopeType, ZoneName: in.ZoneName, Mode: in.Mode, Reason: in.Reason,
+	d2 := s.decide(ctx, sess, "request_zone_maintenance", policy.Request{Op: policy.OpZoneMaintenance, Namespace: ns, ZoneMaintenance: &policy.ZoneMaintenanceParams{
+		ScopeType: p.ScopeType, ZoneName: p.ZoneName, Mode: p.Mode, Reason: p.Reason,
 		AutoResumeAfterMinutes: in.AutoResumeAfterMinutes, RequireEstopClearBeforeResume: in.RequireEstopClearBeforeResume,
 	}}, snap)
-	if d.Effect != policy.RequireApproval {
-		return refused(d), nil
+	if d2.Effect != policy.RequireApproval {
+		return refused(d2), nil
 	}
-	return s.createRequest(ctx, sess, ns, d, focv1.ApprovalRequestSpec{Type: focv1.RequestZoneMaintenance, ZoneMaintenance: &focv1.ZoneMaintenanceParams{
-		ScopeType: in.ScopeType, ZoneName: in.ZoneName, Mode: in.Mode, Reason: in.Reason, ScheduledStart: start,
-	}}, "a person with create on zonemaintenances runs: foc approve <request>")
+	checks, d := s.checkAtFiling(ctx, ns, feasibility.Proposal{Maintenance: p})
+	if d != nil {
+		return s.refuse(ctx, sess, "request_zone_maintenance", pr, *d), nil
+	}
+	reqSpec.Checks = checks
+	return s.createRequest(ctx, sess, ns, d2, reqSpec, "a person with create on zonemaintenances runs: foc approve <request>")
 }
 
 // ZoneStopInput is the input of request_zone_stop.
 type ZoneStopInput struct {
-	Namespace string `json:"namespace,omitempty"`
-	ZoneName  string `json:"zoneName" jsonschema:"FleetZone to stop"`
-	Reason    string `json:"reason" jsonschema:"why the zone must stop; becomes the estop annotation value"`
+	Namespace string        `json:"namespace,omitempty"`
+	ZoneName  string        `json:"zoneName" jsonschema:"FleetZone to stop"`
+	Reason    string        `json:"reason" jsonschema:"why the zone must stop; becomes the estop annotation value"`
+	Preview   *PreviewInput `json:"preview,omitempty"`
 }
 
 // RequestZoneStop asks a person to approve a zone estop.
@@ -243,22 +320,36 @@ func (s *Service) RequestZoneStop(ctx context.Context, sess Session, in ZoneStop
 	if d := needSession(sess); d != nil {
 		return refused(*d), nil
 	}
-	if d := s.outOfScope(ctx, sess, "request_zone_stop", policy.Request{Op: policy.OpZoneStop, Namespace: ns, ZoneStop: &policy.ZoneStopParams{ZoneName: in.ZoneName, Reason: in.Reason}}); d != nil {
+	pr := policy.Request{Op: policy.OpZoneStop, Namespace: ns, ZoneStop: &policy.ZoneStopParams{ZoneName: in.ZoneName, Reason: in.Reason}}
+	if d := s.outOfScope(ctx, sess, "request_zone_stop", pr); d != nil {
 		return refused(*d), nil
+	}
+	reqSpec, d := confirmed(sess, in)
+	if d != nil {
+		return s.refuse(ctx, sess, "request_zone_stop", pr, *d), nil
 	}
 	snap, err := fleet.ZoneSnapshot(ctx, s.C, ns, in.ZoneName)
 	if err != nil {
 		return RequestResult{}, err
 	}
-	d := s.decide(ctx, sess, "request_zone_stop", policy.Request{Op: policy.OpZoneStop, Namespace: ns, ZoneStop: &policy.ZoneStopParams{ZoneName: in.ZoneName, Reason: in.Reason}}, snap)
-	if d.Effect != policy.RequireApproval {
-		return refused(d), nil
+	d2 := s.decide(ctx, sess, "request_zone_stop", pr, snap)
+	if d2.Effect != policy.RequireApproval {
+		return refused(d2), nil
 	}
-	return s.createRequest(ctx, sess, ns, d, focv1.ApprovalRequestSpec{Type: focv1.RequestZoneStop, ZoneStop: &focv1.ZoneStopParams{ZoneName: in.ZoneName, Reason: in.Reason}},
+	checks, d := s.checkAtFiling(ctx, ns, feasibility.Proposal{ZoneStop: reqSpec.ZoneStop})
+	if d != nil {
+		return s.refuse(ctx, sess, "request_zone_stop", pr, *d), nil
+	}
+	reqSpec.Checks = checks
+	return s.createRequest(ctx, sess, ns, d2, reqSpec,
 		"a person with patch and estop-trigger on this fleetzone runs: foc approve <request>. For an emergency, use the physical E-stop or swarmctl estop trigger instead of waiting for approval")
 }
 
 func (s *Service) createRequest(ctx context.Context, sess Session, ns string, d policy.Decision, spec focv1.ApprovalRequestSpec, next string) (RequestResult, error) {
+	if spec.Preview != nil {
+		now := metav1.NewTime(s.now().UTC().Truncate(time.Second))
+		spec.Preview.ID, spec.Preview.ConfirmedAt = PreviewID(spec), &now
+	}
 	spec.RequestedFor = sess.Operator
 	spec.RequestedBy = s.Identity
 	spec.SessionID = sess.ID
