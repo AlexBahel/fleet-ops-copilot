@@ -129,6 +129,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&focv1.ApprovalRequest{}).
 		Watches(&focv1.ApprovalDecision{}, DecisionToRequest()).
+		Watches(&swarmv1.FleetTask{}, TaskToRequest()).
 		Complete(r)
 }
 
@@ -150,6 +151,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, key reconcile.Request) (reco
 		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}
 	st := req.Status.State
+	if st == focv1.StateExecuted && req.Spec.Type == focv1.RequestDraftTask && req.Status.Outcome == nil && req.Status.Target != nil {
+		return reconcile.Result{}, r.observeOutcome(ctx, &req)
+	}
 	if st.IsTerminal() {
 		return reconcile.Result{}, nil
 	}
@@ -345,11 +349,19 @@ func (r *Reconciler) observeActivation(ctx context.Context, req *focv1.ApprovalR
 	}
 	now := metav1.NewTime(r.now())
 	target := focv1.TargetRef{APIVersion: swarmv1.GroupVersion.String(), Kind: "FleetTask", Name: t.Name}
-	r.log(audit.Entry{Kind: audit.KindActivationObserved, Actor: req.Status.DecidedBy, Namespace: req.Namespace, Object: "ApprovalRequest/" + req.Name, SessionID: req.Spec.SessionID,
-		Message: "spec.draft is false; activation was performed outside the copilot", Detail: map[string]any{"target": "FleetTask/" + t.Name, "phase": string(t.Status.Phase)}})
-	r.event(ctx, req, corev1.EventTypeNormal, "ActivationObserved", fmt.Sprintf("FleetTask/%s left Draft after approval by %s; the copilot did not perform the activation", t.Name, req.Status.DecidedBy))
+	// foc activate records the activator in an annotation that the
+	// fleetops-activated-by admission policy binds to the authenticated user
+	// (D79); an activation made another way leaves it unknown.
+	activator := t.Annotations[ActivatedByAnnotation]
+	if activator == "" {
+		activator = "unknown"
+	}
+	r.log(audit.Entry{Kind: audit.KindActivationObserved, Actor: activator, Namespace: req.Namespace, Object: "ApprovalRequest/" + req.Name, SessionID: req.Spec.SessionID,
+		Message: "spec.draft is false; activation was performed outside the copilot", Detail: map[string]any{"target": "FleetTask/" + t.Name, "phase": string(t.Status.Phase), "approvedBy": req.Status.DecidedBy, "activatedBy": activator}})
+	r.event(ctx, req, corev1.EventTypeNormal, "ActivationObserved", fmt.Sprintf("FleetTask/%s left Draft after approval by %s, activated by %s; the copilot did not perform the activation", t.Name, req.Status.DecidedBy, activator))
 	return reconcile.Result{}, r.setStatus(ctx, req, func(s *focv1.ApprovalRequestStatus) {
-		s.State, s.ExecutedAt, s.Target, s.Message = focv1.StateExecuted, &now, &target, "activation observed (performed by a person, not by the copilot)"
+		s.State, s.ExecutedAt, s.Target, s.ActivatedBy = focv1.StateExecuted, &now, &target, activator
+		s.Message = "activation observed (performed by " + activator + ", not by the copilot)"
 	})
 }
 
@@ -361,8 +373,29 @@ func (r *Reconciler) execute(ctx context.Context, req *focv1.ApprovalRequest) (r
 	obj := "ApprovalRequest/" + req.Name
 	var target focv1.TargetRef
 	var err error
+	var checks *focv1.ChecksRecord
 	switch req.Spec.Type {
 	case focv1.RequestDraftTask:
+		var t *swarmv1.FleetTask
+		t, err = DraftTaskObject(req, req.Status.DecidedBy)
+		if err != nil {
+			break
+		}
+		var existing swarmv1.FleetTask
+		gerr := r.C.Get(ctx, client.ObjectKeyFromObject(t), &existing)
+		if gerr == nil && existing.Labels[fleet.RequestLabel] == req.Name {
+			// Created by this request on an earlier attempt: no re-check.
+			target, err = r.createDraft(ctx, req)
+			break
+		}
+		var refusal *policy.Decision
+		checks, refusal, err = r.recheckDraft(ctx, req, t)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+		if refusal != nil {
+			return reconcile.Result{}, r.refuseExecution(ctx, req, checks, *refusal)
+		}
 		target, err = r.createDraft(ctx, req)
 	case focv1.RequestZoneMaintenance:
 		target, err = r.createMaintenance(ctx, req)
@@ -393,6 +426,9 @@ func (r *Reconciler) execute(ctx context.Context, req *focv1.ApprovalRequest) (r
 	r.event(ctx, req, corev1.EventTypeNormal, "Executed", fmt.Sprintf("%s/%s written after approval by %s", target.Kind, target.Name, req.Status.DecidedBy))
 	return reconcile.Result{}, r.setStatus(ctx, req, func(s *focv1.ApprovalRequestStatus) {
 		s.State, s.ExecutedAt, s.Target, s.Message = focv1.StateExecuted, &now, &target, "executed"
+		if checks != nil {
+			s.ExecutionChecks = checks
+		}
 	})
 }
 

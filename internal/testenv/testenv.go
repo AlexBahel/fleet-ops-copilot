@@ -44,6 +44,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"k8s.io/client-go/discovery"
 	"net/http"
 	"os"
 	"os/exec"
@@ -298,6 +299,11 @@ func writeTokenFile(people []Person) (map[string]string, string, error) {
 		return nil, "", err
 	}
 	return tokens, dir, nil
+}
+
+// Discovery is a discovery client as the admin.
+func (e *Env) Discovery() discovery.DiscoveryInterface {
+	return discovery.NewDiscoveryClientForConfigOrDie(e.AdminCfg)
 }
 
 // PersonToken returns a person's bearer token (static token file).

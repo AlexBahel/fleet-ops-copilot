@@ -106,7 +106,8 @@ func newHarness(t *testing.T, mutate func(*policy.File)) *harness {
 	}
 	ctrlName := strings.ToLower(strings.ReplaceAll(t.Name(), "/", "-"))
 	if err := ctrl.NewControllerManagedBy(mgr).Named(ctrlName).For(&focv1.ApprovalRequest{}).
-		Watches(&focv1.ApprovalDecision{}, approval.DecisionToRequest()).Complete(rec); err != nil {
+		Watches(&focv1.ApprovalDecision{}, approval.DecisionToRequest()).
+		Watches(&swarmv1.FleetTask{}, approval.TaskToRequest()).Complete(rec); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())

@@ -12,6 +12,12 @@ rules:
   - apiGroups: ["swarmada.io"]
     resources: [robots, fleettasks, fleetactions, fleetzones, zonemaintenances, discoveredrobots, fleetadapters, robotclasses, tasktriggers]
     verbs: [get, list, watch]
+  # check_task reads the namespace stop markers and maxPendingActionsPerZone
+  # in code and drops the rest of the object (R66, R69); never through a
+  # model-facing tool.
+  - apiGroups: ["swarmada.io"]
+    resources: [swarmadaconfigs]
+    verbs: [get, list]
   # No Swarmada write of any kind: every change is an ApprovalRequest.
   - apiGroups: ["fleetops.alexbahel.github.io"]
     resources: [approvalrequests]
@@ -52,10 +58,22 @@ metadata:
   name: fleetops:foc-approvals
 rules:
   - apiGroups: ["swarmada.io"]
-    resources: [robots, fleettasks, fleetactions, fleetzones, zonemaintenances]
+    resources: [robots, fleettasks, fleetactions, fleetzones, zonemaintenances, fleetadapters]
     verbs: [get, list, watch]
+  # The execution re-check reads the namespace stop markers and the Pending
+  # cap (R66), as check_task does.
+  - apiGroups: ["swarmada.io"]
+    resources: [swarmadaconfigs]
+    verbs: [get, list]
   - apiGroups: ["swarmada.io"]
     resources: [zonemaintenances]
+    verbs: [create]
+  # Dry runs only: before an approved draft is created, each member is
+  # dry-run as a FleetAction so Swarmada's catalog check and Pending cap
+  # answer (R65, D76). The fleetops-foc-approvals-dry-run-only admission
+  # policy refuses any FleetAction create that is not a dry run.
+  - apiGroups: ["swarmada.io"]
+    resources: [fleetactions]
     verbs: [create]
   # Approved drafts only; the fleetops-foc-approvals-drafts-only admission
   # policy refuses any FleetTask create without spec.draft: true.
