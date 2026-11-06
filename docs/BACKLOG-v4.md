@@ -46,6 +46,7 @@ diagnose-07 runs 1–3); none from pass to fail (`docs/DESIGN.md` §4.4).
 |---|---|---|---|
 | P1 | `request_draft_task` has no waypoint field: an action's name, type, zone, priority, required capabilities, preferred robot and dependencies, and no payload (`internal/tools/requests.go`) | dispatch-04, Sonnet 5.5 and Opus 5.5, runs 1 to 3 | Done (FOC-8): `location` on the request, written into the payload (D77); dispatch-04 checks the waypoint on the request |
 | P2 | Conversations are kept in foc-agent's memory: lost on restart, one replica only | FOC-8 (D75) | Durable, owner-bound conversation state shared by replicas (for example a copilot-owned resource holding only the dialogue state, with the same bounds and TTL), so foc-agent can run more than one replica (R69) |
+| P3 | `foc activate` needs `fleetops:approver` to create its Activation record, which also grants deciding requests | FOC-8 (R71, R72) | A narrow `fleetops:activator` ClusterRole: `create` on `approvaldecisions` limited by admission to `type: Activation` (the `fleetops-decisions` policy checking the caller's role, or a separate `approvaldecisions/activation` subresource-style verb via `authorizer` in CEL), `get` on `approvalrequests`; no Verdict decisions (R72) |
 
 ## Not yet examined
 

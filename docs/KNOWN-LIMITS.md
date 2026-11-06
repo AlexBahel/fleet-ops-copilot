@@ -140,7 +140,10 @@ remove it.
   who cleared `spec.draft`. foc-approvals links the most recent record made after the approval and
   lists earlier ones (for example one whose patch Swarmada refused), so with two people activating
   at once the link can name the one whose patch lost. An activation made with `kubectl patch` and
-  no record is recorded as unknown.
+  no record is recorded as "activated outside foc activate; activator not recorded".
+- **`foc activate` needs the `fleetops:approver` role** (`create approvaldecisions`), which also
+  lets the holder approve or reject requests within their Swarmada permissions. A person who may
+  only activate uses `kubectl patch`, and the activator is then not recorded (BACKLOG-v4 P3).
 - **`stallsAfterActivationProxy`** in results.json is a proxy: `check_task` re-run on the fixture
   at the end of a run, not an observation of work left Pending by Swarmada.
 - **Fixture changes for v4.** Scenarios that file work set the live captures' FleetAdapter

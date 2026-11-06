@@ -570,8 +570,10 @@ leaves Draft, `foc-approvals` links the most recent Activation record made no ea
 approval (`status.activationRef`, `status.activatedBy`) and names any earlier ones in its
 `activation_observed` audit line and the request message (a record whose patch Swarmada refused
 stays, since foc activate records before it patches). An activation made without `foc activate`
-is recorded with the activator unknown. `foc activate` needs `create` on `approvaldecisions`,
-which the `fleetops:approver` role grants; without it, it stops before the patch. It prints the API server and
+(a plain `kubectl patch`, which still works) is recorded as "activated outside foc activate;
+activator not recorded" (`status.activatedBy: unknown`, R72). `foc activate` needs `create` on `approvaldecisions`,
+which the `fleetops:approver` role grants (accepted, R72; a narrower `fleetops:activator` role is
+in BACKLOG-v4 P3); without it, it stops before the patch. It prints the API server and
 namespace as `foc approve` does, and replaces the `kubectl patch` instruction.
 
 ## 4. Evaluation plan

@@ -474,8 +474,18 @@ a draft and a blocked check. Then it records the activation as an `ApprovalDecis
 sends the plain `spec.draft=false` patch; nothing is added to the FleetTask. Swarmada checks your
 `activate` verb. Recording needs `create` on `approvaldecisions` (the `fleetops:approver` role).
 foc-approvals links the record to the request when the task leaves Draft (`status.activatedBy`,
-`status.activationRef`); an activation made with `kubectl patch` is recorded with the activator
-unknown.
+`status.activationRef`).
+
+A plain `kubectl patch` still works for a person Swarmada allows to activate, with no
+`fleetops:approver` role needed:
+
+```bash
+kubectl --context <ctx> patch fleettask <task> -n warehouse-a --type merge -p '{"spec":{"draft":false}}'
+```
+
+Swarmada checks the same `activate` verb. foc-approvals still marks the request `Executed`, and its
+message, `activation_observed` audit line and Event say "activated outside foc activate; activator
+not recorded" (`status.activatedBy: unknown`).
 
 **Outcome and follow-up.** foc-approvals records the task's terminal phase on the DraftTask request
 (`status.outcome`). With choice 2 at the preview, a failed task also gets `status.followUp`, a
