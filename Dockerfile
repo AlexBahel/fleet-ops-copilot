@@ -8,6 +8,8 @@
 # so the audit file can be read with `kubectl exec`.
 FROM gcr.io/distroless/static:debug-nonroot
 ARG TARGETARCH
-COPY bin/linux-${TARGETARCH}/foc-mcp bin/linux-${TARGETARCH}/foc-approvals bin/linux-${TARGETARCH}/foc-agent /usr/local/bin/
-COPY policies/default.yaml /etc/fleetops/policies/default.yaml
+# --chmod: the mode in the image must not depend on the umask of the machine
+# that built the binaries (R60); test/image runs each one as user 65532.
+COPY --chmod=0755 bin/linux-${TARGETARCH}/foc-mcp bin/linux-${TARGETARCH}/foc-approvals bin/linux-${TARGETARCH}/foc-agent /usr/local/bin/
+COPY --chmod=0644 policies/default.yaml /etc/fleetops/policies/default.yaml
 USER 65532:65532

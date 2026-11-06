@@ -22,6 +22,7 @@ build: ## Build foc, foc-mcp, foc-approvals, foc-agent into bin/
 vet: ## go vet (including envtest-tagged files)
 	$(GO) vet ./...
 	$(GO) vet -tags envtest ./test/...
+	$(GO) vet -tags image ./test/image
 
 lint: ## golangci-lint
 	golangci-lint run ./...
@@ -64,6 +65,9 @@ KIND_CLUSTER ?=
 IMG ?= fleet-ops-copilot:dev
 ARCH ?= $(shell $(GO) env GOARCH)
 
+test-image: ## Build the binaries under umask 077 and the image, then run each binary in it as user 65532 (R60; needs Docker)
+	$(GO) test -tags image -count=1 -v ./test/image
+
 image: ## Build the foc-mcp/foc-approvals/foc-agent image (binaries built on the host, see Dockerfile)
 	CGO_ENABLED=0 GOOS=linux GOARCH=$(ARCH) $(GO) build -o $(BIN)/linux-$(ARCH)/ ./cmd/foc-mcp ./cmd/foc-approvals ./cmd/foc-agent
 	docker build --platform linux/$(ARCH) -t $(IMG) .
@@ -74,6 +78,9 @@ deploy-kind: image ## Install CRDs, RBAC, admission policies, foc-mcp, foc-appro
 	kubectl --context kind-$(KIND_CLUSTER) apply -f config/crd/ -f config/rbac/ -f config/admission/
 	kubectl --context kind-$(KIND_CLUSTER) -n foc-system create configmap fleetops-policy \
 		--from-file=default.yaml=policies/default.yaml --dry-run=client -o yaml \
+		| kubectl --context kind-$(KIND_CLUSTER) apply -f -
+	kubectl --context kind-$(KIND_CLUSTER) -n foc-system create configmap fleetops-catalogue \
+		--from-file=site.yaml=catalogue/warehouse-a.yaml --dry-run=client -o yaml \
 		| kubectl --context kind-$(KIND_CLUSTER) apply -f -
 	kubectl --context kind-$(KIND_CLUSTER) apply -f config/deploy/
 	kubectl --context kind-$(KIND_CLUSTER) -n foc-system rollout restart deploy/foc-mcp deploy/foc-approvals deploy/foc-agent

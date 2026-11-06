@@ -72,6 +72,13 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
       - name: make ci
         run: make ci
+      # R60: build the binaries under umask 077 and the image, and run each
+      # binary in it as user 65532. The runner has Docker; the test fails
+      # rather than skips when it cannot reach it.
+      - name: Image binaries run as the non-root user
+        run: make test-image
+        env:
+          FOC_IMAGE_TEST_REQUIRED: "1"
       - uses: actions/upload-artifact@v7
         if: always()
         with:
