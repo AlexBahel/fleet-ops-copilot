@@ -27,8 +27,14 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
+
+	"crypto/sha256"
+
+	"k8s.io/client-go/tools/clientcmd"
 
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -45,12 +51,14 @@ func chat(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	kctx := fs.String("context", "", "kubeconfig context whose user's token is sent (default: the current context)")
 	operator := fs.String("operator", "", "name shown in the request if the token is not verified")
 	session := fs.String("session", "", "session id to continue (printed by a previous foc chat)")
+	newConv := fs.Bool("new", false, "start a new conversation instead of continuing the one kept for this context")
+	followUp := fs.String("follow-up", "", "start a conversation at the preview of the follow-up foc-approvals prepared for this ApprovalRequest")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	msg := strings.TrimSpace(strings.Join(fs.Args(), " "))
-	if msg == "" {
-		return errors.New("usage: foc chat [-agent URL] [--context NAME] [-operator NAME] [-session ID] MESSAGE")
+	if msg == "" && *followUp == "" {
+		return errors.New("usage: foc chat [-agent URL] [--context NAME] [-operator NAME] [-session ID] [-new] [-follow-up REQUEST] MESSAGE")
 	}
 	if err := tokenSafeURL(*agent); err != nil {
 		return err
@@ -63,7 +71,12 @@ func chat(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	body, _ := json.Marshal(map[string]string{"operator": *operator, "sessionId": *session, "message": msg})
+	key := conversationKey(*kctx, *agent)
+	conv := ""
+	if !*newConv && *followUp == "" {
+		conv = loadConversation(key)
+	}
+	body, _ := json.Marshal(map[string]string{"operator": *operator, "sessionId": *session, "conversationId": conv, "followUp": *followUp, "message": msg})
 	ctx, cancel := context.WithTimeout(ctx, 11*time.Minute)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(*agent, "/")+"/api/chat", bytes.NewReader(body))
@@ -80,10 +93,12 @@ func chat(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		_, _ = fmt.Fprintln(stderr, "foc: this kubeconfig user has no bearer token (client certificate?); the request is unverified and any request it files can never be approved")
 	}
 	var out struct {
-		SessionID string `json:"sessionId"`
-		Answer    string `json:"answer"`
-		Error     string `json:"error"`
-		ToolCalls []struct {
+		SessionID      string `json:"sessionId"`
+		ConversationID string `json:"conversationId"`
+		Notice         string `json:"notice"`
+		Answer         string `json:"answer"`
+		Error          string `json:"error"`
+		ToolCalls      []struct {
 			Name, PolicyCode, Created string
 			Refused, IsError          bool
 		} `json:"toolCalls"`
@@ -101,11 +116,68 @@ func chat(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		}
 		_, _ = fmt.Fprintln(stdout, line)
 	}
+	if out.ConversationID != "" {
+		if err := saveConversation(key, out.ConversationID); err != nil {
+			_, _ = fmt.Fprintf(stderr, "foc: could not keep the conversation id: %v\n", err)
+		}
+	}
+	if out.Notice != "" {
+		_, _ = fmt.Fprintln(stderr, "foc: "+out.Notice)
+	}
 	if out.Error != "" {
 		return fmt.Errorf("foc-agent: %s", out.Error)
 	}
 	_, _ = fmt.Fprintf(stdout, "%s\n(session %s)\n", out.Answer, out.SessionID)
 	return nil
+}
+
+// conversationKey names the kept conversation of a kubeconfig context and a
+// foc-agent URL (D75): another context, or another foc-agent, starts its own.
+func conversationKey(kctx, agent string) string {
+	if kctx == "" {
+		if raw, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(clientcmd.NewDefaultClientConfigLoadingRules(), nil).RawConfig(); err == nil {
+			kctx = raw.CurrentContext
+		}
+	}
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(kctx+"\x00"+agent)))[:32]
+}
+
+// conversationFile is under the user's state directory: $XDG_STATE_HOME/foc,
+// else ~/.local/state/foc. The id is only useful to its owner (foc-agent
+// checks the requester), and the file is mode 600.
+func conversationFile(key string) (string, error) {
+	dir := os.Getenv("XDG_STATE_HOME")
+	if dir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		dir = filepath.Join(home, ".local", "state")
+	}
+	return filepath.Join(dir, "foc", "conversations", key), nil
+}
+
+func loadConversation(key string) string {
+	p, err := conversationFile(key)
+	if err != nil {
+		return ""
+	}
+	b, err := os.ReadFile(p)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
+}
+
+func saveConversation(key, id string) error {
+	p, err := conversationFile(key)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+		return err
+	}
+	return os.WriteFile(p, []byte(id+"\n"), 0o600)
 }
 
 // tokenSafeURL allows the person's token to go only over https or to a

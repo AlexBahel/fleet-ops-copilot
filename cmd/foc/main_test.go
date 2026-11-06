@@ -44,6 +44,12 @@ func TestActivationBanner(t *testing.T) {
 			t.Errorf("API server must come before the command:\n%s", got)
 		}
 	})
+	t.Run("foc activate with a context", func(t *testing.T) {
+		got := activationBanner("https://127.0.0.1:6443", "warehouse-a", "kind-foc-x", "foc activate areq-1 -n warehouse-a")
+		if !strings.Contains(got, "  foc activate areq-1 -n warehouse-a --context kind-foc-x\n") {
+			t.Errorf("banner:\n%s", got)
+		}
+	})
 	t.Run("explicit context", func(t *testing.T) {
 		got := activationBanner("https://127.0.0.1:6443", "warehouse-a", "kind-foc-x", instr)
 		want := `  kubectl --context kind-foc-x patch fleettask t1 -n warehouse-a --type merge -p '{"spec":{"draft":false}}'` + "\n"
@@ -101,6 +107,37 @@ func TestChatSendsTheKubeconfigToken(t *testing.T) {
 	// A basic-auth user's password is not sent; no token means unverified.
 	if gotAuth != "" || !strings.Contains(errOut.String(), "no bearer token") {
 		t.Fatalf("auth %q stderr %q", gotAuth, errOut.String())
+	}
+}
+
+// D75: foc chat keeps the conversation id per context and sends it back;
+// -new starts a fresh one.
+func TestChatKeepsTheConversation(t *testing.T) {
+	var bodies []string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		bodies = append(bodies, string(b))
+		_, _ = w.Write([]byte(`{"sessionId":"web-1234567890abcdef","conversationId":"abcdefghijklmnopqrstuvwxyz","answer":"ok"}`))
+	}))
+	defer ts.Close()
+	state := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", state)
+	t.Setenv("KUBECONFIG", writeKubeconfig(t, `{token: person-token-1}`))
+	var out, errOut bytes.Buffer
+	for _, args := range [][]string{{"-agent", ts.URL, "inspect the dock"}, {"-agent", ts.URL, "1"}, {"-agent", ts.URL, "-new", "hello"}} {
+		if err := chat(context.Background(), args, &out, &errOut); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if strings.Contains(bodies[0], `"conversationId":"abc`) || !strings.Contains(bodies[1], `"conversationId":"abcdefghijklmnopqrstuvwxyz"`) || strings.Contains(bodies[2], `"conversationId":"abc`) {
+		t.Fatalf("bodies %v", bodies)
+	}
+	files, _ := filepath.Glob(filepath.Join(state, "foc", "conversations", "*"))
+	if len(files) != 1 {
+		t.Fatalf("files %v", files)
+	}
+	if fi, err := os.Stat(files[0]); err != nil || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("mode %v %v", fi.Mode(), err)
 	}
 }
 

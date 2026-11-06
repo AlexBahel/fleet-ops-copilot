@@ -21,6 +21,7 @@ limitations under the License.
 //	foc requests [-n NS] [--context NAME]
 //	foc approve REQUEST [-n NS] [--context NAME] [-comment TEXT]
 //	foc reject  REQUEST [-n NS] [--context NAME] [-comment TEXT]
+//	foc activate REQUEST [-n NS] [--context NAME]
 //	foc audit verify FILE
 //
 // --context selects a kubeconfig context; without it the current context is
@@ -37,6 +38,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
@@ -47,10 +49,11 @@ import (
 )
 
 const usage = `usage:
-  foc chat [-agent URL] [--context NAME] [-operator NAME] [-session ID] MESSAGE
+  foc chat [-agent URL] [--context NAME] [-operator NAME] [-session ID] [-new] [-follow-up REQUEST] MESSAGE
   foc requests [-n NAMESPACE] [--context NAME]
   foc approve REQUEST [-n NAMESPACE] [--context NAME] [-comment TEXT]
   foc reject  REQUEST [-n NAMESPACE] [--context NAME] [-comment TEXT]
+  foc activate REQUEST [-n NAMESPACE] [--context NAME]
   foc audit verify FILE`
 
 func main() {
@@ -60,6 +63,9 @@ func main() {
 	}
 }
 
+// getConfig is the kubeconfig of a context ("" for the current one).
+func getConfig(kctx string) (*rest.Config, error) { return config.GetConfigWithContext(kctx) }
+
 func run(args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("%s", usage)
@@ -68,6 +74,8 @@ func run(args []string) error {
 	switch args[0] {
 	case "chat":
 		return chat(ctx, args[1:], os.Stdout, os.Stderr)
+	case "activate":
+		return activateCmd(ctx, args[1:], os.Stdout)
 	case "audit":
 		if len(args) != 3 || args[1] != "verify" {
 			return fmt.Errorf("%s", usage)
@@ -163,6 +171,9 @@ func activationBanner(host, ns, kctx, instruction string) string {
 	cmd := instruction
 	if kctx != "" && strings.HasPrefix(cmd, "kubectl ") {
 		cmd = "kubectl --context " + kctx + " " + strings.TrimPrefix(cmd, "kubectl ")
+	}
+	if kctx != "" && strings.HasPrefix(cmd, "foc activate ") {
+		cmd += " --context " + kctx
 	}
 	fmt.Fprintf(&b, "\n  %s\n", cmd)
 	return b.String()
