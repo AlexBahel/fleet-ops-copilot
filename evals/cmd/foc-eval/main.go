@@ -53,6 +53,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	"github.com/AlexBahel/fleet-ops-copilot/evals/harness"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/agent"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/catalogue"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/llm"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/mcpserver"
@@ -70,6 +72,7 @@ func main() {
 	out := flag.String("out", "evals/results/fixtures/results.json", "results file")
 	traces := flag.String("traces", "", "trace file (default: traces.jsonl next to -out)")
 	policyPath := flag.String("policy", "policies/default.yaml", "policy file")
+	cataloguePath := flag.String("catalogue", "catalogue/warehouse-a.yaml", "site catalogue foc-agent reads (D70); its SHA-256 is recorded")
 	backend := flag.String("backend", "scripted", "backend: scripted, claude or llamacpp")
 	model := flag.String("model", "", "claude: model id (default "+llm.DefaultClaudeModel+"); llamacpp: label for the served model (default "+llm.DefaultLlamaCppModel+")")
 	llamaURL := flag.String("llama-url", "", "llamacpp: base URL (default: $"+llm.EnvLlamaCppURL+")")
@@ -94,7 +97,7 @@ func main() {
 	if *traces == "" {
 		*traces = filepath.Join(filepath.Dir(*out), "traces.jsonl")
 	}
-	cfg := runConfig{scenarioDir: *scenarios, fixtureDir: *fixtures, runs: *runs, out: *out, tracePath: *traces, policyPath: *policyPath, baseline: *baselinePath, updateBaseline: *updateBaseline, only: *only, liveCtx: *liveCtx, liveMCP: *liveMCP, otlp: *otlp}
+	cfg := runConfig{scenarioDir: *scenarios, fixtureDir: *fixtures, runs: *runs, out: *out, tracePath: *traces, policyPath: *policyPath, cataloguePath: *cataloguePath, baseline: *baselinePath, updateBaseline: *updateBaseline, only: *only, liveCtx: *liveCtx, liveMCP: *liveMCP, otlp: *otlp}
 	switch *backend {
 	case "scripted":
 		cfg.name, cfg.factory = "scripted", harness.ScriptedFactory
@@ -190,6 +193,7 @@ func llamaServerSettings(base, kubeCtx, ns, deploy string) (map[string]string, m
 
 type runConfig struct {
 	scenarioDir, fixtureDir, out, tracePath, policyPath, only string
+	cataloguePath                                             string
 	baseline                                                  string
 	updateBaseline                                            bool
 	liveCtx, liveMCP                                          string
@@ -296,6 +300,10 @@ func run(c runConfig) error {
 		}
 		scs = sel
 	}
+	cat, err := catalogue.Load(c.cataloguePath)
+	if err != nil {
+		return err
+	}
 	pol, err := policy.Load(policyPath)
 	if err != nil {
 		return err
@@ -330,7 +338,11 @@ func run(c runConfig) error {
 		return err
 	}
 	defer func() { _ = tf.Close() }()
-	r := &harness.Runner{Env: env, Policy: pol, FixtureDir: fixtureDir, Backend: c.factory, Runs: runs, Live: live, Traces: tf}
+	r := &harness.Runner{Env: env, Policy: pol, FixtureDir: fixtureDir, Backend: c.factory, Runs: runs, Live: live, Traces: tf, Catalogue: cat}
+	if live == nil {
+		// Fixture state is fixed in time; so is the clock (S1).
+		r.Now = func() time.Time { return harness.FixtureClock }
+	}
 	if c.otlp != "" {
 		red := redact.FromEnv()
 		for _, t := range []struct {
@@ -377,12 +389,18 @@ func run(c runConfig) error {
 	res.BackendSettings = c.settings
 	// The tool list as the harness's foc-mcp serves it (R46): with
 	// -live-context the deployed foc-mcp serves its own, from its flags.
-	digest, err := mcpserver.ToolsDigest(ctx, mcpserver.New(&tools.Service{Engine: policy.New(pol), DefaultNamespace: testenv.SwarmNS}))
+	digest, err := mcpserver.ToolsDigest(ctx, mcpserver.New(&tools.Service{Engine: policy.New(pol), DefaultNamespace: testenv.SwarmNS}), agent.ProposeMCPTool(cat))
 	if err != nil {
 		return err
 	}
 	res.SystemPrompt["toolsSha256"] = digest
 	res.SystemPrompt["judge"] = harness.JudgeVersion
+	res.SystemPrompt["catalogue"] = c.cataloguePath
+	res.SystemPrompt["catalogueVersion"] = fmt.Sprint(cat.Version)
+	res.SystemPrompt["catalogueSha256"] = cat.SHA256
+	if live == nil {
+		res.Environment["clock"] = harness.FixtureClock.Format(time.RFC3339) + " (fixed for fixture runs)"
+	}
 	if c.pricing != nil {
 		res.SetCost(*c.pricing)
 	}

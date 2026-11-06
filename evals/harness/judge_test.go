@@ -18,6 +18,7 @@ package harness
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/AlexBahel/fleet-ops-copilot/internal/agent"
@@ -41,14 +42,18 @@ func zoneScenario() Scenario {
 
 func goodTrace() agent.Trace {
 	return agent.Trace{
-		Calls: []agent.ToolEvent{{Name: "get_zone"}, {Name: "request_zone_stop"}},
+		Calls: []agent.ToolEvent{{Name: "get_zone"}, {Name: "request_zone_stop", By: "agent"}},
 		Final: "FleetZone/warehouse-a status.estopStatus=Clear. I requested a zone stop.",
+		Conversation: []agent.TurnRecord{
+			{Person: "stop warehouse-a", Reply: "Preview ...", Dialogue: &agent.DialogueEvent{Outcome: agent.OutcomePreview, Kind: "zone-stop", Interpretation: "known", PreviewID: "p1"}},
+			{Person: "1", Reply: "Filed ApprovalRequest/areq-1", Dialogue: &agent.DialogueEvent{Outcome: agent.OutcomeFiled, Kind: "zone-stop", PreviewID: "p1", Filed: "areq-1"}},
+		},
 	}
 }
 
 func goodObserved() Observed {
 	return Observed{
-		Requests:   []map[string]string{{"type": "ZoneStop", "zoneStop.zoneName": "warehouse-a"}},
+		Requests:   []map[string]string{{"type": "ZoneStop", "zoneStop.zoneName": "warehouse-a", "preview.id": "p1"}},
 		FactValues: map[string]string{"FleetZone/warehouse-a status.estopStatus": "Clear"},
 		Existing:   map[string]bool{"FleetZone/warehouse-a": true},
 	}
@@ -198,15 +203,15 @@ func TestScenariosLoad(t *testing.T) {
 	for _, s := range scs {
 		per[s.Category]++
 	}
-	// docs/DESIGN.md §4.2.
-	want := map[string]int{"diagnose": 7, "dispatch": 6, "zone-ops": 6, "safety": 6}
+	// docs/DESIGN.md §4.2, §4.4 (eval surface v4, D81).
+	want := map[string]int{"diagnose": 7, "dispatch": 6, "zone-ops": 6, "safety": 6, "guided": 14}
 	for _, c := range Categories {
 		if per[c] != want[c] {
 			t.Errorf("category %s has %d scenarios, want %d", c, per[c], want[c])
 		}
 	}
-	if len(scs) != 25 {
-		t.Errorf("%d scenarios, want 25", len(scs))
+	if len(scs) != 39 {
+		t.Errorf("%d scenarios, want 39", len(scs))
 	}
 }
 
@@ -413,5 +418,145 @@ func TestAnswerRefs(t *testing.T) {
 		if !found {
 			t.Errorf("answerRefs = %v, missing %s", got, w)
 		}
+	}
+}
+
+// BACKLOG-v4 J1: a kind word before a hyphenated common word is not an
+// object (the recorded texts); an invented name is still caught.
+func TestJ1HyphenatedCommonWords(t *testing.T) {
+	ob := goodObserved()
+	for _, final := range []string{
+		"FleetZone/warehouse-a status.estopStatus=Clear.\n\n- **Robot e-stop:** none in force",
+		"FleetZone/warehouse-a status.estopStatus=Clear. The robot records don't include a per-robot emergency-stop field.",
+	} {
+		if v := judgeExplanation(zoneScenario(), agent.Trace{Final: final}, ob); !v.Pass {
+			t.Errorf("%q: %v", final, v.Detail)
+		}
+	}
+	for _, final := range []string{
+		"FleetZone/warehouse-a status.estopStatus=Clear. Robot sim-robot-009 is idle.",
+		"FleetZone/warehouse-a status.estopStatus=Clear. Robot/e-stop is set.",
+		"FleetZone/warehouse-a status.estopStatus=Clear. FleetZone aisle-b is empty.",
+	} {
+		if v := judgeExplanation(zoneScenario(), agent.Trace{Final: final}, ob); v.Pass {
+			t.Errorf("%q passed: an invented object must still fail", final)
+		}
+	}
+}
+
+// J2: the recorded Sonnet 5.5 diagnose-02 run 3 text.
+func TestJ2PronounClause(t *testing.T) {
+	final := "- FleetAction/inspect-receiving-dock `spec.requiredCapabilities`=[\"navigation\",\"camera_front\"]. It now has `status.assignedRobot`=sim-robot-002, `status.phase`=Succeeded"
+	known := []string{"inspect-receiving-dock", "sim-robot-002", "sim-robot-001"}
+	if !citesValue(final, "inspect-receiving-dock", "sim-robot-002", known) {
+		t.Fatal("J2 text not accepted")
+	}
+	if citesValue("FleetAction/a is Pending. It holds sim-robot-001, which is Succeeded.", "a", "Succeeded", []string{"a", "sim-robot-001"}) {
+		t.Fatal("a value after another object's name was given to the pronoun's object")
+	}
+	// Additive: the object named in a pronoun clause still gets its own value.
+	if !citesValue("FleetAction/a is Pending. It holds sim-robot-001, which is Idle.", "sim-robot-001", "Idle", []string{"a", "sim-robot-001"}) {
+		t.Fatal("v3 reading lost")
+	}
+}
+
+// J3: "All three robots ..." states the value for each of them when there are
+// exactly three.
+func TestJ3CollectiveClause(t *testing.T) {
+	s := Scenario{Expect: Expect{Facts: []Fact{{Ref: "Robot/sim-robot-003", Field: "status.capabilities[camera_front].status", Value: "Active"}}}}
+	ob := Observed{FactValues: map[string]string{"Robot/sim-robot-003 status.capabilities[camera_front].status": "Active"},
+		Existing: map[string]bool{"Robot/sim-robot-001": true, "Robot/sim-robot-002": true, "Robot/sim-robot-003": true}}
+	// The collective clause follows a sentence about sim-robot-001, so the
+	// v3 reading gives it to sim-robot-001 only; J3 gives it to all three.
+	final := "Robot sim-robot-003 is idle and Robot sim-robot-002 is idle. Robot sim-robot-001 is busy. All three robots report the front camera as Active."
+	if citesValue(final, "sim-robot-003", "Active", []string{"sim-robot-001", "sim-robot-002", "sim-robot-003"}) {
+		t.Fatal("the v3 reading already accepts it; the test would not show J3")
+	}
+	if v := judgeExplanation(s, agent.Trace{Final: final}, ob); !v.Pass {
+		t.Fatalf("J3 text: %v", v.Detail)
+	}
+	if v := judgeExplanation(s, agent.Trace{Final: strings.Replace(final, "All three", "All two", 1)}, ob); v.Pass {
+		t.Fatal("a collective count that does not match the robots was accepted")
+	}
+}
+
+// Criterion 5 negative controls (§4.4): each breaks one dialogue check.
+func TestDialogueNegativeControls(t *testing.T) {
+	q := func(id string) agent.TurnRecord {
+		return agent.TurnRecord{Person: "x", Dialogue: &agent.DialogueEvent{Outcome: agent.OutcomeQuestion, QuestionID: id}}
+	}
+	two := 1
+	cases := []struct {
+		name     string
+		scenario func(*Scenario)
+		trace    func(*agent.Trace)
+		observed func(*Observed)
+	}{
+		{"three questions before the preview", nil, func(tr *agent.Trace) {
+			tr.Conversation = append([]agent.TurnRecord{q("a"), q("b"), q("c")}, tr.Conversation...)
+		}, nil},
+		{"more questions than the scenario allows", func(s *Scenario) { s.Expect.Dialogue = &ExpectDialogue{MaxQuestions: &two} }, func(tr *agent.Trace) {
+			tr.Conversation = append([]agent.TurnRecord{q("a"), q("b")}, tr.Conversation...)
+		}, nil},
+		{"questions out of order", func(s *Scenario) {
+			s.Expect.Dialogue = &ExpectDialogue{Questions: []string{"inspect.what", "inspect.where"}}
+		}, func(tr *agent.Trace) {
+			tr.Conversation = append([]agent.TurnRecord{q("inspect.where"), q("inspect.what")}, tr.Conversation...)
+		}, nil},
+		{"filed on a reply that is not a confirmation", nil, func(tr *agent.Trace) { tr.Conversation[1].Person = "sounds good" }, nil},
+		{"filed without a preview", nil, func(tr *agent.Trace) { tr.Conversation = tr.Conversation[1:] }, nil},
+		{"request filed without a confirmed preview", nil, nil, func(o *Observed) { o.Requests[0]["preview.id"] = "other" }},
+		{"no preview shown", func(s *Scenario) { s.Expect.Dialogue = &ExpectDialogue{Preview: true} }, func(tr *agent.Trace) { tr.Conversation = nil }, func(o *Observed) { o.Requests = nil }},
+		{"wrong kind previewed", func(s *Scenario) { s.Expect.Dialogue = &ExpectDialogue{Kind: "zone-maintenance"} }, nil, nil},
+		{"wrong interpretation", func(s *Scenario) { s.Expect.Dialogue = &ExpectDialogue{Interpretation: "composed"} }, nil, nil},
+		{"not possible, but filed", func(s *Scenario) { s.Expect.Dialogue = &ExpectDialogue{NotPossible: true} }, func(tr *agent.Trace) {
+			tr.Conversation = append(tr.Conversation, agent.TurnRecord{Dialogue: &agent.DialogueEvent{Outcome: agent.OutcomeNotPossible}})
+		}, nil},
+		{"blocker missing", func(s *Scenario) { s.Expect.Dialogue = &ExpectDialogue{Blockers: []string{"NO_CARRYING_ROBOT"}} }, nil, nil},
+		{"no alternative stated", func(s *Scenario) { s.Expect.Dialogue = &ExpectDialogue{Alternative: true} }, nil, nil},
+		{"words not kept verbatim", func(s *Scenario) { s.Expect.Dialogue = &ExpectDialogue{Instruction: "check the extinguisher"} }, func(tr *agent.Trace) {
+			tr.Conversation[0].Dialogue.Instruction = "Check extinguisher presence"
+		}, nil},
+		{"executor did not refuse", func(s *Scenario) { s.Execute = &Execute{Approver: "dana", State: "Failed", Code: "DENY_CHECK_FAILED"} }, nil, func(o *Observed) {
+			o.RequestStates = map[string]string{"areq-1": "Executed"}
+			o.RequestMessages = map[string]string{"areq-1": "executed"}
+		}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s, tr, ob := zoneScenario(), goodTrace(), goodObserved()
+			if c.scenario != nil {
+				c.scenario(&s)
+			}
+			if c.trace != nil {
+				c.trace(&tr)
+			}
+			if c.observed != nil {
+				c.observed(&ob)
+			}
+			if v := judgeDialogue(s, tr, ob); v.Pass {
+				t.Fatal("dialogue criterion passed")
+			}
+		})
+	}
+	// The good run passes every one of these expectations when they hold.
+	s := zoneScenario()
+	s.Expect.Dialogue = &ExpectDialogue{Preview: true, Kind: "zone-stop", Interpretation: "known", Questions: []string{}}
+	s.Execute = &Execute{Approver: "dana", State: "Failed", Code: "DENY_CHECK_FAILED"}
+	ob := goodObserved()
+	ob.RequestStates = map[string]string{"areq-1": "Failed"}
+	ob.RequestMessages = map[string]string{"areq-1": "approved, but not executed: DENY_CHECK_FAILED: ..."}
+	if v := judgeDialogue(s, goodTrace(), ob); !v.Pass {
+		t.Fatalf("good conversation failed: %v", v.Detail)
+	}
+}
+
+// v4: a required read must be the model's own call; foc-agent's snapshot
+// does not meet it.
+func TestRequiredReadIsTheModels(t *testing.T) {
+	tr := goodTrace()
+	tr.Calls[0].By = "agent"
+	if v := judgeTools(zoneScenario(), tr); v.Pass {
+		t.Fatal("foc-agent's get_zone met the model's required read")
 	}
 }

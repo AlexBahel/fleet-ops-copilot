@@ -31,8 +31,9 @@ import (
 	"github.com/AlexBahel/fleet-ops-copilot/internal/llm"
 )
 
-// Categories are the four scenario categories of docs/DESIGN.md §4.2.
-var Categories = []string{"diagnose", "dispatch", "zone-ops", "safety"}
+// Categories are the scenario categories of docs/DESIGN.md §4.2; guided
+// (multi-turn task requests, §4.4) was added with eval surface v4 (D81).
+var Categories = []string{"diagnose", "dispatch", "zone-ops", "safety", "guided"}
 
 // Scenario is one evaluation case.
 type Scenario struct {
@@ -49,13 +50,75 @@ type Scenario struct {
 	// identity (R39).
 	OperatorIdentity string `json:"-"`
 	Prompt           string `json:"prompt"`
-	// Script is the scripted backend's turns. Model backends ignore it.
+	// Script is the scripted backend's turns. Model backends ignore it. In
+	// a conversation the steps are consumed in order across the person's
+	// messages; a message foc-agent answers itself (a numbered choice, a
+	// confirmation) consumes none.
 	Script []ScriptStep `json:"script"`
-	Expect Expect       `json:"expect"`
+	// Responder is the scripted person (§4.4): the reply to each question
+	// id ("inspect.what", "somethingElse.describe", ...) and to "preview".
+	// Without it the scenario is one message.
+	Responder map[string]string `json:"responder,omitempty"`
+	// MaxTurns bounds the person's messages (default 6).
+	MaxTurns int `json:"maxTurns,omitempty"`
+	// Execute approves the filed request as a fixture person and runs the
+	// approval reconciler, after applying AfterFiling (D76).
+	Execute *Execute `json:"execute,omitempty"`
+	// Setup changes the fixture after it is loaded and before the run, in the
+	// scenario file where a reader sees it. Used to show the live captures'
+	// adapter Connected, as it was while the scenario ran (the captures show
+	// Disconnected only because the quickstart stops its adapter on exit,
+	// D31, D47); the capture files are not changed.
+	Setup  []Mutation `json:"setup,omitempty"`
+	Expect Expect     `json:"expect"`
 }
 
-// ScriptStep is one scripted turn: one tool call, or the final answer.
+// Execute is what happens after the conversation.
+type Execute struct {
+	Approver    string     `json:"approver"`
+	AfterFiling []Mutation `json:"afterFiling,omitempty"`
+	// State and Code are what the request must end in.
+	State string `json:"state"`
+	Code  string `json:"code,omitempty"`
+}
+
+// Mutation changes the fixture between filing and approval: a merge patch on
+// the object (Status: on its status), or its deletion.
+type Mutation struct {
+	Ref    string         `json:"ref"`
+	Patch  map[string]any `json:"patch,omitempty"`
+	Status bool           `json:"status,omitempty"`
+	Delete bool           `json:"delete,omitempty"`
+}
+
+// ExpectDialogue is criterion 5 (§4.4). The cap of two questions before the
+// preview, and "nothing filed without a confirmed preview", apply to every
+// scenario whether or not this is set.
+type ExpectDialogue struct {
+	// MaxQuestions bounds the questions before the preview (at most 2).
+	MaxQuestions *int `json:"maxQuestions,omitempty"`
+	// Questions are the question ids asked, in order.
+	Questions []string `json:"questions,omitempty"`
+	// Preview requires a preview to be shown, of Kind when set.
+	Preview bool   `json:"preview,omitempty"`
+	Kind    string `json:"kind,omitempty"`
+	// Interpretation of a "something else" answer: known, composed or
+	// notPossible.
+	Interpretation string `json:"interpretation,omitempty"`
+	// NotPossible: the copilot says the request cannot be made, and files
+	// nothing.
+	NotPossible bool `json:"notPossible,omitempty"`
+	// Blockers must appear in the preview; Alternative requires one stated.
+	Blockers    []string `json:"blockers,omitempty"`
+	Alternative bool     `json:"alternative,omitempty"`
+	// Instruction: the person's words kept verbatim must equal it.
+	Instruction string `json:"instruction,omitempty"`
+}
+
+// ScriptStep is one scripted turn: one tool call (with optional text the
+// model says with it), or the final answer.
 type ScriptStep struct {
+	Say   string         `json:"say,omitempty"`
 	Tool  string         `json:"tool,omitempty"`
 	Args  map[string]any `json:"args,omitempty"`
 	Final string         `json:"final,omitempty"`
@@ -79,6 +142,8 @@ type Expect struct {
 	Refusal *ExpectRefusal `json:"refusal,omitempty"`
 	// Facts must hold in the fixture and be cited in the answer.
 	Facts []Fact `json:"facts"`
+	// Dialogue is criterion 5 (§4.4).
+	Dialogue *ExpectDialogue `json:"dialogue,omitempty"`
 	// Absent lists objects the operator asks about that do not exist. The
 	// answer must name each one and cite every item its list tool returned
 	// (docs/DESIGN.md D45).
@@ -182,8 +247,15 @@ func (s Scenario) validate() error {
 		// Approval, refusal and absent-object scenarios may pin no fact; the
 		// answer must still cite a real one (D40, D45).
 		return fmt.Errorf("a scenario that expects no approval, refusal or absent object must require at least one API fact")
-	case len(s.Script) == 0 || s.Script[len(s.Script)-1].Final == "":
-		return fmt.Errorf("the script must end with a final answer")
+	case len(s.Script) == 0:
+		return fmt.Errorf("a scenario needs a script")
+	case s.Responder == nil && s.Script[len(s.Script)-1].Final == "" && s.Script[len(s.Script)-1].Tool != "propose_task":
+		// propose_task ends the turn with the copilot's own text.
+		return fmt.Errorf("a one-message script must end with a final answer or propose_task")
+	case s.Expect.Dialogue != nil && s.Expect.Dialogue.MaxQuestions != nil && *s.Expect.Dialogue.MaxQuestions > 2:
+		return fmt.Errorf("maxQuestions above the cap of 2")
+	case s.Execute != nil && (s.Execute.Approver == "" || s.Execute.State == ""):
+		return fmt.Errorf("execute needs an approver and the state the request must end in")
 	}
 	for _, a := range s.Expect.Absent {
 		if kind, name, ok := strings.Cut(a.Ref, "/"); !ok || kind == "" || name == "" || !strings.HasPrefix(a.List, "list_") {
@@ -193,6 +265,9 @@ func (s Scenario) validate() error {
 	for i, st := range s.Script {
 		if (st.Tool == "") == (st.Final == "") {
 			return fmt.Errorf("script step %d must have exactly one of tool or final", i)
+		}
+		if st.Say != "" && st.Tool == "" {
+			return fmt.Errorf("script step %d: say goes with a tool call", i)
 		}
 	}
 	return nil
@@ -210,7 +285,7 @@ func (s Scenario) ScriptedBackend() (*llm.Scripted, error) {
 		if err != nil {
 			return nil, err
 		}
-		sc.Steps = append(sc.Steps, llm.Step{Calls: []llm.ToolCall{{ID: fmt.Sprintf("call-%d", i), Name: st.Tool, Args: args}}})
+		sc.Steps = append(sc.Steps, llm.Step{Final: st.Say, Calls: []llm.ToolCall{{ID: fmt.Sprintf("call-%d", i), Name: st.Tool, Args: args}}})
 	}
 	return sc, nil
 }

@@ -90,6 +90,18 @@ type Trace struct {
 	// question asked, a preview shown, a request filed, ...; nil for a plain
 	// answer.
 	Dialogue *DialogueEvent `json:"dialogue,omitempty"`
+	// Conversation is set on a trace that combines several messages (the
+	// evaluation harness): one record per person message, in order.
+	Conversation []TurnRecord `json:"conversation,omitempty"`
+}
+
+// TurnRecord is one person message and the copilot's reply.
+type TurnRecord struct {
+	Person   string         `json:"person"`
+	Reply    string         `json:"reply"`
+	Dialogue *DialogueEvent `json:"dialogue,omitempty"`
+	// Stalled: the scripted person had no reply for the question asked.
+	Stalled bool `json:"stalled,omitempty"`
 }
 
 // LocalTool is a tool foc-agent handles itself. Call returns the content

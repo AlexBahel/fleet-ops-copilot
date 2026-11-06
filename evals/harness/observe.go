@@ -216,8 +216,10 @@ func Observe(ctx context.Context, admin client.Client, s Scenario, answer string
 		return ob, err
 	}
 	ob.RequestStates = map[string]string{}
+	ob.RequestMessages = map[string]string{}
 	for _, r := range reqs.Items {
 		ob.RequestStates[r.Name] = string(r.Status.State)
+		ob.RequestMessages[r.Name] = r.Status.Message
 		b, _ := json.Marshal(r.Spec)
 		var m map[string]any
 		_ = json.Unmarshal(b, &m)
@@ -296,6 +298,12 @@ func flatten(prefix string, v any, out map[string]string) {
 				p = prefix + "." + k
 			}
 			flatten(p, x, out)
+		}
+	case []any:
+		// v4: list items are addressable (draftTask.actions[0].location.waypoint).
+		out[prefix] = fmt.Sprint(t)
+		for i, x := range t {
+			flatten(fmt.Sprintf("%s[%d]", prefix, i), x, out)
 		}
 	default:
 		out[prefix] = fmt.Sprint(t)
