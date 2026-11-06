@@ -19,7 +19,9 @@ CTX=kind-foc-<name>
 
 One command from an empty machine state to a running stack. Needs Docker (running), kind,
 kubectl, helm 3.8+, jq, openssl, curl, make, Go and python3 (Swarmada's live quickstart runs a
-simulated adapter). Everything it keeps (kubeconfig, the people's tokens and kubeconfigs, the
+simulated adapter with the first `python3` on `PATH`, which must import `grpc` and
+`google.protobuf`; `make foc-up` checks this before it creates anything and stops with the fix,
+R59, D82). Everything it keeps (kubeconfig, the people's tokens and kubeconfigs, the
 Swarmada copy, logs) is in `$FOC_UP_DIR`, by default `~/.local/state/fleet-ops-copilot/foc-up`,
 **outside the repository**; the scripts refuse a directory inside it. It never reads or writes
 `~/.kube/config`:
@@ -160,6 +162,10 @@ Approving also requires the Swarmada permission for the underlying change (for e
 `swarmada:fleet-manager`); foc-approvals checks it with a SubjectAccessReview and refuses the
 decision otherwise. Approvers must be people: a ServiceAccount's decision is refused at admission.
 
+Activating an approved draft needs Swarmada's `activate` verb on `fleettasks` (and `patch`); any
+person who holds it may run `foc activate`, not only the approver (R69). Reading the fleet for its
+checks needs `get`/`list` on the Swarmada kinds; a read the person lacks is reported as not checked.
+
 ### Upgrade and policy changes
 
 ```bash
@@ -168,6 +174,11 @@ helm --kube-context $CTX upgrade foc charts/fleet-ops-copilot -n foc-system \
 ```
 
 A change of policy text changes the `checksum/policy` annotation, so both Deployments restart.
+
+The site catalogue (section 9) is changed the same way, with `--set-file catalogue.content=<catalogue.yaml>`;
+restart foc-agent afterwards (`kubectl --context $CTX -n foc-system rollout restart deploy/foc-agent`),
+which refuses to start on a catalogue that does not validate. The catalogue is part of the eval
+surface: run `make ci` with the new file in `catalogue/` before deploying it.
 Helm does not upgrade CRDs in `crds/`; after a CRD change, apply them yourself:
 `kubectl --context $CTX apply -f charts/fleet-ops-copilot/crds/`.
 
@@ -409,4 +420,70 @@ opened beside `config/airgap` by `config/airgap/networkpolicy-tracing.yaml`, whi
 backend first), and in the chart only with `networkPolicy.enabled` (D69). Both rules are
 template-verified only, until the next cluster run. The backend ran on a `make foc-up` cluster
 on 2026-11-05 (`docs/evidence/airgap-2026-11-05/`), before D68 and D69.
+
+## 9. Requests for work: questions, preview, confirmation, activation
+
+Not run on a cluster yet: tested with the scripted backend, envtest and the fixture evaluations
+(FOC-8).
+
+Work is asked for in a conversation (docs/DESIGN.md §3.10). The copilot asks at most two short
+questions, shows a preview, and files an `ApprovalRequest` only after the person replies `1`
+(confirm) or `2` (confirm, and prepare a follow-up request if the task fails). `3 <change>` changes
+the request and shows a new preview; `4` cancels. Nothing is filed without that reply: foc-mcp
+refuses a request whose confirmed preview is missing or differs (`DENY_NOT_CONFIRMED`,
+`DENY_PREVIEW_MISMATCH`).
+
+**Conversations.** `foc chat` keeps the conversation per kubeconfig context and foc-agent URL in
+`$XDG_STATE_HOME/foc/conversations/` (default `~/.local/state/foc/conversations/`, mode 600);
+`foc chat --new` starts another. The web page keeps it in the page's memory; reload starts a new
+one. foc-agent holds conversations in memory for 30 minutes after the last message, bound to the
+requester foc-mcp verified: another person cannot continue one, even with its id. A foc-agent
+restart loses them; the chart runs one foc-agent replica and refuses more.
+
+**The preview's checks** (`check_task`, reads only): an eligible robot now under Swarmada's
+candidate filters that a read can evaluate, zone state (stops, maintenance, restrictions), the
+waypoint, dependencies, timing and the policy. The verdict is "likely feasible" or "blocked", never
+a guarantee: the adapter's own check of the concrete action is not visible before assignment.
+A blocked preview names each blocker with an alternative and cannot be confirmed. Common blockers:
+
+| Code | Meaning | What to do |
+|---|---|---|
+| `NO_ELIGIBLE_ROBOT` | no robot passes the candidate filters now (the reason names each filter and robot) | wait, free a robot, or change the request |
+| `ROBOTS_BUSY` (warning) | the only candidates are busy now | none: the task waits for them after activation |
+| `CHARGE_BELOW_BATTERY_FLOOR` | the robot is below its `minBatteryPctForAction`; Swarmada gives it no new action, a Charge included | charge it by hand or with its own app, or a person lowers the floor |
+| `NO_CARRYING_ROBOT` | no robot declares the carrying capability a delivery needs | move a robot there instead (no load) |
+| `ZONE_STOPPED`, `NAMESPACE_STOPPED` | a stop is in force; Swarmada holds work there | a person clears the stop; the copilot cannot |
+| `WAYPOINT_NOT_FOUND`, `ZONE_NOT_FOUND` | the place does not exist | the preview lists what exists |
+
+**At execution.** Immediately before creating an approved draft, foc-approvals re-runs the checks
+and dry-runs the FleetTask and each member as a FleetAction through Swarmada's admission. If
+anything fails the request ends `Failed` with `DENY_CHECK_FAILED` or `DENY_SWARMADA_REFUSED` and the
+reason, and nothing is written; `foc requests` and the web UI show it. `status.executionChecks`
+holds what was checked.
+
+**Activation.** A draft runs only after a separate activation request is approved and a person
+runs it with their own kubeconfig:
+
+```bash
+KUBECONFIG=<your kubeconfig> foc activate <activation-request> -n warehouse-a [--context <ctx>]
+```
+
+`foc activate` refuses a ServiceAccount, a request that is not `Approved`, a task that is no longer
+a draft and a blocked check; then it sends one JSON patch that fails if the task changed, clears
+`spec.draft` and records you in `fleetops.alexbahel.github.io/activated-by` (an admission policy
+admits only your own name there). Swarmada checks your `activate` verb. foc-approvals records the
+activator on the request; an activation made with `kubectl patch` is recorded with the activator
+unknown.
+
+**Outcome and follow-up.** foc-approvals records the task's terminal phase on the DraftTask request
+(`status.outcome`). With choice 2 at the preview, a failed task also gets `status.followUp`, a
+proposal only: `foc chat --follow-up <request>` opens it at a preview, and it is filed only after a
+new confirmation.
+
+**The site catalogue** (`catalogue/warehouse-a.yaml`, chart `files/site-catalogue.yaml`) lists the
+kinds of work, their Swarmada mapping, defaults and the questions that lead to each; kinds Swarmada
+cannot report a result for say so in the preview (`resultReported: false`). "Something else"
+answers are written to foc-agent's audit file as `catalogue_review` entries, for deciding what to
+add: read them with `kubectl --context $CTX -n foc-system exec deploy/foc-agent -- cat /var/lib/fleetops/audit/foc-agent.jsonl`.
+The file is on an emptyDir volume and is lost with the pod.
 

@@ -42,9 +42,16 @@ The same agent, tools, policy and approval path serve both; only the model backe
   ServiceAccount. `foc-approvals` then refuses self-approval (`DENY_SELF_APPROVAL`), checks with a
   SubjectAccessReview that the approver could make the change directly, and re-runs the policy on
   fresh cluster state before the single write.
+- **Guided requests** (§3.10, D70–D79). Work is asked for in a short conversation driven by a site
+  catalogue: at most two questions, then a preview with a fleet check (`check_task`, reads only:
+  an eligible robot now under Swarmada's candidate filters, zone state, location, dependencies,
+  timing). The model reads the person's words and is offered no write tool; foc-agent files the
+  request only on the person's own confirmation, and foc-mcp refuses a request without one. Before
+  creating an approved draft, `foc-approvals` re-checks and dry-runs it through Swarmada's
+  admission, and refuses with the reason if conditions changed.
 - **A person activates.** Swarmada refuses draft activation to every ServiceAccount, so the
-  copilot never activates: after approval it records the exact command, the approver runs it with
-  their own credentials, and `foc-approvals` watches for the task to leave `Draft` (D28).
+  copilot never activates: after approval a person Swarmada allows to activate runs
+  `foc activate` with their own credentials, and `foc-approvals` records who did it (D28, D79).
 - **TokenReview identity** (D57). The requester is the username of the caller's own bearer token,
   verified by `foc-mcp` with a TokenReview; a name the client asserts is ignored. A request without
   a verified requester is recorded `unverified:<name>` and can be rejected but never approved
@@ -60,6 +67,13 @@ The same agent, tools, policy and approval path serve both; only the model backe
   `test/live` runs the approval paths against Swarmada v0.4 with them served.
 
 ## Measured results
+
+These model results are on eval surface v3 (25 scenarios, the model calling the request tools
+itself). Eval surface v4 (FOC-8, 39 scenarios, guided requests) is a different architecture: the
+model is offered no write tool and requests are filed by foc-agent after a confirmation, so the
+v3 numbers below do not carry over and the unsafe-write measure changes meaning (D81). No model
+has been run on v4 yet; its scripted self-test passes 117/117
+([`evals/results/fixtures/results.json`](evals/results/fixtures/results.json)).
 
 All three model runs: 25 scenarios × 3 runs, fixture mode (Swarmada objects loaded into an envtest
 API server; no Swarmada controller runs and nobody decides requests), Swarmada `558da47` through
@@ -116,7 +130,7 @@ force for a pod, every external target is blocked; a new pod's egress was open f
 
 [`docs/KNOWN-LIMITS.md`](docs/KNOWN-LIMITS.md) lists what is not built, measured or enforced. The
 main ones for reading the numbers above: the five agent roles are not built (one loop offers every
-tool); model runs of record are fixture-mode only, not through the deployed foc-agent; the web UI
+tool but the request tools); model runs of record are fixture-mode only, not through the deployed foc-agent; the web UI
 has no login, so requests filed from it are never approvable; people on kind use a static token
 file (test only), and OIDC has not been run; the air-gapped profile is installed beside the Helm
 chart, not from it. [`docs/BACKLOG-v4.md`](docs/BACKLOG-v4.md) lists the judge, scenario and tool
@@ -128,9 +142,10 @@ defects found in the record runs.
 
 Requires Docker (running), kind, kubectl, helm 3.8+, jq, openssl, curl, make, Go 1.25+ and
 python3 with the `grpcio` package: Swarmada's quickstart runs a simulated robot adapter in
-Python, and it stops with `No module named 'grpc'` without it. Use a virtual environment that
-has it (`python3 -m venv .venv && . .venv/bin/activate && pip install grpcio protobuf`). Full list:
-[`docs/RUNBOOK.md`](docs/RUNBOOK.md), section 0.
+Python with the first `python3` on `PATH`. `make foc-up` checks that interpreter before it creates
+anything and stops with the fix if it cannot import `grpc` and `google.protobuf`. Use a virtual
+environment that has them (`python3 -m venv .venv && . .venv/bin/activate && pip install grpcio protobuf`).
+Full list: [`docs/RUNBOOK.md`](docs/RUNBOOK.md), section 0.
 
 foc-agent, the process that talks to the model, starts only when the API key Secret exists.
 Put the key in a file only you can read and pass it to `foc-up`, which creates the Secret; the
@@ -179,8 +194,37 @@ copilot does:
 | Ask | What happens |
 |---|---|
 | A question about the fleet, for example the one above | It calls read-only tools and answers with the objects and fields it read. |
-| A change, for example `"Pause zone warehouse-a for maintenance, graceful."` | It files an approval request and changes nothing. The person who asked cannot approve it. |
+| Work, for example `"Inspect the receiving dock."` or `"Pause zone warehouse-a for maintenance, graceful."` | It asks at most two short questions, shows a preview with its checks, and files an approval request only after you reply `1` (below). It changes nothing itself, and the person who asked cannot approve it. |
 | A forbidden action, for example `"Clear the emergency stop on warehouse-a."` | It refuses and gives the reason. Clearing stops, releasing robots, deleting, approving and editing running work are never available. |
+
+Asking for work is a short conversation. `foc chat` keeps the conversation for the context until
+`foc chat --new`, so answer with the number of a choice:
+
+```text
+$ foc chat ... "Inspect the receiving dock."
+What should the robot inspect?
+1 Damage
+2 Location
+3 Both
+4 Something else — describe it
+$ foc chat ... 1
+Preview — Inspect for damage (catalogue kind inspect-damage)
+  Location: receiving-dock-1 (FleetZone warehouse-a, x 5.1, y 2.1)
+  ...
+  Swarmada records arrival and completion, not what the robot found; a person reviews the result on the robot's side.
+Checks: likely feasible. Eligible now: inspect: sim-robot-002, sim-robot-003.
+Checked against current fleet state; Swarmada's own acceptance is checked at execution.
+1 Confirm · 2 Confirm, and prepare a follow-up request if it fails · 3 Change something — describe it · 4 Cancel
+$ foc chat ... 1
+Filed ApprovalRequest/areq-... (inspect-damage). It waits for a named person: ...
+```
+
+The kinds of work the site offers, and the questions that lead to each, are in the site catalogue
+([`catalogue/warehouse-a.yaml`](catalogue/warehouse-a.yaml)). "Something else" takes your own
+words: the copilot keeps them verbatim, maps them to a known kind or to basic steps for a person
+to review, or says it cannot be done and files nothing. A preview with a blocker (no robot can do
+it, the zone is stopped, the robot is below its battery floor) explains why and offers an
+alternative; it cannot be confirmed.
 
 A request is decided by a different person, with their own kubeconfig:
 
@@ -188,6 +232,15 @@ A request is decided by a different person, with their own kubeconfig:
 KUBECONFIG=$P/dana.kubeconfig bin/foc requests -n warehouse-a --context dana@foc-up
 KUBECONFIG=$P/dana.kubeconfig bin/foc approve <request> -n warehouse-a --context dana@foc-up
 KUBECONFIG=$P/dana.kubeconfig bin/foc reject  <request> -n warehouse-a --context dana@foc-up -comment "<why>"
+```
+
+An approved draft runs once it is activated. Activation is its own request (`"Activate the
+draft inspect-damage-..."`); once a person approves it, a person Swarmada allows to activate runs
+it with their own kubeconfig. `foc activate` checks the fleet again first and refuses if the work
+could not run now:
+
+```bash
+KUBECONFIG=$P/dana.kubeconfig bin/foc activate <activation-request> -n warehouse-a --context dana@foc-up
 ```
 
 The web chat is at http://127.0.0.1:8090/ through the same port-forward. It shows pending
@@ -298,10 +351,12 @@ go run -tags envtest ./evals/cmd/foc-eval -backend claude -model claude-sonnet-5
 
 | Path | Contents |
 |---|---|
-| `cmd/foc-mcp` | MCP server: read tools and policy-gated request tools |
+| `cmd/foc-mcp` | MCP server: read tools, `check_task`, and policy-gated request tools that file only a confirmed preview |
 | `cmd/foc-approvals` | Approval controller and executor |
 | `cmd/foc-agent` | Agent process: model loop over MCP, web chat and approval-requests panel (shows `foc approve`/`foc reject` commands; cannot approve), OpenTelemetry traces |
-| `cmd/foc` | CLI: `chat` (sends your bearer token so foc-mcp can verify you as the requester), `requests`, `approve`, `reject`, `audit verify` |
+| `cmd/foc` | CLI: `chat` (sends your bearer token so foc-mcp can verify you as the requester; keeps the conversation), `requests`, `approve`, `reject`, `activate`, `audit verify` |
+| `catalogue/` | The site catalogue: kinds of work, their Swarmada mapping, the questions that lead to each |
+| `internal/catalogue`, `internal/dialogue`, `internal/conversation`, `internal/feasibility` | Catalogue loader; question and preview engine; per-person conversation store; `check_task`'s evaluation |
 | `api/v1alpha1` | `ApprovalRequest`, `ApprovalDecision` (`fleetops.alexbahel.github.io`) |
 | `internal/policy` | Policy engine; default policy in `policies/default.yaml` |
 | `internal/llm` | Model backends: `claude` (Claude API), `llamacpp` (llama-server) and `scripted` |
@@ -314,7 +369,7 @@ go run -tags envtest ./evals/cmd/foc-eval -backend claude -model claude-sonnet-5
 | `hack/` | `foc-up.sh`, `foc-down.sh`, `kind-people.sh` (test-only person tokens), `kind/` (kind configuration), `airgap.mk`, live-test scripts |
 | `docs/` | `DESIGN.md` (design and decision log), `KNOWN-LIMITS.md`, `BACKLOG-v4.md`, `RUNBOOK.md` (draft), `architecture/` (D2 source and SVG), `evidence/` (cluster logs) |
 | `evals/` | Evaluation harness, scenarios, fixtures (hand-written and captured live), results |
-| `test/envtest`, `test/live` | API-server tests; approval paths against a live Swarmada control plane |
+| `test/envtest`, `test/live`, `test/image` | API-server tests; approval paths against a live Swarmada control plane; the image's binaries run as the non-root user |
 
 ## How it was built
 
