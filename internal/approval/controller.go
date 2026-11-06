@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	authzv1 "k8s.io/api/authorization/v1"
@@ -40,6 +41,7 @@ import (
 
 	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/audit"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/draft"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/policy"
 )
@@ -263,7 +265,7 @@ func (r *Reconciler) consider(ctx context.Context, req *focv1.ApprovalRequest, d
 	instruction := ""
 	msg := "approved"
 	if req.Spec.Type == focv1.RequestActivateTask {
-		instruction = ActivationCommand(req.Namespace, req.Spec.ActivateTask.TaskName)
+		instruction = ActivationCommand(req.Namespace, req.Name)
 		msg = "approved; Swarmada refuses activate to every ServiceAccount, so " + d.Spec.DecidedBy + " runs: " + instruction
 	}
 	r.log(audit.Entry{Kind: audit.KindApproved, Actor: d.Spec.DecidedBy, Namespace: req.Namespace, Object: obj, SessionID: req.Spec.SessionID, Detail: map[string]any{"decision": d.Name, "type": string(req.Spec.Type), "instruction": instruction}})
@@ -323,11 +325,10 @@ func (r *Reconciler) freshDecision(ctx context.Context, req *focv1.ApprovalReque
 	return policy.Decision{Effect: policy.Deny, Code: policy.CodeMalformed, Message: "unknown request type"}, nil
 }
 
-// ActivationCommand is the exact command an approver runs to activate a
-// draft. Swarmada v0.4's swarmctl has no activate subcommand; clearing
-// spec.draft with a patch is the interface (RFC-0003 #resources-tasktrigger).
-func ActivationCommand(ns, task string) string {
-	return fmt.Sprintf(`kubectl patch fleettask %s -n %s --type merge -p '%s'`, task, ns, ActivationPatch)
+// ActivationCommand is the exact command a person runs to activate the draft
+// an approved ActivateTask request names, with their own kubeconfig (D79).
+func ActivationCommand(ns, request string) string {
+	return fmt.Sprintf("foc activate %s -n %s", request, ns)
 }
 
 func (r *Reconciler) observeActivation(ctx context.Context, req *focv1.ApprovalRequest) (reconcile.Result, error) {
@@ -396,40 +397,31 @@ func (r *Reconciler) execute(ctx context.Context, req *focv1.ApprovalRequest) (r
 }
 
 // DraftTaskObject is the FleetTask foc-approvals creates for an approved
-// DraftTask request, held as a draft. approvedBy is recorded in an
-// annotation. The web UI shows this same object before approval.
-func DraftTaskObject(req *focv1.ApprovalRequest, approvedBy string) *swarmv1.FleetTask {
+// DraftTask request, held as a draft (internal/draft builds it). approvedBy is
+// recorded in an annotation. The web UI shows this same object before approval.
+func DraftTaskObject(req *focv1.ApprovalRequest, approvedBy string) (*swarmv1.FleetTask, error) {
 	p := req.Spec.DraftTask
-	t := &swarmv1.FleetTask{
-		TypeMeta: metav1.TypeMeta{APIVersion: swarmv1.GroupVersion.String(), Kind: "FleetTask"},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: p.TaskName, Namespace: req.Namespace,
-			Labels: map[string]string{fleet.CreatedByLabel: "foc-approvals", fleet.RequestLabel: req.Name, fleet.SessionLabel: req.Spec.SessionID},
-			Annotations: map[string]string{
-				"fleetops.alexbahel.github.io/approved-by":   approvedBy,
-				"fleetops.alexbahel.github.io/requested-for": req.Spec.RequestedFor,
-				"fleetops.alexbahel.github.io/purpose":       p.Purpose,
-			},
-		},
-		Spec: swarmv1.FleetTaskSpec{Draft: true},
+	t, err := draft.Task(req.Namespace, p)
+	if err != nil {
+		return nil, err
 	}
-	for _, a := range p.Actions {
-		t.Spec.Actions = append(t.Spec.Actions, swarmv1.FleetTaskAction{
-			Name: a.Name, DependsOn: a.DependsOn,
-			Action: swarmv1.FleetActionSpec{
-				Type: swarmv1.ActionType(a.Type), Zone: a.Zone, Priority: swarmv1.ActionPriority(a.Priority),
-				RequiredCapabilities: a.RequiredCapabilities, PreferredRobot: a.PreferredRobot,
-			},
-		})
+	t.Labels = map[string]string{fleet.CreatedByLabel: "foc-approvals", fleet.RequestLabel: req.Name, fleet.SessionLabel: req.Spec.SessionID}
+	t.Annotations = map[string]string{
+		"fleetops.alexbahel.github.io/approved-by":   approvedBy,
+		"fleetops.alexbahel.github.io/requested-for": req.Spec.RequestedFor,
+		"fleetops.alexbahel.github.io/purpose":       p.Purpose,
 	}
-	return t
+	return t, nil
 }
 
 // createDraft creates the approved FleetTask held as a draft. Swarmada
 // generates no child action for it, and only a person holding activate can
 // clear spec.draft (internal/webhook/fleettask_webhook.go in Swarmada).
 func (r *Reconciler) createDraft(ctx context.Context, req *focv1.ApprovalRequest) (focv1.TargetRef, error) {
-	t := DraftTaskObject(req, req.Status.DecidedBy)
+	t, err := DraftTaskObject(req, req.Status.DecidedBy)
+	if err != nil {
+		return focv1.TargetRef{}, err
+	}
 	ref := focv1.TargetRef{APIVersion: swarmv1.GroupVersion.String(), Kind: "FleetTask", Name: t.Name}
 	if err := r.C.Create(ctx, t); err != nil {
 		if apierrors.IsAlreadyExists(err) {
@@ -505,9 +497,27 @@ func ZoneStopPatch(req *focv1.ApprovalRequest) ([]byte, error) {
 	return json.Marshal(map[string]any{"metadata": map[string]any{"annotations": map[string]string{fleet.EstopAnnotation: req.Spec.ZoneStop.Reason}}})
 }
 
-// ActivationPatch is the merge patch in ActivationCommand. The approver sends
-// it with their own credentials; the copilot never does.
-const ActivationPatch = `{"spec":{"draft":false}}`
+// ActivatedByAnnotation records who activated a draft. foc activate sets it
+// in the activation patch, and the fleetops-activated-by admission policy
+// admits it only with the authenticated user's name (D79).
+const ActivatedByAnnotation = "fleetops.alexbahel.github.io/activated-by"
+
+// ActivationPatch is the JSON patch foc activate sends with the person's own
+// credentials: it fails unless the task is still a draft, clears spec.draft
+// and records the activator. hasAnnotations says whether the task already
+// has metadata.annotations (a JSON patch cannot add a key to a missing map).
+func ActivationPatch(user string, hasAnnotations bool) ([]byte, error) {
+	ops := []map[string]any{
+		{"op": "test", "path": "/spec/draft", "value": true},
+		{"op": "replace", "path": "/spec/draft", "value": false},
+	}
+	if hasAnnotations {
+		ops = append(ops, map[string]any{"op": "add", "path": "/metadata/annotations/" + strings.ReplaceAll(ActivatedByAnnotation, "/", "~1"), "value": user})
+	} else {
+		ops = append(ops, map[string]any{"op": "add", "path": "/metadata/annotations", "value": map[string]string{ActivatedByAnnotation: user}})
+	}
+	return json.Marshal(ops)
+}
 
 func (r *Reconciler) setStatus(ctx context.Context, req *focv1.ApprovalRequest, mutate func(*focv1.ApprovalRequestStatus)) error {
 	base := req.DeepCopy()

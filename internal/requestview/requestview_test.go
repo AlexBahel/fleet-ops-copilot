@@ -69,7 +69,10 @@ func TestDraftViewIsTheExecutorObject(t *testing.T) {
 	if err := yaml.UnmarshalStrict([]byte(c.Body), &got); err != nil {
 		t.Fatalf("body is not a FleetTask: %v\n%s", err, c.Body)
 	}
-	want := approval.DraftTaskObject(r, ApproverPlaceholder)
+	want, err := approval.DraftTaskObject(r, ApproverPlaceholder)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !reflect.DeepEqual(got.Spec, want.Spec) || !reflect.DeepEqual(got.ObjectMeta, want.ObjectMeta) || got.TypeMeta != want.TypeMeta {
 		t.Fatalf("body differs from executor object:\n%s", c.Body)
 	}
@@ -160,10 +163,12 @@ func TestZoneStopView(t *testing.T) {
 func TestActivateView(t *testing.T) {
 	r := req("areq-act", t0, focv1.ApprovalRequestSpec{Type: focv1.RequestActivateTask, ActivateTask: &focv1.ActivateTaskParams{TaskName: "stage-pallet-a"}})
 	c := Of(r).Change
-	if c.Command != approval.ActivationCommand("warehouse-a", "stage-pallet-a") || c.Body != approval.ActivationPatch || !strings.HasPrefix(c.Writer, "the approver") {
+	body, _ := approval.ActivationPatch(ActivatorPlaceholder, true)
+	if c.Command != "foc activate areq-act -n warehouse-a" || c.Body != string(body) || !strings.HasPrefix(c.Writer, "a person Swarmada allows") {
 		t.Fatalf("change %+v", c)
 	}
-	if !reflect.DeepEqual(c.Diff, []Line{{" ", "spec:"}, {"-", "  draft: true"}, {"+", "  draft: false"}}) {
+	want := []Line{{" ", "metadata:"}, {"+", "  annotations: {" + approval.ActivatedByAnnotation + ": <you>}"}, {" ", "spec:"}, {"-", "  draft: true"}, {"+", "  draft: false"}}
+	if !reflect.DeepEqual(c.Diff, want) {
 		t.Fatalf("diff %+v", c.Diff)
 	}
 }

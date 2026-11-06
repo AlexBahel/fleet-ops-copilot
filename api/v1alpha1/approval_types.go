@@ -53,6 +53,60 @@ type DraftAction struct {
 	PreferredRobot string `json:"preferredRobot,omitempty"`
 	// +optional
 	DependsOn []string `json:"dependsOn,omitempty"`
+	// CustomType names the verb of a Custom action (FleetAction spec.customType).
+	// +optional
+	CustomType string `json:"customType,omitempty"`
+	// Location is where the action takes place; the executor writes it into
+	// the payload in the site catalogue's convention (DESIGN.md D77).
+	// +optional
+	Location *Location `json:"location,omitempty"`
+	// Route is an ordered list of locations (patrol).
+	// +optional
+	Route []Location `json:"route,omitempty"`
+	// LookFor lists what an inspection is about (payload lookFor).
+	// +optional
+	LookFor []string `json:"lookFor,omitempty"`
+	// Instruction is the requester's own words, verbatim (payload instruction).
+	// +optional
+	// +kubebuilder:validation:MaxLength=2000
+	Instruction string `json:"instruction,omitempty"`
+	// RobotSelector pins the action to one robot (FleetAction spec.robotSelector).
+	// +optional
+	RobotSelector string `json:"robotSelector,omitempty"`
+	// Dock names the charging dock or waypoint for a Charge (payload dock).
+	// +optional
+	Dock string `json:"dock,omitempty"`
+	// Bounds names the area of a Custom explore-floor survey (payload bounds).
+	// +optional
+	Bounds string `json:"bounds,omitempty"`
+	// OnFailure is Swarmada's onFailure: Requeue (default, bounded retries) or Alert.
+	// +optional
+	// +kubebuilder:validation:Enum=Requeue;Alert
+	OnFailure string `json:"onFailure,omitempty"`
+}
+
+// Location is a place in a FleetZone: a waypoint resolved to its pose.
+// Coordinates are decimal strings in the zone's frame (metres at this site).
+type Location struct {
+	// +kubebuilder:validation:MinLength=1
+	Zone string `json:"zone"`
+	// +optional
+	Waypoint string `json:"waypoint,omitempty"`
+	// +optional
+	// +kubebuilder:validation:Pattern=`^-?[0-9]+(\.[0-9]+)?$`
+	X string `json:"x,omitempty"`
+	// +optional
+	// +kubebuilder:validation:Pattern=`^-?[0-9]+(\.[0-9]+)?$`
+	Y string `json:"y,omitempty"`
+}
+
+// Repeat runs a draft's members in sequence, repeatedly (FleetTask spec.flow
+// loop over a sequence).
+type Repeat struct {
+	// Times is the number of rounds.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=100
+	Times int32 `json:"times"`
 }
 
 // DraftTaskParams is the FleetTask foc-approvals creates, held as a draft,
@@ -66,6 +120,9 @@ type DraftTaskParams struct {
 	Purpose string `json:"purpose,omitempty"`
 	// +kubebuilder:validation:MinItems=1
 	Actions []DraftAction `json:"actions"`
+	// Repeat, when set, runs the actions in order Times times (spec.flow).
+	// +optional
+	Repeat *Repeat `json:"repeat,omitempty"`
 }
 
 // ActivateTaskParams names the draft FleetTask to activate.
@@ -102,6 +159,74 @@ type ZoneStopParams struct {
 	// Reason becomes the swarmada.io/estop-triggered annotation value.
 	// +kubebuilder:validation:MinLength=1
 	Reason string `json:"reason"`
+}
+
+// Interpretation says how a request was understood (DESIGN.md §3.10.3).
+// +kubebuilder:validation:Enum=Known;Composed
+type Interpretation string
+
+const (
+	// InterpretationKnown is a kind from the site catalogue.
+	InterpretationKnown Interpretation = "Known"
+	// InterpretationComposed is composed from basic steps for human review.
+	InterpretationComposed Interpretation = "Composed"
+)
+
+// FailureHandling is what the copilot does when the task fails (D78).
+// +kubebuilder:validation:Enum=ReportOnly;PrepareFollowUp
+type FailureHandling string
+
+const (
+	FailureReportOnly      FailureHandling = "ReportOnly"
+	FailurePrepareFollowUp FailureHandling = "PrepareFollowUp"
+)
+
+// PreviewRecord is the preview the requester confirmed before the request
+// was filed (DESIGN.md §3.10.5).
+type PreviewRecord struct {
+	// ID is the SHA-256 of the request parameters with this record (ID and
+	// ConfirmedAt left empty).
+	// +kubebuilder:validation:MinLength=1
+	ID string `json:"id"`
+	// CatalogueVersion and CatalogueSHA256 identify the site catalogue.
+	CatalogueVersion int32  `json:"catalogueVersion"`
+	CatalogueSHA256  string `json:"catalogueSHA256"`
+	// Kind is the catalogue kind.
+	// +kubebuilder:validation:MinLength=1
+	Kind           string         `json:"kind"`
+	Interpretation Interpretation `json:"interpretation"`
+	// Instruction is the requester's own words for a "something else" request.
+	// +optional
+	// +kubebuilder:validation:MaxLength=2000
+	Instruction string `json:"instruction,omitempty"`
+	// ResultReported is false when Swarmada records arrival and completion,
+	// not what the robot found (class (b) kinds).
+	ResultReported  bool            `json:"resultReported"`
+	FailureHandling FailureHandling `json:"failureHandling"`
+	// ConfirmedAt is when foc-mcp received the confirmation.
+	// +optional
+	ConfirmedAt *metav1.Time `json:"confirmedAt,omitempty"`
+}
+
+// CheckRecord is one check of check_task (DESIGN.md §3.10.4).
+type CheckRecord struct {
+	Name string `json:"name"`
+	// +kubebuilder:validation:Enum=Passed;Warning;Blocked;NotChecked
+	Outcome string `json:"outcome"`
+	// +optional
+	Code string `json:"code,omitempty"`
+	// +optional
+	Detail string `json:"detail,omitempty"`
+}
+
+// ChecksRecord is a check_task result.
+type ChecksRecord struct {
+	// Verdict is "likely feasible" or "blocked".
+	Verdict   string        `json:"verdict"`
+	CheckedAt metav1.Time   `json:"checkedAt"`
+	Checks    []CheckRecord `json:"checks,omitempty"`
+	// +optional
+	DryRuns []CheckRecord `json:"dryRuns,omitempty"`
 }
 
 // PolicyRecord is the policy engine's decision when the request was created.
@@ -142,6 +267,12 @@ type ApprovalRequestSpec struct {
 	ZoneMaintenance *ZoneMaintenanceParams `json:"zoneMaintenance,omitempty"`
 	// +optional
 	ZoneStop *ZoneStopParams `json:"zoneStop,omitempty"`
+	// Preview is the preview the requester confirmed (D74).
+	// +optional
+	Preview *PreviewRecord `json:"preview,omitempty"`
+	// Checks are the check_task results when the request was filed (D77).
+	// +optional
+	Checks *ChecksRecord `json:"checks,omitempty"`
 }
 
 // RequestState is the lifecycle state of an ApprovalRequest.
@@ -198,6 +329,43 @@ type ApprovalRequestStatus struct {
 	// +optional
 	// +listType=set
 	RefusedDecisions []string `json:"refusedDecisions,omitempty"`
+	// ExecutionChecks are the checks and dry runs re-run immediately before
+	// the write (D76).
+	// +optional
+	ExecutionChecks *ChecksRecord `json:"executionChecks,omitempty"`
+	// ActivatedBy is the person who activated the draft, from the
+	// fleetops.alexbahel.github.io/activated-by annotation; "unknown" when the
+	// activation was made without foc activate (D79).
+	// +optional
+	ActivatedBy string `json:"activatedBy,omitempty"`
+	// Outcome is the task's terminal result, recorded after activation (D78).
+	// +optional
+	Outcome *Outcome `json:"outcome,omitempty"`
+	// FollowUp is a proposal, never filed without a new preview and
+	// confirmation (D78).
+	// +optional
+	FollowUp *FollowUp `json:"followUp,omitempty"`
+}
+
+// Outcome is a drafted task's terminal result.
+type Outcome struct {
+	// Phase is the FleetTask's terminal status.phase.
+	Phase string `json:"phase"`
+	// +optional
+	FailedMember string `json:"failedMember,omitempty"`
+	// +optional
+	FailureReason string      `json:"failureReason,omitempty"`
+	ObservedAt    metav1.Time `json:"observedAt"`
+}
+
+// FollowUp is a proposed request prepared after a failure.
+type FollowUp struct {
+	// Kind is the catalogue kind of the original request.
+	Kind string `json:"kind"`
+	// Summary says what the follow-up would do.
+	Summary string `json:"summary"`
+	// DraftTask carries the original parameters for the new preview.
+	DraftTask *DraftTaskParams `json:"draftTask"`
 }
 
 // ApprovalRequest is a proposed Swarmada write that a named person must approve.

@@ -164,7 +164,11 @@ func ChangeOf(r *focv1.ApprovalRequest) Change {
 		if r.Spec.DraftTask == nil {
 			break
 		}
-		c := create(approval.DraftTaskObject(r, approver))
+		obj, err := approval.DraftTaskObject(r, approver)
+		if err != nil {
+			break
+		}
+		c := create(obj)
 		c.Notes = append([]string{"spec.draft is true: Swarmada creates no FleetAction for this task, and nothing is dispatched until a person activates it (a separate ActivateTask request)."}, c.Notes...)
 		return c
 	case focv1.RequestZoneMaintenance:
@@ -201,19 +205,24 @@ func ChangeOf(r *focv1.ApprovalRequest) Change {
 		if r.Spec.ActivateTask == nil {
 			break
 		}
-		cmd := approval.ActivationCommand(r.Namespace, r.Spec.ActivateTask.TaskName)
+		cmd := approval.ActivationCommand(r.Namespace, r.Name)
+		body, _ := approval.ActivationPatch(ActivatorPlaceholder, true)
 		return Change{
-			Writer:    "the approver, with their own credentials, after approval (the copilot never activates)",
-			Operation: "JSON merge patch",
+			Writer:    "a person Swarmada allows to activate, with their own credentials, after approval (the copilot never activates)",
+			Operation: "JSON patch",
 			Target:    fmt.Sprintf("FleetTask %s/%s", r.Namespace, r.Spec.ActivateTask.TaskName),
-			Diff:      []Line{{Op: " ", Text: "spec:"}, {Op: "-", Text: "  draft: true"}, {Op: "+", Text: "  draft: false"}},
-			Body:      approval.ActivationPatch,
-			Command:   cmd,
-			Notes:     []string{"Swarmada refuses this patch to every ServiceAccount; foc approve prints the command and foc-approvals records when the task leaves Draft."},
+			Diff: []Line{{Op: " ", Text: "metadata:"}, {Op: "+", Text: "  annotations: {" + approval.ActivatedByAnnotation + ": " + ActivatorPlaceholder + "}"},
+				{Op: " ", Text: "spec:"}, {Op: "-", Text: "  draft: true"}, {Op: "+", Text: "  draft: false"}},
+			Body:    string(body),
+			Command: cmd,
+			Notes:   []string{"Swarmada refuses this patch to every ServiceAccount and checks the activate verb of the person who sends it. foc activate re-checks the fleet first and fails if the task is no longer a draft; foc-approvals records the activator from the annotation (D79)."},
 		}
 	}
 	return Change{Notes: []string{fmt.Sprintf("request type %q has no parameters the UI can show", r.Spec.Type)}}
 }
+
+// ActivatorPlaceholder stands for the person who runs foc activate.
+const ActivatorPlaceholder = "<you>"
 
 // create shows a new object: every line added.
 func create(obj client.Object) Change {

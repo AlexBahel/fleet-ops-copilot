@@ -17,6 +17,7 @@ limitations under the License.
 package approval
 
 import (
+	"strings"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,7 +37,10 @@ func TestDraftTaskObject(t *testing.T) {
 	req := request(focv1.ApprovalRequestSpec{Type: focv1.RequestDraftTask, DraftTask: &focv1.DraftTaskParams{
 		TaskName: "stage-pallet-a", Purpose: "stage", Actions: []focv1.DraftAction{{Name: "go", Type: "Navigate", Zone: "warehouse-a", Priority: "Normal", RequiredCapabilities: []string{"navigation"}}},
 	}})
-	o := DraftTaskObject(req, "pat")
+	o, err := DraftTaskObject(req, "pat")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !o.Spec.Draft || o.Name != "stage-pallet-a" || o.Namespace != "warehouse-a" || o.Kind != "FleetTask" {
 		t.Fatalf("object %+v", o)
 	}
@@ -68,7 +72,18 @@ func TestZoneStopPatchAndActivationCommand(t *testing.T) {
 	if string(b) != `{"metadata":{"annotations":{"swarmada.io/estop-triggered":"spill"}}}` {
 		t.Fatalf("patch %s", b)
 	}
-	if got := ActivationCommand("warehouse-a", "t1"); got != `kubectl patch fleettask t1 -n warehouse-a --type merge -p '{"spec":{"draft":false}}'` {
+	if got := ActivationCommand("warehouse-a", "areq-1"); got != "foc activate areq-1 -n warehouse-a" {
 		t.Fatalf("command %s", got)
+	}
+	p, err := ActivationPatch("dana", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(p) != `[{"op":"test","path":"/spec/draft","value":true},{"op":"replace","path":"/spec/draft","value":false},{"op":"add","path":"/metadata/annotations","value":{"fleetops.alexbahel.github.io/activated-by":"dana"}}]` {
+		t.Fatalf("patch %s", p)
+	}
+	p, _ = ActivationPatch("dana", true)
+	if !strings.Contains(string(p), `"path":"/metadata/annotations/fleetops.alexbahel.github.io~1activated-by","value":"dana"`) {
+		t.Fatalf("patch %s", p)
 	}
 }

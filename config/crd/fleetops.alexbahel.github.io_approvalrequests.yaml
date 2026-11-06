@@ -70,6 +70,66 @@ spec:
                 required:
                 - taskName
                 type: object
+              checks:
+                description: Checks are the check_task results when the request was
+                  filed (D77).
+                properties:
+                  checkedAt:
+                    format: date-time
+                    type: string
+                  checks:
+                    items:
+                      description: CheckRecord is one check of check_task (DESIGN.md
+                        §3.10.4).
+                      properties:
+                        code:
+                          type: string
+                        detail:
+                          type: string
+                        name:
+                          type: string
+                        outcome:
+                          enum:
+                          - Passed
+                          - Warning
+                          - Blocked
+                          - NotChecked
+                          type: string
+                      required:
+                      - name
+                      - outcome
+                      type: object
+                    type: array
+                  dryRuns:
+                    items:
+                      description: CheckRecord is one check of check_task (DESIGN.md
+                        §3.10.4).
+                      properties:
+                        code:
+                          type: string
+                        detail:
+                          type: string
+                        name:
+                          type: string
+                        outcome:
+                          enum:
+                          - Passed
+                          - Warning
+                          - Blocked
+                          - NotChecked
+                          type: string
+                      required:
+                      - name
+                      - outcome
+                      type: object
+                    type: array
+                  verdict:
+                    description: Verdict is "likely feasible" or "blocked".
+                    type: string
+                required:
+                - checkedAt
+                - verdict
+                type: object
               draftTask:
                 description: |-
                   DraftTaskParams is the FleetTask foc-approvals creates, held as a draft,
@@ -81,12 +141,61 @@ spec:
                         DraftAction is one member of a drafted FleetTask, limited to the
                         FleetActionSpec fields the copilot may set.
                       properties:
+                        bounds:
+                          description: Bounds names the area of a Custom explore-floor
+                            survey (payload bounds).
+                          type: string
+                        customType:
+                          description: CustomType names the verb of a Custom action
+                            (FleetAction spec.customType).
+                          type: string
                         dependsOn:
+                          items:
+                            type: string
+                          type: array
+                        dock:
+                          description: Dock names the charging dock or waypoint for
+                            a Charge (payload dock).
+                          type: string
+                        instruction:
+                          description: Instruction is the requester's own words, verbatim
+                            (payload instruction).
+                          maxLength: 2000
+                          type: string
+                        location:
+                          description: |-
+                            Location is where the action takes place; the executor writes it into
+                            the payload in the site catalogue's convention (DESIGN.md D77).
+                          properties:
+                            waypoint:
+                              type: string
+                            x:
+                              pattern: ^-?[0-9]+(\.[0-9]+)?$
+                              type: string
+                            "y":
+                              pattern: ^-?[0-9]+(\.[0-9]+)?$
+                              type: string
+                            zone:
+                              minLength: 1
+                              type: string
+                          required:
+                          - zone
+                          type: object
+                        lookFor:
+                          description: LookFor lists what an inspection is about (payload
+                            lookFor).
                           items:
                             type: string
                           type: array
                         name:
                           minLength: 1
+                          type: string
+                        onFailure:
+                          description: 'OnFailure is Swarmada''s onFailure: Requeue
+                            (default, bounded retries) or Alert.'
+                          enum:
+                          - Requeue
+                          - Alert
                           type: string
                         preferredRobot:
                           type: string
@@ -95,6 +204,32 @@ spec:
                         requiredCapabilities:
                           items:
                             type: string
+                          type: array
+                        robotSelector:
+                          description: RobotSelector pins the action to one robot
+                            (FleetAction spec.robotSelector).
+                          type: string
+                        route:
+                          description: Route is an ordered list of locations (patrol).
+                          items:
+                            description: |-
+                              Location is a place in a FleetZone: a waypoint resolved to its pose.
+                              Coordinates are decimal strings in the zone's frame (metres at this site).
+                            properties:
+                              waypoint:
+                                type: string
+                              x:
+                                pattern: ^-?[0-9]+(\.[0-9]+)?$
+                                type: string
+                              "y":
+                                pattern: ^-?[0-9]+(\.[0-9]+)?$
+                                type: string
+                              zone:
+                                minLength: 1
+                                type: string
+                            required:
+                            - zone
+                            type: object
                           type: array
                         type:
                           description: Type is a Swarmada FleetAction spec.type.
@@ -111,6 +246,19 @@ spec:
                   purpose:
                     description: Purpose is shown to the person who reviews the draft.
                     type: string
+                  repeat:
+                    description: Repeat, when set, runs the actions in order Times
+                      times (spec.flow).
+                    properties:
+                      times:
+                        description: Times is the number of rounds.
+                        format: int32
+                        maximum: 100
+                        minimum: 1
+                        type: integer
+                    required:
+                    - times
+                    type: object
                   taskName:
                     description: TaskName is the FleetTask name in the request's namespace.
                     minLength: 1
@@ -138,6 +286,63 @@ spec:
                 required:
                 - code
                 - effect
+                type: object
+              preview:
+                description: Preview is the preview the requester confirmed (D74).
+                properties:
+                  catalogueSHA256:
+                    type: string
+                  catalogueVersion:
+                    description: CatalogueVersion and CatalogueSHA256 identify the
+                      site catalogue.
+                    format: int32
+                    type: integer
+                  confirmedAt:
+                    description: ConfirmedAt is when foc-mcp received the confirmation.
+                    format: date-time
+                    type: string
+                  failureHandling:
+                    description: FailureHandling is what the copilot does when the
+                      task fails (D78).
+                    enum:
+                    - ReportOnly
+                    - PrepareFollowUp
+                    type: string
+                  id:
+                    description: |-
+                      ID is the SHA-256 of the request parameters with this record (ID and
+                      ConfirmedAt left empty).
+                    minLength: 1
+                    type: string
+                  instruction:
+                    description: Instruction is the requester's own words for a "something
+                      else" request.
+                    maxLength: 2000
+                    type: string
+                  interpretation:
+                    description: Interpretation says how a request was understood
+                      (DESIGN.md §3.10.3).
+                    enum:
+                    - Known
+                    - Composed
+                    type: string
+                  kind:
+                    description: Kind is the catalogue kind.
+                    minLength: 1
+                    type: string
+                  resultReported:
+                    description: |-
+                      ResultReported is false when Swarmada records arrival and completion,
+                      not what the robot found (class (b) kinds).
+                    type: boolean
+                required:
+                - catalogueSHA256
+                - catalogueVersion
+                - failureHandling
+                - id
+                - interpretation
+                - kind
+                - resultReported
                 type: object
               requestedBy:
                 description: RequestedBy is the principal that created the object
@@ -234,6 +439,12 @@ spec:
           status:
             description: ApprovalRequestStatus is written only by foc-approvals.
             properties:
+              activatedBy:
+                description: |-
+                  ActivatedBy is the person who activated the draft, from the
+                  fleetops.alexbahel.github.io/activated-by annotation; "unknown" when the
+                  activation was made without foc activate (D79).
+                type: string
               decidedAt:
                 format: date-time
                 type: string
@@ -244,6 +455,221 @@ spec:
               executedAt:
                 format: date-time
                 type: string
+              executionChecks:
+                description: |-
+                  ExecutionChecks are the checks and dry runs re-run immediately before
+                  the write (D76).
+                properties:
+                  checkedAt:
+                    format: date-time
+                    type: string
+                  checks:
+                    items:
+                      description: CheckRecord is one check of check_task (DESIGN.md
+                        §3.10.4).
+                      properties:
+                        code:
+                          type: string
+                        detail:
+                          type: string
+                        name:
+                          type: string
+                        outcome:
+                          enum:
+                          - Passed
+                          - Warning
+                          - Blocked
+                          - NotChecked
+                          type: string
+                      required:
+                      - name
+                      - outcome
+                      type: object
+                    type: array
+                  dryRuns:
+                    items:
+                      description: CheckRecord is one check of check_task (DESIGN.md
+                        §3.10.4).
+                      properties:
+                        code:
+                          type: string
+                        detail:
+                          type: string
+                        name:
+                          type: string
+                        outcome:
+                          enum:
+                          - Passed
+                          - Warning
+                          - Blocked
+                          - NotChecked
+                          type: string
+                      required:
+                      - name
+                      - outcome
+                      type: object
+                    type: array
+                  verdict:
+                    description: Verdict is "likely feasible" or "blocked".
+                    type: string
+                required:
+                - checkedAt
+                - verdict
+                type: object
+              followUp:
+                description: |-
+                  FollowUp is a proposal, never filed without a new preview and
+                  confirmation (D78).
+                properties:
+                  draftTask:
+                    description: DraftTask carries the original parameters for the
+                      new preview.
+                    properties:
+                      actions:
+                        items:
+                          description: |-
+                            DraftAction is one member of a drafted FleetTask, limited to the
+                            FleetActionSpec fields the copilot may set.
+                          properties:
+                            bounds:
+                              description: Bounds names the area of a Custom explore-floor
+                                survey (payload bounds).
+                              type: string
+                            customType:
+                              description: CustomType names the verb of a Custom action
+                                (FleetAction spec.customType).
+                              type: string
+                            dependsOn:
+                              items:
+                                type: string
+                              type: array
+                            dock:
+                              description: Dock names the charging dock or waypoint
+                                for a Charge (payload dock).
+                              type: string
+                            instruction:
+                              description: Instruction is the requester's own words,
+                                verbatim (payload instruction).
+                              maxLength: 2000
+                              type: string
+                            location:
+                              description: |-
+                                Location is where the action takes place; the executor writes it into
+                                the payload in the site catalogue's convention (DESIGN.md D77).
+                              properties:
+                                waypoint:
+                                  type: string
+                                x:
+                                  pattern: ^-?[0-9]+(\.[0-9]+)?$
+                                  type: string
+                                "y":
+                                  pattern: ^-?[0-9]+(\.[0-9]+)?$
+                                  type: string
+                                zone:
+                                  minLength: 1
+                                  type: string
+                              required:
+                              - zone
+                              type: object
+                            lookFor:
+                              description: LookFor lists what an inspection is about
+                                (payload lookFor).
+                              items:
+                                type: string
+                              type: array
+                            name:
+                              minLength: 1
+                              type: string
+                            onFailure:
+                              description: 'OnFailure is Swarmada''s onFailure: Requeue
+                                (default, bounded retries) or Alert.'
+                              enum:
+                              - Requeue
+                              - Alert
+                              type: string
+                            preferredRobot:
+                              type: string
+                            priority:
+                              type: string
+                            requiredCapabilities:
+                              items:
+                                type: string
+                              type: array
+                            robotSelector:
+                              description: RobotSelector pins the action to one robot
+                                (FleetAction spec.robotSelector).
+                              type: string
+                            route:
+                              description: Route is an ordered list of locations (patrol).
+                              items:
+                                description: |-
+                                  Location is a place in a FleetZone: a waypoint resolved to its pose.
+                                  Coordinates are decimal strings in the zone's frame (metres at this site).
+                                properties:
+                                  waypoint:
+                                    type: string
+                                  x:
+                                    pattern: ^-?[0-9]+(\.[0-9]+)?$
+                                    type: string
+                                  "y":
+                                    pattern: ^-?[0-9]+(\.[0-9]+)?$
+                                    type: string
+                                  zone:
+                                    minLength: 1
+                                    type: string
+                                required:
+                                - zone
+                                type: object
+                              type: array
+                            type:
+                              description: Type is a Swarmada FleetAction spec.type.
+                              minLength: 1
+                              type: string
+                            zone:
+                              type: string
+                          required:
+                          - name
+                          - type
+                          type: object
+                        minItems: 1
+                        type: array
+                      purpose:
+                        description: Purpose is shown to the person who reviews the
+                          draft.
+                        type: string
+                      repeat:
+                        description: Repeat, when set, runs the actions in order Times
+                          times (spec.flow).
+                        properties:
+                          times:
+                            description: Times is the number of rounds.
+                            format: int32
+                            maximum: 100
+                            minimum: 1
+                            type: integer
+                        required:
+                        - times
+                        type: object
+                      taskName:
+                        description: TaskName is the FleetTask name in the request's
+                          namespace.
+                        minLength: 1
+                        type: string
+                    required:
+                    - actions
+                    - taskName
+                    type: object
+                  kind:
+                    description: Kind is the catalogue kind of the original request.
+                    type: string
+                  summary:
+                    description: Summary says what the follow-up would do.
+                    type: string
+                required:
+                - draftTask
+                - kind
+                - summary
+                type: object
               instruction:
                 description: |-
                   Instruction is the exact command the approver runs with their own
@@ -252,6 +678,24 @@ spec:
                 type: string
               message:
                 type: string
+              outcome:
+                description: Outcome is the task's terminal result, recorded after
+                  activation (D78).
+                properties:
+                  failedMember:
+                    type: string
+                  failureReason:
+                    type: string
+                  observedAt:
+                    format: date-time
+                    type: string
+                  phase:
+                    description: Phase is the FleetTask's terminal status.phase.
+                    type: string
+                required:
+                - observedAt
+                - phase
+                type: object
               refusedDecisions:
                 description: RefusedDecisions lists ApprovalDecisions that were not
                   accepted.
