@@ -39,6 +39,8 @@ spec:
             - -mcp-url=http://foc-mcp:{{ .Values.mcp.port }}/mcp
             - -namespaces={{ join "," .Values.swarmadaNamespaces }}
             - -max-concurrent={{ .Values.agent.maxConcurrent }}
+            - -catalogue=/etc/fleetops/catalogue/site.yaml
+            - -audit={{ .Values.audit.dir }}/foc-agent.jsonl
             {{- with include "foc.otlpEndpoint" . }}
             - -otlp-endpoint={{ . }}
             {{- end }}
@@ -52,6 +54,14 @@ spec:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts:
+            - {name: catalogue, mountPath: /etc/fleetops/catalogue, readOnly: true}
+            - {name: audit, mountPath: {{ .Values.audit.dir }}}
+      volumes:
+        - name: catalogue
+          configMap: {name: fleetops-catalogue}
+        - name: audit
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

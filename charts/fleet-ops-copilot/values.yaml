@@ -26,6 +26,14 @@ swarmadaNamespaces:
 policy:
   content: ""
 
+# The site catalogue foc-agent reads (docs/DESIGN.md §3.10.1): the kinds of
+# work a person can ask for, their Swarmada mapping and the questions that
+# lead to them. Empty content uses files/site-catalogue.yaml (the fictional
+# warehouse's, a copy of catalogue/warehouse-a.yaml). foc-agent refuses to
+# start on a catalogue that does not validate. Part of the eval surface.
+catalogue:
+  content: ""
+
 mcp:
   replicas: 1
   port: 8080
@@ -47,6 +55,8 @@ agent:
   # false renders no foc-agent Deployment or Service (the ServiceAccount and
   # its read-only RoleBindings stay).
   enabled: true
+  # At most 1: conversations are kept in the pod's memory (D75); the render
+  # fails for more.
   replicas: 1
   port: 8090
   # Chat requests in flight per pod; more get HTTP 429.

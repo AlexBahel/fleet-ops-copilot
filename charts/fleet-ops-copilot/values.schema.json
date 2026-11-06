@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft-07/schema#",
   "type": "object",
   "additionalProperties": false,
-  "required": ["image", "swarmadaNamespaces", "policy", "mcp", "approvals", "agent", "tracing", "llm", "audit", "networkPolicy"],
+  "required": ["image", "swarmadaNamespaces", "policy", "catalogue", "mcp", "approvals", "agent", "tracing", "llm", "audit", "networkPolicy"],
   "properties": {
     "image": {
       "type": "object",
@@ -25,11 +25,16 @@
       "additionalProperties": false,
       "properties": {"content": {"type": "string"}}
     },
+    "catalogue": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {"content": {"type": "string"}}
+    },
     "mcp": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "replicas": {"type": "integer", "minimum": 0},
+        "replicas": {"type": "integer", "minimum": 0, "maximum": 1},
         "port": {"type": "integer", "minimum": 1, "maximum": 65535},
         "resources": {"type": "object"}
       }

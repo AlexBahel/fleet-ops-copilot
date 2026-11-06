@@ -29,6 +29,14 @@ app.kubernetes.io/part-of: fleet-ops-copilot
 {{- end -}}
 {{- end -}}
 
+{{- define "foc.catalogue" -}}
+{{- if .Values.catalogue.content -}}
+{{ .Values.catalogue.content }}
+{{- else -}}
+{{ .Files.Get "files/site-catalogue.yaml" }}
+{{- end -}}
+{{- end -}}
+
 {{/*
 Environment for foc-agent's claude backend (templates/foc-agent.yaml). The key
 comes from an existing Secret; the chart never holds its value.
@@ -107,6 +115,9 @@ on a single file still fails on a bad configuration.
 {{- if not (has . $.Values.swarmadaNamespaces) -}}
 {{- fail (printf "the policy file lists namespace %q, which is not in swarmadaNamespaces: foc-mcp and foc-approvals would have no RoleBinding there" .) -}}
 {{- end -}}
+{{- end -}}
+{{- if gt (int .Values.agent.replicas) 1 -}}
+{{- fail "agent.replicas must be 0 or 1: foc-agent keeps conversations in memory (docs/DESIGN.md D75)" -}}
 {{- end -}}
 {{- if and .Values.tracing.backend.enabled .Values.tracing.otlpEndpoint -}}
 {{- fail "tracing.backend.enabled and tracing.otlpEndpoint are both set: the in-cluster backend is the exporter's endpoint, so leave tracing.otlpEndpoint empty (or turn the backend off to use your own collector)" -}}

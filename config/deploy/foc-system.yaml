@@ -2,7 +2,8 @@
 # foc-agent (model loop and web UI) in namespace foc-system. Apply after
 # config/crd, config/rbac and config/admission (make deploy-kind). The policy
 # file comes from ConfigMap fleetops-policy (created by make deploy-kind from
-# policies/default.yaml). foc-agent does not start until Secret
+# policies/default.yaml), foc-agent's site catalogue from ConfigMap
+# fleetops-catalogue (from catalogue/warehouse-a.yaml). foc-agent does not start until Secret
 # fleet-ops-copilot-claude (key ANTHROPIC_API_KEY) exists in foc-system.
 # Audit files are on emptyDir volumes: they do not survive a pod restart
 # (docs/KNOWN-LIMITS.md, "Audit storage").
@@ -113,7 +114,7 @@ spec:
           image: fleet-ops-copilot:dev
           imagePullPolicy: IfNotPresent
           command: [/usr/local/bin/foc-agent]
-          args: [-backend=claude, -listen=:8090, -mcp-url=http://foc-mcp:8080/mcp, -namespaces=warehouse-a, -max-concurrent=4]
+          args: [-backend=claude, -listen=:8090, -mcp-url=http://foc-mcp:8080/mcp, -namespaces=warehouse-a, -max-concurrent=4, -catalogue=/etc/fleetops/catalogue/site.yaml, -audit=/var/lib/fleetops/audit/foc-agent.jsonl]
           env:
             - name: ANTHROPIC_API_KEY
               valueFrom:
@@ -124,6 +125,14 @@ spec:
           livenessProbe: {httpGet: {path: /healthz, port: http}, periodSeconds: 10}
           readinessProbe: {httpGet: {path: /readyz, port: http}, periodSeconds: 10, timeoutSeconds: 5}
           securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts:
+            - {name: catalogue, mountPath: /etc/fleetops/catalogue, readOnly: true}
+            - {name: audit, mountPath: /var/lib/fleetops/audit}
+      volumes:
+        - name: catalogue
+          configMap: {name: fleetops-catalogue}
+        - name: audit
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

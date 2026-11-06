@@ -1,0 +1,286 @@
+# Site catalogue for the fictional Example Distribution Co. warehouse A
+# (docs/DESIGN.md §2, §3.10.1, D70). It lists the kinds of work a person can
+# ask for here, how each maps to Swarmada v0.4, and the questions that lead to
+# each. Classes come from docs/design/foc8-inventory.md §4. Part of the eval
+# surface: results and requests record this file's SHA-256.
+apiVersion: fleetops.alexbahel.github.io/v1alpha1
+kind: SiteCatalogue
+version: 1
+site: Example Distribution Co. warehouse A (fictional)
+namespace: warehouse-a
+
+# A location is a FleetZone waypoint resolved to its pose and written into the
+# FleetAction payload with these keys; the quickstart's simulated adapter reads
+# x and y in metres (inventory §2.3).
+location:
+  waypoint: waypoint
+  x: x
+  "y": "y"
+
+# Shown in the preview, never asked (R64). onFailure Requeue is Swarmada's
+# bounded retry: "retries up to 3 times, then alerts" (R69).
+defaults:
+  priority: Normal
+  onFailure: Requeue
+  failureHandling: ReportOnly
+
+kinds:
+  - name: inspect-damage
+    title: Inspect for damage
+    class: b
+    resultReported: false
+    request: DraftTask
+    requiredCapabilities: [navigation, camera_front]
+    members:
+      - {name: inspect, type: Navigate, at: location}
+    lookFor: [damage]
+    required: [location]
+    optional: [robot, priority, onFailure]
+    results: [status.phase, status.assignedRobot, status.startedAt, status.completedAt, status.failureReason]
+
+  - name: inspect-location
+    title: Inspect the state of a location
+    class: b
+    resultReported: false
+    request: DraftTask
+    requiredCapabilities: [navigation, camera_front]
+    members:
+      - {name: inspect, type: Navigate, at: location}
+    lookFor: [location-state]
+    required: [location]
+    optional: [robot, priority, onFailure]
+    results: [status.phase, status.assignedRobot, status.startedAt, status.completedAt, status.failureReason]
+
+  - name: inspect-both
+    title: Inspect for damage and the state of a location
+    class: b
+    resultReported: false
+    request: DraftTask
+    requiredCapabilities: [navigation, camera_front]
+    members:
+      - {name: inspect, type: Navigate, at: location}
+    lookFor: [damage, location-state]
+    required: [location]
+    optional: [robot, priority, onFailure]
+    results: [status.phase, status.assignedRobot, status.startedAt, status.completedAt, status.failureReason]
+
+  - name: move
+    title: Move a robot to a location
+    class: a
+    resultReported: true
+    request: DraftTask
+    requiredCapabilities: [navigation]
+    members:
+      - {name: move, type: Navigate, at: location}
+    required: [location]
+    optional: [robot, priority, onFailure]
+    results: [status.phase, status.assignedRobot, status.completedAt, Robot status.position, Robot status.currentZone]
+
+  - name: deliver
+    title: Carry a load from one location to another
+    class: a
+    resultReported: true
+    request: DraftTask
+    # transport.payload is the carrying capability the quickstart adapter's
+    # catalog names; no quickstart robot declares it (check_task:
+    # NO_CARRYING_ROBOT).
+    requiredCapabilities: [navigation, transport.payload]
+    members:
+      - {name: pickup, type: PickUp, at: from}
+      - {name: dropoff, type: DropOff, at: to, dependsOn: [pickup]}
+    required: [from, to]
+    optional: [robot, priority, onFailure]
+    results: [FleetTask status.phase, FleetTask status.actionSummary, status.phase of each member]
+
+  - name: charge
+    title: Send a robot to charge
+    class: a
+    resultReported: true
+    request: DraftTask
+    members:
+      - {name: charge, type: Charge, pin: robot, dock: dock}
+    required: [robot]
+    optional: [dock, priority, onFailure]
+    defaults: {dock: charging-bay}
+    results: [status.phase, Robot status.batteryPercent]
+
+  - name: patrol
+    title: Patrol a route
+    class: a
+    resultReported: true
+    request: DraftTask
+    requiredCapabilities: [navigation]
+    # One Patrol member per stop of the route, run in order, `times` rounds
+    # (FleetTask spec.flow loop). The quickstart adapter drives each Patrol to
+    # one x/y, hence one member per stop (KNOWN-LIMITS).
+    members:
+      - {name: patrol, type: Patrol, along: route}
+    repeat: times
+    required: [route]
+    optional: [times, robot, priority, onFailure]
+    defaults: {times: "1"}
+    results: [FleetTask status.phase, "status.actions[].iterationsCompleted", "status.actions[].iterationsFailed"]
+
+  - name: survey
+    title: Survey (map) an area
+    class: b
+    resultReported: false
+    request: DraftTask
+    members:
+      - {name: survey, type: Custom, customType: explore-floor, bounds: zone}
+    required: [zone]
+    optional: [robot, priority, onFailure]
+    results: [status.phase, status.assignedRobot, status.completedAt]
+
+  - name: zone-maintenance
+    title: Zone maintenance window
+    class: a
+    resultReported: true
+    request: ZoneMaintenance
+    required: [zone, reason]
+    optional: [mode, start]
+    defaults: {mode: Graceful}
+    results: [ZoneMaintenance status.phase, status.pausedRobots, status.windingDownRobots]
+
+  - name: zone-stop
+    title: Zone emergency stop (not an emergency path)
+    class: a
+    resultReported: true
+    request: ZoneStop
+    required: [zone, reason]
+    results: [FleetZone status.estopStatus]
+
+  - name: activate
+    title: Activate a draft task
+    class: a
+    resultReported: true
+    request: ActivateTask
+    required: [task]
+    results: [FleetTask status.phase]
+
+asks:
+  - name: inspect
+    title: Inspect
+    questions:
+      - id: inspect.what
+        text: What should the robot inspect?
+        fills: [kind]
+        choices:
+          - {label: Damage, kind: inspect-damage}
+          - {label: Location, kind: inspect-location}
+          - {label: Both, kind: inspect-both}
+          - {label: "Something else — describe it", somethingElse: true}
+      - id: inspect.where
+        text: Where should the robot inspect?
+        fills: [location]
+        source: {from: waypoints}
+
+  - name: move
+    title: Move
+    kind: move
+    questions:
+      - id: move.where
+        text: Where should the robot go?
+        fills: [location]
+        source: {from: waypoints}
+
+  - name: deliver
+    title: Deliver
+    kind: deliver
+    questions:
+      - id: deliver.fromTo
+        text: From where to where?
+        fills: [from, to]
+        source: {from: waypointPairs}
+
+  - name: charge
+    title: Charge
+    kind: charge
+    questions:
+      - id: charge.robot
+        text: Which robot should charge?
+        fills: [robot]
+        source: {from: robots, order: battery}
+
+  - name: patrol
+    title: Patrol
+    kind: patrol
+    questions:
+      - id: patrol.route
+        text: Which route?
+        fills: [route]
+        source: {from: routes}
+      - id: patrol.times
+        text: How many rounds?
+        fills: [times]
+        choices:
+          - {label: 1 round, set: {times: "1"}}
+          - {label: 3 rounds, set: {times: "3"}}
+          - {label: 5 rounds, set: {times: "5"}}
+          - {label: "Something else — describe it", somethingElse: true}
+
+  - name: survey
+    title: Survey
+    kind: survey
+    questions:
+      - id: survey.zone
+        text: Which area should be surveyed?
+        fills: [zone]
+        source: {from: zones}
+
+  - name: zone-maintenance
+    title: Zone maintenance
+    kind: zone-maintenance
+    questions:
+      - id: maintenance.zone
+        text: Which zone?
+        fills: [zone]
+        source: {from: zones}
+      - id: maintenance.mode
+        text: How and when should it start?
+        fills: [mode, start]
+        choices:
+          - {label: "Graceful (robots finish their current action), on approval", set: {mode: Graceful, start: ""}}
+          - {label: "Immediate (current actions are requeued), on approval", set: {mode: Immediate, start: ""}}
+          - {label: "Something else — describe it", somethingElse: true}
+
+  - name: zone-stop
+    title: Zone stop
+    kind: zone-stop
+    questions:
+      - id: stop.zone
+        text: Which zone should stop?
+        fills: [zone]
+        source: {from: zones}
+
+  - name: activate
+    title: Activate
+    kind: activate
+    questions:
+      - id: activate.task
+        text: Which draft should be activated?
+        fills: [task]
+        source: {from: drafts}
+
+somethingElse:
+  id: somethingElse.describe
+  text: Describe what the robot should do or look for, where, and what result you need.
+
+# Kinds a "something else" request may be composed from, one member each.
+basicSteps: [move, patrol, charge]
+
+# Class (c): needs a Swarmada change (inventory §4, BACKLOG-v4 "Proposed for
+# Swarmada draft 5"). Nothing here can be previewed or filed.
+notYetPossible:
+  - id: C1
+    need: a result reporting what the robot found
+    say: Swarmada v0.4 records that a robot action ran and ended, not what the robot found; there is no result field for a robot action.
+  - id: C2
+    need: photos or other evidence attached to the result
+    say: Swarmada v0.4 has no place for evidence from a robot action.
+  - id: C3
+    need: analysis by an external service on a robot's sensor stream
+    say: Swarmada v0.4 has no dispatch path for External actions.
+  - id: C6
+    need: charging a robot below its battery floor
+    say: Swarmada v0.4 gives no new action, a Charge included, to a robot below its battery floor.

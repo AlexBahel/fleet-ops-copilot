@@ -92,7 +92,10 @@ func check(repo, rendered string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	pairs := [][2]string{{filepath.Join(repo, "policies", "default.yaml"), filepath.Join(chart, "files", "default-policy.yaml")}}
+	pairs := [][2]string{
+		{filepath.Join(repo, "policies", "default.yaml"), filepath.Join(chart, "files", "default-policy.yaml")},
+		{filepath.Join(repo, "catalogue", "warehouse-a.yaml"), filepath.Join(chart, "files", "site-catalogue.yaml")},
+	}
 	for _, c := range crds {
 		pairs = append(pairs, [2]string{c, filepath.Join(chart, "crds", filepath.Base(c))})
 	}
@@ -138,19 +141,27 @@ func check(repo, rendered string) ([]string, error) {
 
 	delete(want, "v1/Namespace//foc-system") // created by helm install --create-namespace
 
-	const policyKey = "v1/ConfigMap/foc-system/fleetops-policy"
-	if cm, ok := got[policyKey]; ok {
-		policy, err := os.ReadFile(filepath.Join(repo, "policies", "default.yaml"))
+	// The ConfigMaps make deploy-kind creates from files (the policy, the
+	// site catalogue) are rendered by the chart from its copies.
+	for _, cmf := range []struct{ name, key, file string }{
+		{"fleetops-policy", "default.yaml", filepath.Join("policies", "default.yaml")},
+		{"fleetops-catalogue", "site.yaml", filepath.Join("catalogue", "warehouse-a.yaml")},
+	} {
+		key := "v1/ConfigMap/foc-system/" + cmf.name
+		cm, ok := got[key]
+		if !ok {
+			problems = append(problems, "chart renders no ConfigMap "+cmf.name)
+			continue
+		}
+		content, err := os.ReadFile(filepath.Join(repo, cmf.file))
 		if err != nil {
 			return nil, err
 		}
 		data, _ := cm["data"].(obj)
-		if s, _ := data["default.yaml"].(string); s != string(policy) {
-			problems = append(problems, "ConfigMap fleetops-policy data[default.yaml] differs from policies/default.yaml")
+		if s, _ := data[cmf.key].(string); s != string(content) {
+			problems = append(problems, fmt.Sprintf("ConfigMap %s data[%s] differs from %s", cmf.name, cmf.key, cmf.file))
 		}
-		delete(got, policyKey)
-	} else {
-		problems = append(problems, "chart renders no ConfigMap fleetops-policy")
+		delete(got, key)
 	}
 
 	for _, k := range sortedKeys(want) {
