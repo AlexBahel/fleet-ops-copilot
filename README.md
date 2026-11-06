@@ -205,6 +205,73 @@ air-gapped profile, which needs no API key, see RUNBOOK section 3.
 make foc-down                  # removes the cluster foc-up, its kubeconfig and the people's tokens
 ```
 
+### Connect to a Swarmada you run yourself
+
+`make foc-up` bundles Swarmada for a one-command demo. The copilot itself is a separate Helm
+chart that talks to Swarmada only through the Kubernetes API, so it can be installed next to a
+Swarmada that is already running. It is installed **into the cluster where Swarmada runs**: it
+needs that cluster's API server for token checks, RBAC and Swarmada's webhooks.
+
+Requirements for that Swarmada:
+
+- Swarmada **v0.4** (the version `go.mod` pins; other versions are not supported yet).
+- Its **admission webhooks served**. Swarmada's quickstart turns them off; without them the copilot
+  refuses every draft (`DENY_DRAFT_GATE_ABSENT`). Turning them on is RUNBOOK section 6.
+- The namespaces the copilot may work in, for example `warehouse-a`.
+
+**1. Run Swarmada.** For a local try, use Swarmada's warehouse quickstart
+(`examples/warehouse-quickstart/run.sh` in the
+[Swarmada repository](https://github.com/swarmada/swarmada) at tag `rfc-0001-v0.4`) on a kind
+cluster whose name starts with `foc-`, for example `foc-sw`. The copilot's scripts only act on
+`kind-foc-*` contexts. For any other cluster, follow Swarmada's own documentation.
+
+**2. Turn on Swarmada's webhooks and check the cluster** (RUNBOOK sections 6 and 1):
+
+```bash
+export KUBECONFIG=<kubeconfig with only the foc-sw context>
+CTX=kind-foc-sw
+cd "$(go list -m -f '{{.Dir}}' github.com/swarmada/swarmada)"
+kubectl --context $CTX apply -k config/controlstream-tls/ --server-side --force-conflicts
+kubectl --context $CTX -n system rollout status deploy/swarmada-controller-manager --timeout=300s
+cd -
+KIND_CLUSTER=foc-sw KUBECONFIG=$KUBECONFIG scripts/foc-up-preflight.sh   # must end with PASSED
+```
+
+**3. Install the copilot:**
+
+```bash
+make image IMG=fleet-ops-copilot:dev
+kind load docker-image fleet-ops-copilot:dev --name foc-sw
+helm --kube-context $CTX install foc charts/fleet-ops-copilot \
+  --namespace foc-system --create-namespace --set 'swarmadaNamespaces={warehouse-a}'
+kubectl --context $CTX -n foc-system rollout status deploy/foc-mcp deploy/foc-approvals --timeout=180s
+```
+
+**4. Add the API key and the people.** Create the key Secret from a file (RUNBOOK section 2), then
+let people decide requests by binding `fleetops:approver` to them in each Swarmada namespace:
+
+```bash
+(umask 077; pbpaste > ~/foc-key.txt)
+kubectl --context $CTX -n foc-system create secret generic fleet-ops-copilot-claude \
+  --from-file=ANTHROPIC_API_KEY=$HOME/foc-key.txt --dry-run=client -o yaml | kubectl --context $CTX apply -f -
+rm ~/foc-key.txt
+kubectl --context $CTX -n warehouse-a create rolebinding approver-<person> \
+  --clusterrole=fleetops:approver --user=<person>
+```
+
+People ask with their own kubeconfig, as in section 2 above. A request is approvable only if the
+person's kubeconfig carries a bearer token (an OIDC login, for example); a client-certificate user
+is recorded as unverified (RUNBOOK section 7).
+
+**5. Remove the copilot** without touching Swarmada:
+
+```bash
+helm --kube-context $CTX uninstall foc --namespace foc-system
+```
+
+The copilot's two CRDs stay; deleting them deletes every ApprovalRequest and ApprovalDecision.
+The audit files are lost with the pods, so copy them first (RUNBOOK section 4).
+
 ### Other commands
 
 ```bash
