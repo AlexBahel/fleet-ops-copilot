@@ -73,43 +73,6 @@ spec:
   policyName: fleetops-foc-approvals-dry-run-only
   validationActions: ["Deny"]
 ---
-# fleetops.alexbahel.github.io/activated-by records who activated a draft
-# (foc activate, D79). It may name only the authenticated user who sets it.
-apiVersion: admissionregistration.k8s.io/v1
-kind: ValidatingAdmissionPolicy
-metadata:
-  name: fleetops-activated-by
-  labels:
-    {{- include "foc.chartLabels" . | nindent 4 }}
-spec:
-  failurePolicy: Fail
-  matchConstraints:
-    resourceRules:
-      - apiGroups: ["swarmada.io"]
-        apiVersions: ["*"]
-        operations: ["CREATE", "UPDATE"]
-        resources: ["fleettasks"]
-  matchConditions:
-    - name: sets-activated-by
-      expression: >-
-        has(object.metadata.annotations) && 'fleetops.alexbahel.github.io/activated-by' in object.metadata.annotations &&
-        (request.operation == 'CREATE' || !has(oldObject.metadata.annotations) ||
-        !('fleetops.alexbahel.github.io/activated-by' in oldObject.metadata.annotations) ||
-        oldObject.metadata.annotations['fleetops.alexbahel.github.io/activated-by'] != object.metadata.annotations['fleetops.alexbahel.github.io/activated-by'])
-  validations:
-    - expression: "object.metadata.annotations['fleetops.alexbahel.github.io/activated-by'] == request.userInfo.username"
-      message: "fleetops.alexbahel.github.io/activated-by must name the user who sets it"
----
-apiVersion: admissionregistration.k8s.io/v1
-kind: ValidatingAdmissionPolicyBinding
-metadata:
-  name: fleetops-activated-by
-  labels:
-    {{- include "foc.chartLabels" . | nindent 4 }}
-spec:
-  policyName: fleetops-activated-by
-  validationActions: ["Deny"]
----
 # foc-approvals may only add swarmada.io/estop-triggered to a FleetZone that
 # lacks it. Swarmada's FleetZone mutating webhook (mfleetzone.swarmada.io,
 # stampEstopActor in internal/webhook/estop_actor_defaulter.go) runs before

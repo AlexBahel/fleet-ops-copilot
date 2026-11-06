@@ -333,11 +333,15 @@ type ApprovalRequestStatus struct {
 	// the write (D76).
 	// +optional
 	ExecutionChecks *ChecksRecord `json:"executionChecks,omitempty"`
-	// ActivatedBy is the person who activated the draft, from the
-	// fleetops.alexbahel.github.io/activated-by annotation; "unknown" when the
-	// activation was made without foc activate (D79).
+	// ActivatedBy is the person who activated the draft: spec.decidedBy of
+	// the Activation ApprovalDecision foc activate created (ActivationRef);
+	// "unknown" when the draft left Draft with no such record (D79).
 	// +optional
 	ActivatedBy string `json:"activatedBy,omitempty"`
+	// ActivationRef is the Activation ApprovalDecision linked when the
+	// draft left Draft; the most recent one when there are several.
+	// +optional
+	ActivationRef string `json:"activationRef,omitempty"`
 	// Outcome is the task's terminal result, recorded after activation (D78).
 	// +optional
 	Outcome *Outcome `json:"outcome,omitempty"`
@@ -402,14 +406,33 @@ const (
 	VerdictReject  Verdict = "Reject"
 )
 
+// DecisionType says what an ApprovalDecision records.
+// +kubebuilder:validation:Enum=Verdict;Activation
+type DecisionType string
+
+const (
+	// DecisionVerdict is a person's approve or reject (the default).
+	DecisionVerdict DecisionType = "Verdict"
+	// DecisionActivation records that a person ran foc activate for an
+	// approved ActivateTask request (D79). It decides nothing.
+	DecisionActivation DecisionType = "Activation"
+)
+
 // ApprovalDecisionSpec is created by a person with their own credentials.
 // An admission policy (config/admission) binds decidedBy to the authenticated
-// username and refuses ServiceAccounts and updates.
+// username and refuses ServiceAccounts and updates, for both types.
+// +kubebuilder:validation:XValidation:rule="(has(self.type) && self.type == 'Activation') ? !has(self.verdict) : has(self.verdict)",message="a Verdict decision needs spec.verdict; an Activation record has none"
 type ApprovalDecisionSpec struct {
 	// RequestRef is the ApprovalRequest name in the same namespace.
 	// +kubebuilder:validation:MinLength=1
-	RequestRef string  `json:"requestRef"`
-	Verdict    Verdict `json:"verdict"`
+	RequestRef string `json:"requestRef"`
+	// Type is Verdict (approve or reject) or Activation (D79).
+	// +kubebuilder:default=Verdict
+	// +optional
+	Type DecisionType `json:"type,omitempty"`
+	// Verdict is set on a Verdict decision only.
+	// +optional
+	Verdict Verdict `json:"verdict,omitempty"`
 	// DecidedBy must equal the creating user's authenticated username.
 	// +kubebuilder:validation:MinLength=1
 	DecidedBy string `json:"decidedBy"`
@@ -421,10 +444,15 @@ type ApprovalDecisionSpec struct {
 	Comment string `json:"comment,omitempty"`
 }
 
-// ApprovalDecision records one person's approve or reject of one ApprovalRequest.
+// IsActivation reports whether the decision is an Activation record.
+func (s ApprovalDecisionSpec) IsActivation() bool { return s.Type == DecisionActivation }
+
+// ApprovalDecision records one person's approve or reject of one
+// ApprovalRequest, or that a person activated its draft (type Activation).
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Namespaced,shortName=adec
 // +kubebuilder:printcolumn:name="Request",type=string,JSONPath=`.spec.requestRef`
+// +kubebuilder:printcolumn:name="Type",type=string,JSONPath=`.spec.type`
 // +kubebuilder:printcolumn:name="Verdict",type=string,JSONPath=`.spec.verdict`
 // +kubebuilder:printcolumn:name="DecidedBy",type=string,JSONPath=`.spec.decidedBy`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`

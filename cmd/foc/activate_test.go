@@ -29,7 +29,6 @@ import (
 	swarmv1 "github.com/swarmada/swarmada/api/v1"
 
 	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
-	"github.com/AlexBahel/fleet-ops-copilot/internal/approval"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
 )
 
@@ -57,8 +56,9 @@ func who(user string, groups ...string) func(context.Context) (string, []string,
 	return func(context.Context) (string, []string, error) { return user, groups, nil }
 }
 
-// D79: foc activate checks first, then sends the JSON patch that clears
-// spec.draft and names the activator.
+// D79: foc activate checks first, records the activation as an
+// ApprovalDecision of type Activation, then sends the plain spec.draft=false
+// patch; the FleetTask gains no annotation.
 func TestActivate(t *testing.T) {
 	ctx := context.Background()
 	c := activationWorld(focv1.StateApproved, true)
@@ -70,10 +70,17 @@ func TestActivate(t *testing.T) {
 	if err := c.Get(ctx, client.ObjectKey{Namespace: "warehouse-a", Name: "move-1"}, &task); err != nil {
 		t.Fatal(err)
 	}
-	if task.Spec.Draft || task.Annotations[approval.ActivatedByAnnotation] != "dana" {
-		t.Fatalf("task draft=%v annotations=%v", task.Spec.Draft, task.Annotations)
+	if task.Spec.Draft || len(task.Annotations) != 0 {
+		t.Fatalf("task draft=%v annotations=%v: only spec.draft may change", task.Spec.Draft, task.Annotations)
 	}
-	for _, want := range []string{"API server: https://127.0.0.1:6443", "checks: likely feasible", "Swarmada's own acceptance is checked at execution", "activated FleetTask move-1 as dana"} {
+	var ds focv1.ApprovalDecisionList
+	if err := c.List(ctx, &ds); err != nil {
+		t.Fatal(err)
+	}
+	if len(ds.Items) != 1 || !ds.Items[0].Spec.IsActivation() || ds.Items[0].Spec.DecidedBy != "dana" || ds.Items[0].Spec.RequestRef != "areq-act" || ds.Items[0].Spec.Verdict != "" {
+		t.Fatalf("activation record %+v", ds.Items)
+	}
+	for _, want := range []string{"API server: https://127.0.0.1:6443", "checks: likely feasible", "Swarmada's own acceptance is checked at execution", "recorded ApprovalDecision areq-act-activation-", "activated FleetTask move-1 as dana"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("output lacks %q:\n%s", want, out.String())
 		}
@@ -105,6 +112,10 @@ func TestActivateRefuses(t *testing.T) {
 			_ = tc.c.Get(ctx, client.ObjectKey{Namespace: "warehouse-a", Name: "move-1"}, &task)
 			if !task.Spec.Draft {
 				t.Fatal("activated anyway")
+			}
+			var ds focv1.ApprovalDecisionList
+			if err := tc.c.List(ctx, &ds); err != nil || len(ds.Items) != 0 {
+				t.Fatalf("refused, yet recorded %v (%v)", ds.Items, err)
 			}
 		})
 	}

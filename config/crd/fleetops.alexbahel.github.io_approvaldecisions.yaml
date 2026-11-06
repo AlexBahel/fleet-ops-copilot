@@ -20,6 +20,9 @@ spec:
     - jsonPath: .spec.requestRef
       name: Request
       type: string
+    - jsonPath: .spec.type
+      name: Type
+      type: string
     - jsonPath: .spec.verdict
       name: Verdict
       type: string
@@ -32,8 +35,9 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: ApprovalDecision records one person's approve or reject of one
-          ApprovalRequest.
+        description: |-
+          ApprovalDecision records one person's approve or reject of one
+          ApprovalRequest, or that a person activated its draft (type Activation).
         properties:
           apiVersion:
             description: |-
@@ -56,7 +60,7 @@ spec:
             description: |-
               ApprovalDecisionSpec is created by a person with their own credentials.
               An admission policy (config/admission) binds decidedBy to the authenticated
-              username and refuses ServiceAccounts and updates.
+              username and refuses ServiceAccounts and updates, for both types.
             properties:
               comment:
                 type: string
@@ -76,8 +80,15 @@ spec:
                 description: RequestRef is the ApprovalRequest name in the same namespace.
                 minLength: 1
                 type: string
+              type:
+                default: Verdict
+                description: Type is Verdict (approve or reject) or Activation (D79).
+                enum:
+                - Verdict
+                - Activation
+                type: string
               verdict:
-                description: Verdict is the approver's answer.
+                description: Verdict is set on a Verdict decision only.
                 enum:
                 - Approve
                 - Reject
@@ -85,8 +96,12 @@ spec:
             required:
             - decidedBy
             - requestRef
-            - verdict
             type: object
+            x-kubernetes-validations:
+            - message: a Verdict decision needs spec.verdict; an Activation record
+                has none
+              rule: '(has(self.type) && self.type == ''Activation'') ? !has(self.verdict)
+                : has(self.verdict)'
         required:
         - spec
         type: object

@@ -441,9 +441,14 @@ spec:
             properties:
               activatedBy:
                 description: |-
-                  ActivatedBy is the person who activated the draft, from the
-                  fleetops.alexbahel.github.io/activated-by annotation; "unknown" when the
-                  activation was made without foc activate (D79).
+                  ActivatedBy is the person who activated the draft: spec.decidedBy of
+                  the Activation ApprovalDecision foc activate created (ActivationRef);
+                  "unknown" when the draft left Draft with no such record (D79).
+                type: string
+              activationRef:
+                description: |-
+                  ActivationRef is the Activation ApprovalDecision linked when the
+                  draft left Draft; the most recent one when there are several.
                 type: string
               decidedAt:
                 format: date-time

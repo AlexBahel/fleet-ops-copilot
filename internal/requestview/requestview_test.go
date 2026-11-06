@@ -163,11 +163,13 @@ func TestZoneStopView(t *testing.T) {
 func TestActivateView(t *testing.T) {
 	r := req("areq-act", t0, focv1.ApprovalRequestSpec{Type: focv1.RequestActivateTask, ActivateTask: &focv1.ActivateTaskParams{TaskName: "stage-pallet-a"}})
 	c := Of(r).Change
-	body, _ := approval.ActivationPatch(ActivatorPlaceholder, true)
-	if c.Command != "foc activate areq-act -n warehouse-a" || c.Body != string(body) || !strings.HasPrefix(c.Writer, "a person Swarmada allows") {
+	if c.Command != "foc activate areq-act -n warehouse-a" || c.Body != approval.ActivationPatch || !strings.HasPrefix(c.Writer, "a person Swarmada allows") {
 		t.Fatalf("change %+v", c)
 	}
-	want := []Line{{" ", "metadata:"}, {"+", "  annotations: {" + approval.ActivatedByAnnotation + ": <you>}"}, {" ", "spec:"}, {"-", "  draft: true"}, {"+", "  draft: false"}}
+	if !strings.Contains(c.Notes[0], "ApprovalDecision of type Activation") || !strings.Contains(c.Notes[0], "Nothing is added to the FleetTask") {
+		t.Fatalf("notes %q", c.Notes)
+	}
+	want := []Line{{" ", "spec:"}, {"-", "  draft: true"}, {"+", "  draft: false"}}
 	if !reflect.DeepEqual(c.Diff, want) {
 		t.Fatalf("diff %+v", c.Diff)
 	}

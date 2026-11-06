@@ -39,6 +39,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -508,17 +509,21 @@ func TestLiveApprovalPaths(t *testing.T) {
 		out := e.foc(t, "approve", req, "-n", ns, "--context", e.approverCtx)
 		host := "API server: " + e.approverCfg.Host
 		iHost, iNS := strings.Index(out, host), strings.Index(out, "namespace:  "+ns)
-		iCmd := strings.Index(out, "\n  kubectl --context "+e.approverCtx+" patch fleettask "+draft)
+		want := "\n  foc activate " + req + " -n " + ns + " --context " + e.approverCtx
+		iCmd := strings.Index(out, want)
 		if iHost < 0 || iNS < 0 || iCmd < 0 || iHost > iCmd || iNS > iCmd {
-			t.Fatalf("foc approve must show %q and the namespace above the activation command; got:\n%s", host, out)
+			t.Fatalf("foc approve must show %q and the namespace above %q; got:\n%s", host, want, out)
 		}
-		line := strings.TrimSpace(strings.SplitN(out[iCmd+1:], "\n", 2)[0])
-		// The person runs the printed command with their own credentials.
-		cmd := exec.Command("sh", "-c", line)
-		b, err := cmd.CombinedOutput()
-		t.Logf("$ %s\n%s", line, b)
-		if err != nil {
-			t.Fatalf("the approver's activation command failed: %v", err)
+		var before swarmv1.FleetTask
+		if err := e.admin.Get(ctx, client.ObjectKey{Namespace: ns, Name: draft}, &before); err != nil {
+			t.Fatal(err)
+		}
+		// The person runs the printed command with their own credentials:
+		// foc activate records an Activation ApprovalDecision, then sends the
+		// plain spec.draft=false patch through Swarmada's real webhook (R71).
+		act := e.foc(t, strings.Fields(strings.TrimSpace(out[iCmd+1:iCmd+len(want)]))[1:]...)
+		if !strings.Contains(act, "recorded ApprovalDecision "+req+"-activation-") || !strings.Contains(act, "activated FleetTask "+draft) {
+			t.Fatalf("foc activate output:\n%s", act)
 		}
 		e.waitState(t, req, focv1.StateExecuted, 60*time.Second)
 		var evs corev1.EventList
@@ -553,6 +558,27 @@ func TestLiveApprovalPaths(t *testing.T) {
 		t.Logf("FleetTask %s after activation: spec.draft=%v status.phase=%s", draft, ft.Spec.Draft, ft.Status.Phase)
 		if ft.Spec.Draft {
 			t.Error("still a draft")
+		}
+		if !maps.Equal(ft.Annotations, before.Annotations) {
+			t.Errorf("activation changed the FleetTask's annotations: %v -> %v", before.Annotations, ft.Annotations)
+		}
+		// The activation record: our own API, bound to the authenticated
+		// person, linked by foc-approvals.
+		var got focv1.ApprovalRequest
+		if err := e.admin.Get(ctx, client.ObjectKey{Namespace: ns, Name: req}, &got); err != nil {
+			t.Fatal(err)
+		}
+		var rec focv1.ApprovalDecision
+		if err := e.admin.Get(ctx, client.ObjectKey{Namespace: ns, Name: got.Status.ActivationRef}, &rec); err != nil {
+			t.Fatalf("activationRef %q: %v", got.Status.ActivationRef, err)
+		}
+		rec.ManagedFields = nil
+		logYAML(t, "ApprovalDecision "+rec.Name, rec)
+		if !rec.Spec.IsActivation() || rec.Spec.RequestRef != req || rec.Spec.DecidedBy != got.Status.ActivatedBy || strings.HasPrefix(rec.Spec.DecidedBy, "system:serviceaccount:") {
+			t.Errorf("activation record %+v, request activatedBy %q", rec.Spec, got.Status.ActivatedBy)
+		}
+		if got.Status.ActivatedBy != got.Status.DecidedBy {
+			t.Logf("note: activated by %q, approved by %q", got.Status.ActivatedBy, got.Status.DecidedBy)
 		}
 	})
 

@@ -20,12 +20,15 @@ package envtest
 
 import (
 	"context"
+	"maps"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	authzv1 "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -168,10 +171,13 @@ func TestFocMcpHasNoCreateOnSwarmada(t *testing.T) {
 	}
 }
 
-// D79: the activation patch foc activate sends records the activator, the
-// admission policy refuses an annotation naming someone else, and
-// foc-approvals records the activator.
-func TestActivatedByIsTheAuthenticatedUser(t *testing.T) {
+// D79 (R71): foc activate records the activation in our own API, as an
+// ApprovalDecision of type Activation, then sends the plain spec.draft=false
+// patch. The fleetops-decisions admission policy binds the record to the
+// authenticated caller; a record decides nothing; a record made before the
+// approval is never linked; a record whose patch Swarmada refused is listed,
+// not linked; activation changes nothing on the FleetTask but spec.draft.
+func TestActivationRecordIsTheAuthenticatedUser(t *testing.T) {
 	ctx := context.Background()
 	h := newHarness(t, nil)
 	ensureZone(t, "act-zone")
@@ -189,32 +195,102 @@ func TestActivatedByIsTheAuthenticatedUser(t *testing.T) {
 		t.Fatal(err)
 	}
 	actName := reqName(t, act)
+	record := func(person, decidedBy string) (*focv1.ApprovalDecision, error) {
+		_, groups, err := approverFor(t, person).Identity(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		d := &focv1.ApprovalDecision{ObjectMeta: metav1.ObjectMeta{GenerateName: actName + "-activation-", Namespace: swarmNS},
+			Spec: focv1.ApprovalDecisionSpec{RequestRef: actName, Type: focv1.DecisionActivation, DecidedBy: decidedBy, DecidedByGroups: groups}}
+		return d, asPerson(t, person).Create(ctx, d)
+	}
+	// Same binding as a verdict: a record naming someone else is refused.
+	if _, err := record("dana", "eve"); err == nil || !strings.Contains(err.Error(), "spec.decidedBy must be the authenticated user") {
+		t.Fatalf("forged activation record: %v", err)
+	}
+	// A record carries no verdict, and a verdict decision needs one.
+	_, groups, _ := approverFor(t, "dana").Identity(ctx)
+	bad := &focv1.ApprovalDecision{ObjectMeta: metav1.ObjectMeta{GenerateName: "bad-", Namespace: swarmNS},
+		Spec: focv1.ApprovalDecisionSpec{RequestRef: actName, Type: focv1.DecisionActivation, Verdict: focv1.VerdictApprove, DecidedBy: "dana", DecidedByGroups: groups}}
+	if err := asPerson(t, "dana").Create(ctx, bad); err == nil || !strings.Contains(err.Error(), "an Activation record has none") {
+		t.Fatalf("activation record with a verdict: %v", err)
+	}
+	// A record made while the request is Pending decides nothing, and is
+	// never linked (it predates the approval).
+	early, err := record("sam", "sam")
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(1100 * time.Millisecond) // creationTimestamp has one-second resolution
+	if r := waitState(t, actName, focv1.StatePending); slices.Contains(r.Status.RefusedDecisions, early.Name) || r.Status.DecidedBy != "" {
+		t.Fatalf("an activation record was taken as a decision: %+v", r.Status)
+	}
 	if _, err := approverFor(t, "dana").Decide(ctx, swarmNS, actName, focv1.VerdictApprove, ""); err != nil {
 		t.Fatal(err)
 	}
 	waitState(t, actName, focv1.StateApproved)
+	time.Sleep(1100 * time.Millisecond)
+	// eve may record, but may not activate (she holds no Swarmada role).
 	var task swarmv1.FleetTask
 	if err := admin.Get(ctx, client.ObjectKey{Namespace: swarmNS, Name: "act-move"}, &task); err != nil {
 		t.Fatal(err)
 	}
-	forged, _ := approval.ActivationPatch("eve", len(task.Annotations) > 0)
-	if err := asPerson(t, "dana").Patch(ctx, &task, client.RawPatch(types.JSONPatchType, forged)); err == nil || !strings.Contains(err.Error(), "must name the user who sets it") {
-		t.Fatalf("forged activator: %v", err)
+	if _, err := record("eve", "eve"); err != nil {
+		t.Fatal(err)
 	}
-	patch, _ := approval.ActivationPatch("dana", len(task.Annotations) > 0)
-	if err := asPerson(t, "dana").Patch(ctx, &task, client.RawPatch(types.JSONPatchType, patch)); err != nil {
+	if err := asPerson(t, "eve").Patch(ctx, &task, client.RawPatch(types.MergePatchType, []byte(approval.ActivationPatch))); err == nil || !strings.Contains(err.Error(), "forbidden") {
+		t.Fatalf("eve's activation: %v", err)
+	}
+	time.Sleep(1100 * time.Millisecond)
+	before := maps.Clone(task.Annotations)
+	mine, err := record("dana", "dana")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := asPerson(t, "dana").Patch(ctx, &task, client.RawPatch(types.MergePatchType, []byte(approval.ActivationPatch))); err != nil {
 		t.Fatalf("dana's activation: %v", err)
 	}
 	got := waitState(t, actName, focv1.StateExecuted)
-	if got.Status.ActivatedBy != "dana" {
-		t.Fatalf("activatedBy %q", got.Status.ActivatedBy)
+	if got.Status.ActivatedBy != "dana" || got.Status.ActivationRef != mine.Name || !strings.Contains(got.Status.Message, "1 earlier Activation record(s) by eve") {
+		t.Fatalf("activatedBy %q ref %q (want %s), message %q", got.Status.ActivatedBy, got.Status.ActivationRef, mine.Name, got.Status.Message)
 	}
-	// The JSON patch fails once the task is no longer a draft.
 	if err := admin.Get(ctx, client.ObjectKeyFromObject(&task), &task); err != nil {
 		t.Fatal(err)
 	}
-	if err := asPerson(t, "dana").Patch(ctx, &task, client.RawPatch(types.JSONPatchType, patch)); err == nil {
-		t.Fatal("second activation patch accepted")
+	if !maps.Equal(task.Annotations, before) {
+		t.Fatalf("activation changed annotations: %v -> %v", before, task.Annotations)
+	}
+}
+
+// R71: the copilot installs no admission policy that matches the Swarmada
+// resources a person activates (fleettasks are matched only for
+// foc-approvals' own writes).
+func TestNoCopilotPolicyOnActivation(t *testing.T) {
+	ctx := context.Background()
+	ps := &unstructured.UnstructuredList{}
+	ps.SetAPIVersion("admissionregistration.k8s.io/v1")
+	ps.SetKind("ValidatingAdmissionPolicyList")
+	if err := admin.List(ctx, ps); err != nil {
+		t.Fatal(err)
+	}
+	if len(ps.Items) == 0 {
+		t.Fatal("no admission policies installed")
+	}
+	for _, p := range ps.Items {
+		rules, _, _ := unstructured.NestedSlice(p.Object, "spec", "matchConstraints", "resourceRules")
+		conds, _, _ := unstructured.NestedSlice(p.Object, "spec", "matchConditions")
+		forApprovals := false
+		for _, c := range conds {
+			if e, _ := c.(map[string]any)["expression"].(string); strings.Contains(e, "system:serviceaccount:foc-system:foc-approvals") {
+				forApprovals = true
+			}
+		}
+		for _, r := range rules {
+			groups, _, _ := unstructured.NestedStringSlice(r.(map[string]any), "apiGroups")
+			if slices.Contains(groups, "swarmada.io") && !forApprovals {
+				t.Errorf("policy %s matches Swarmada resources for every caller", p.GetName())
+			}
+		}
 	}
 }
 

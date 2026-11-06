@@ -17,7 +17,6 @@ limitations under the License.
 package approval
 
 import (
-	"strings"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -75,15 +74,7 @@ func TestZoneStopPatchAndActivationCommand(t *testing.T) {
 	if got := ActivationCommand("warehouse-a", "areq-1"); got != "foc activate areq-1 -n warehouse-a" {
 		t.Fatalf("command %s", got)
 	}
-	p, err := ActivationPatch("dana", false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(p) != `[{"op":"test","path":"/spec/draft","value":true},{"op":"replace","path":"/spec/draft","value":false},{"op":"add","path":"/metadata/annotations","value":{"fleetops.alexbahel.github.io/activated-by":"dana"}}]` {
-		t.Fatalf("patch %s", p)
-	}
-	p, _ = ActivationPatch("dana", true)
-	if !strings.Contains(string(p), `"path":"/metadata/annotations/fleetops.alexbahel.github.io~1activated-by","value":"dana"`) {
-		t.Fatalf("patch %s", p)
+	if ActivationPatch != `{"spec":{"draft":false}}` {
+		t.Fatalf("activation patch %s", ActivationPatch)
 	}
 }

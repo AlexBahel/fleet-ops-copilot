@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -33,6 +34,7 @@ import (
 	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/approval"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/feasibility"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/policy"
 )
 
@@ -47,9 +49,11 @@ type activator struct {
 // activate runs an approved ActivateTask request with the person's own
 // credentials (DESIGN.md §3.10.9, D79): it refuses a ServiceAccount, a
 // request that is not approved, a task that is no longer a draft, and a
-// fleet check with a blocker; then it sends one JSON patch that fails if
-// the task changed, clears spec.draft and records the activator. Swarmada
-// checks the person's own activate verb.
+// fleet check with a blocker; then it creates an ApprovalDecision of type
+// Activation naming the person (the fleetops-decisions admission policy binds
+// it to the authenticated caller) and sends the plain spec.draft=false patch.
+// Swarmada checks the person's own activate verb; nothing is added to the
+// FleetTask. foc-approvals links the record when the task leaves Draft.
 func activate(ctx context.Context, a activator, ns, request, kctx string, stdout io.Writer) error {
 	user, groups, err := a.Identity(ctx)
 	if err != nil {
@@ -104,14 +108,18 @@ func activate(ctx context.Context, a activator, ns, request, kctx string, stdout
 	if rep.Verdict == feasibility.Blocked {
 		return errors.New("not activated: a check is blocked (above)")
 	}
-	patch, err := approval.ActivationPatch(user, len(task.Annotations) > 0)
-	if err != nil {
-		return err
+	rec := &focv1.ApprovalDecision{
+		ObjectMeta: metav1.ObjectMeta{GenerateName: request + "-activation-", Namespace: ns, Labels: map[string]string{fleet.RequestLabel: request}},
+		Spec:       focv1.ApprovalDecisionSpec{RequestRef: request, Type: focv1.DecisionActivation, DecidedBy: user, DecidedByGroups: groups},
 	}
-	if err := a.C.Patch(ctx, &task, client.RawPatch(types.JSONPatchType, patch)); err != nil {
-		return fmt.Errorf("not activated: %w", err)
+	if err := a.C.Create(ctx, rec); err != nil {
+		return fmt.Errorf("not activated: recording the activation (an ApprovalDecision of type Activation; the fleetops:approver role grants create): %w", err)
 	}
-	_, _ = fmt.Fprintf(stdout, "activated FleetTask %s as %s; foc-approvals records the activation on %s\n", name, user, request)
+	_, _ = fmt.Fprintf(stdout, "recorded ApprovalDecision %s (type Activation, by %s)\n", rec.Name, user)
+	if err := a.C.Patch(ctx, &task, client.RawPatch(types.MergePatchType, []byte(approval.ActivationPatch))); err != nil {
+		return fmt.Errorf("not activated: %w (the Activation record %s stays; it is linked only if the task leaves Draft)", err, rec.Name)
+	}
+	_, _ = fmt.Fprintf(stdout, "activated FleetTask %s as %s; foc-approvals links %s to %s\n", name, user, rec.Name, request)
 	return nil
 }
 

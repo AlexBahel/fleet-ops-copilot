@@ -206,16 +206,17 @@ func ChangeOf(r *focv1.ApprovalRequest) Change {
 			break
 		}
 		cmd := approval.ActivationCommand(r.Namespace, r.Name)
-		body, _ := approval.ActivationPatch(ActivatorPlaceholder, true)
 		return Change{
 			Writer:    "a person Swarmada allows to activate, with their own credentials, after approval (the copilot never activates)",
-			Operation: "JSON patch",
+			Operation: "JSON merge patch (spec.draft only)",
 			Target:    fmt.Sprintf("FleetTask %s/%s", r.Namespace, r.Spec.ActivateTask.TaskName),
-			Diff: []Line{{Op: " ", Text: "metadata:"}, {Op: "+", Text: "  annotations: {" + approval.ActivatedByAnnotation + ": " + ActivatorPlaceholder + "}"},
-				{Op: " ", Text: "spec:"}, {Op: "-", Text: "  draft: true"}, {Op: "+", Text: "  draft: false"}},
-			Body:    string(body),
-			Command: cmd,
-			Notes:   []string{"Swarmada refuses this patch to every ServiceAccount and checks the activate verb of the person who sends it. foc activate re-checks the fleet first and fails if the task is no longer a draft; foc-approvals records the activator from the annotation (D79)."},
+			Diff:      []Line{{Op: " ", Text: "spec:"}, {Op: "-", Text: "  draft: true"}, {Op: "+", Text: "  draft: false"}},
+			Body:      approval.ActivationPatch,
+			Command:   cmd,
+			Notes: []string{
+				"Before the patch, foc activate re-checks the fleet and creates an ApprovalDecision of type Activation naming " + ActivatorPlaceholder + " (the fleetops-decisions admission policy binds it to the authenticated person). Nothing is added to the FleetTask.",
+				"Swarmada refuses this patch to every ServiceAccount and checks the activate verb of the person who sends it. When the task leaves Draft, foc-approvals links the Activation record to this request (D79).",
+			},
 		}
 	}
 	return Change{Notes: []string{fmt.Sprintf("request type %q has no parameters the UI can show", r.Spec.Type)}}

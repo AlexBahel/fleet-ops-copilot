@@ -177,8 +177,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, key reconcile.Request) (reco
 	}
 	for i := range decisions {
 		d := &decisions[i]
-		if slices.Contains(req.Status.RefusedDecisions, d.Name) {
-			continue
+		if d.Spec.IsActivation() || slices.Contains(req.Status.RefusedDecisions, d.Name) {
+			continue // an Activation record decides nothing (D79)
 		}
 		accepted, err := r.consider(ctx, &req, d)
 		if err != nil || accepted {
@@ -349,20 +349,57 @@ func (r *Reconciler) observeActivation(ctx context.Context, req *focv1.ApprovalR
 	}
 	now := metav1.NewTime(r.now())
 	target := focv1.TargetRef{APIVersion: swarmv1.GroupVersion.String(), Kind: "FleetTask", Name: t.Name}
-	// foc activate records the activator in an annotation that the
-	// fleetops-activated-by admission policy binds to the authenticated user
-	// (D79); an activation made another way leaves it unknown.
-	activator := t.Annotations[ActivatedByAnnotation]
-	if activator == "" {
-		activator = "unknown"
+	// foc activate creates an Activation ApprovalDecision, bound to the
+	// authenticated person by the fleetops-decisions admission policy, before
+	// it patches the task (D79). An activation made another way has none.
+	rec, others, err := r.activationRecord(ctx, req)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	activator, ref := "unknown", ""
+	if rec != nil {
+		activator, ref = rec.Spec.DecidedBy, rec.Name
+	}
+	detail := map[string]any{"target": "FleetTask/" + t.Name, "phase": string(t.Status.Phase), "approvedBy": req.Status.DecidedBy, "activatedBy": activator, "activationRef": ref}
+	msg := "activation observed (performed by " + activator + ", not by the copilot)"
+	if len(others) > 0 {
+		detail["otherActivationRecords"] = others
+		msg += fmt.Sprintf("; %d earlier Activation record(s) by %s", len(others), strings.Join(others, ", "))
 	}
 	r.log(audit.Entry{Kind: audit.KindActivationObserved, Actor: activator, Namespace: req.Namespace, Object: "ApprovalRequest/" + req.Name, SessionID: req.Spec.SessionID,
-		Message: "spec.draft is false; activation was performed outside the copilot", Detail: map[string]any{"target": "FleetTask/" + t.Name, "phase": string(t.Status.Phase), "approvedBy": req.Status.DecidedBy, "activatedBy": activator}})
+		Message: "spec.draft is false; activation was performed outside the copilot", Detail: detail})
 	r.event(ctx, req, corev1.EventTypeNormal, "ActivationObserved", fmt.Sprintf("FleetTask/%s left Draft after approval by %s, activated by %s; the copilot did not perform the activation", t.Name, req.Status.DecidedBy, activator))
 	return reconcile.Result{}, r.setStatus(ctx, req, func(s *focv1.ApprovalRequestStatus) {
-		s.State, s.ExecutedAt, s.Target, s.ActivatedBy = focv1.StateExecuted, &now, &target, activator
-		s.Message = "activation observed (performed by " + activator + ", not by the copilot)"
+		s.State, s.ExecutedAt, s.Target, s.ActivatedBy, s.ActivationRef = focv1.StateExecuted, &now, &target, activator, ref
+		s.Message = msg
 	})
+}
+
+// activationRecord returns the most recent Activation ApprovalDecision for
+// an approved ActivateTask request, made no earlier than the approval, and
+// the people named by any earlier ones (foc activate records before it
+// patches, so a record whose patch Swarmada refused can precede the one that
+// succeeded).
+func (r *Reconciler) activationRecord(ctx context.Context, req *focv1.ApprovalRequest) (*focv1.ApprovalDecision, []string, error) {
+	ds, err := r.decisionsFor(ctx, req)
+	if err != nil {
+		return nil, nil, err
+	}
+	var recs []focv1.ApprovalDecision
+	for _, d := range ds {
+		if !d.Spec.IsActivation() || (req.Status.DecidedAt != nil && d.CreationTimestamp.Before(&metav1.Time{Time: req.Status.DecidedAt.Truncate(time.Second)})) {
+			continue
+		}
+		recs = append(recs, d)
+	}
+	if len(recs) == 0 {
+		return nil, nil, nil
+	}
+	var others []string
+	for _, d := range recs[:len(recs)-1] {
+		others = append(others, d.Spec.DecidedBy)
+	}
+	return &recs[len(recs)-1], others, nil
 }
 
 // MaintenanceName is the deterministic ZoneMaintenance name for a request, so
@@ -533,27 +570,10 @@ func ZoneStopPatch(req *focv1.ApprovalRequest) ([]byte, error) {
 	return json.Marshal(map[string]any{"metadata": map[string]any{"annotations": map[string]string{fleet.EstopAnnotation: req.Spec.ZoneStop.Reason}}})
 }
 
-// ActivatedByAnnotation records who activated a draft. foc activate sets it
-// in the activation patch, and the fleetops-activated-by admission policy
-// admits it only with the authenticated user's name (D79).
-const ActivatedByAnnotation = "fleetops.alexbahel.github.io/activated-by"
-
-// ActivationPatch is the JSON patch foc activate sends with the person's own
-// credentials: it fails unless the task is still a draft, clears spec.draft
-// and records the activator. hasAnnotations says whether the task already
-// has metadata.annotations (a JSON patch cannot add a key to a missing map).
-func ActivationPatch(user string, hasAnnotations bool) ([]byte, error) {
-	ops := []map[string]any{
-		{"op": "test", "path": "/spec/draft", "value": true},
-		{"op": "replace", "path": "/spec/draft", "value": false},
-	}
-	if hasAnnotations {
-		ops = append(ops, map[string]any{"op": "add", "path": "/metadata/annotations/" + strings.ReplaceAll(ActivatedByAnnotation, "/", "~1"), "value": user})
-	} else {
-		ops = append(ops, map[string]any{"op": "add", "path": "/metadata/annotations", "value": map[string]string{ActivatedByAnnotation: user}})
-	}
-	return json.Marshal(ops)
-}
+// ActivationPatch is the merge patch foc activate sends with the person's own
+// credentials, after it records the activation (D79): it clears spec.draft
+// and nothing else. The copilot never sends it.
+const ActivationPatch = `{"spec":{"draft":false}}`
 
 func (r *Reconciler) setStatus(ctx context.Context, req *focv1.ApprovalRequest, mutate func(*focv1.ApprovalRequestStatus)) error {
 	base := req.DeepCopy()
