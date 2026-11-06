@@ -560,3 +560,28 @@ func TestRequiredReadIsTheModels(t *testing.T) {
 		t.Fatal("foc-agent's get_zone met the model's required read")
 	}
 }
+
+// R71: the engine's fixed refusal sentences count only in a reply the
+// engine wrote; the same words in model prose do not.
+func TestEngineRefusalWordsOnlyFromTheEngine(t *testing.T) {
+	prose := "That is not possible here, so nothing was filed."
+	model := agent.Trace{Final: prose, Conversation: []agent.TurnRecord{{Person: "x", Reply: prose}}}
+	if statesRefusal(model) {
+		t.Fatal("model prose counted as the engine's refusal")
+	}
+	engine := "Not possible here: the site catalogue has no kind \"weld\". Nothing was filed."
+	np := agent.Trace{Final: engine, Conversation: []agent.TurnRecord{{Person: "x", Reply: engine, Dialogue: &agent.DialogueEvent{Outcome: agent.OutcomeNotPossible}}}}
+	if !statesRefusal(np) {
+		t.Fatal("the engine's not-possible statement not counted")
+	}
+	blocked := "Preview ...\nNothing can be filed as it stands. 1 ..."
+	for _, b := range []bool{true, false} {
+		tr := agent.Trace{Final: blocked, Conversation: []agent.TurnRecord{{Person: "x", Reply: blocked, Dialogue: &agent.DialogueEvent{Outcome: agent.OutcomePreview, Blocked: b}}}}
+		if statesRefusal(tr) != b {
+			t.Fatalf("blocked=%v preview: refusal %v", b, !b)
+		}
+	}
+	if !statesRefusal(agent.Trace{Final: "I cannot do that."}) {
+		t.Fatal("a plain refusal word no longer counts")
+	}
+}

@@ -28,9 +28,11 @@ old one.
 Each fix needs a judge test that fails on the old judge, and a check that no run in the three
 recorded results changes verdict in the wrong direction. FOC-8: each test uses the recorded text
 that the v3 judge failed. All three fixes only add ways to accept a citation (J1 removes a
-reference, J2 and J3 add a reading), so no run v3 passed can fail on them; this argument is
-the check made, not a re-judging of the recorded runs, whose cluster observations are not
-recorded.
+reference, J2 and J3 add a reading), so no run v3 passed can fail on them. R71 measured it: the
+225 recorded runs, replayed offline on the v3 tree (every recorded v3 verdict reproduced) and
+judged by judge v4 on criteria 1–4, change in six runs, all from fail to pass (J1: Sonnet 5.5
+diagnose-01 run 1, Opus 5.5 diagnose-07 run 2; J2: Sonnet 5.5 diagnose-02 run 3; J3: Qwen2.5-7B
+diagnose-07 runs 1–3); none from pass to fail (`docs/DESIGN.md` §4.4).
 
 ## Scenario
 
