@@ -218,17 +218,33 @@ func TestOtherAsks(t *testing.T) {
 	if in.Actions[0].Type != "PickUp" || in.Actions[1].DependsOn[0] != "pickup" || in.Actions[1].Location.Waypoint != "staging-shelf-a" {
 		t.Fatalf("deliver input %+v", in)
 	}
-	// Patrol: route then rounds.
+	// Patrol: the route is asked; the rounds have a default (1) and are
+	// shown in the preview, not asked (rule 6); words that give them count.
 	st = newState("patrol the warehouse")
 	e.Propose(st, Input{Ask: "patrol"}, snap)
 	o, _, _ = e.Answer(st, 1, "", snap)
-	if o.Question == nil || o.Question.ID != "patrol.times" {
-		t.Fatalf("patrol %+v", o)
-	}
-	o, _, _ = e.Answer(st, 2, "", snap)
 	in = draftInput(t, o)
-	if in.Repeat != 3 || len(in.Actions[0].Route) != 3 {
-		t.Fatalf("patrol input %+v", in)
+	if in.Repeat != 1 || len(in.Actions[0].Route) != 3 || len(st.Asked) != 1 || !strings.Contains(strings.Join(o.Proposal.Lines, "|"), "Times: 1 round(s) (default)") {
+		t.Fatalf("patrol input %+v lines %v asked %v", in, o.Proposal.Lines, st.Asked)
+	}
+	st = newState("patrol the warehouse three times")
+	o = e.Propose(st, Input{Ask: "patrol", Fields: map[string]string{"times": "3"}}, snap)
+	o, _, _ = e.Answer(st, 1, "", snap)
+	if in = draftInput(t, o); in.Repeat != 3 {
+		t.Fatalf("patrol times %+v", in)
+	}
+	// A draft name the person gives is used.
+	st = newState("move a robot to the charging bay, call it park-1")
+	o = e.Propose(st, Input{Ask: "move", Fields: map[string]string{"location": "charging-bay", "name": "park-1"}}, snap)
+	if in = draftInput(t, o); in.Name != "park-1" {
+		t.Fatalf("name %q", in.Name)
+	}
+	// Zone maintenance with everything given or defaulted asks nothing.
+	st = newState("put warehouse-a into maintenance for floor cleaning")
+	o = e.Propose(st, Input{Ask: "zone-maintenance", Fields: map[string]string{"reason": "floor cleaning"}}, snap)
+	zm, ok := o.Proposal.Input.(tools.ZoneMaintenanceInput)
+	if !ok || zm.Mode != "Graceful" || zm.ScheduledStart != "" || len(st.Asked) != 0 {
+		t.Fatalf("maintenance %+v asked %v", o, st.Asked)
 	}
 	// Zone stop: one zone, inferred; the reason defaults to the person's words.
 	st = newState("stop warehouse-a, there is a spill")

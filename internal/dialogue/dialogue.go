@@ -200,6 +200,11 @@ func (e *Engine) Propose(st *State, in Input, snap Snapshot) Outcome {
 		if st.SomethingElse == nil {
 			st.SomethingElse = &SomethingElse{}
 		}
+		if st.SomethingElse.Text == "" && in.SomethingElse != nil {
+			// The request was "something else" from its first message: the
+			// person's words are that message, verbatim.
+			st.SomethingElse.Text = st.Message
+		}
 		if in.SomethingElse == nil {
 			// The person's request fits no ask: one open question.
 			return e.askOpen(st)
@@ -393,7 +398,11 @@ func (e *Engine) next(st *State, snap Snapshot) Outcome {
 	return e.proposal(st, snap.waypoints())
 }
 
+// answered reports whether a question need not be asked: every field it
+// fills is known, from the person's words or a default of the kind (rule 6:
+// defaults are shown in the preview, not asked).
 func (e *Engine) answered(st *State, q catalogue.Question) bool {
+	k, _ := e.Cat.KindByName(st.Kind)
 	for _, f := range q.Fills {
 		if f == "kind" {
 			if st.Kind == "" {
@@ -401,9 +410,15 @@ func (e *Engine) answered(st *State, q catalogue.Question) bool {
 			}
 			continue
 		}
-		if _, ok := st.Fields[f]; !ok {
-			return false
+		if _, ok := st.Fields[f]; ok {
+			continue
 		}
+		if k != nil {
+			if _, ok := e.Cat.Default(k, f); ok {
+				continue
+			}
+		}
+		return false
 	}
 	return true
 }
@@ -604,12 +619,16 @@ func (e *Engine) proposal(st *State, wps map[string]Waypoint) Outcome {
 		FailureHandling: e.Cat.Defaults["failureHandling"], CatalogueVersion: e.Cat.Version, CatalogueSHA256: e.Cat.SHA256}
 	switch k.Request {
 	case catalogue.RequestDraftTask:
-		in := tools.DraftTaskInput{Name: draftName(k.Name, vals, st.Message), Purpose: purpose(k, vals), Preview: pv}
+		name := draftName(k.Name, vals, st.Message)
+		if n := st.Fields["name"]; n != "" && dnsName.MatchString(n) {
+			name = n // the name the person gave
+		}
+		in := tools.DraftTaskInput{Name: name, Purpose: purpose(k, vals), Preview: pv}
 		for _, m := range k.Members {
 			in.Actions = append(in.Actions, e.member(m, k, vals, wps, instr))
 		}
 		if k.Repeat != "" {
-			if n, err := strconv.Atoi(vals[k.Repeat]); err == nil && n > 0 {
+			if n, err := strconv.ParseInt(vals[k.Repeat], 10, 32); err == nil && n > 0 {
 				in.Repeat = int32(n)
 			}
 		}
@@ -775,7 +794,10 @@ func fieldLine(f, v string, def bool, k *catalogue.Kind, wps map[string]Waypoint
 	return fmt.Sprintf("%s: %s", label(f), shown)
 }
 
-var nonName = regexp.MustCompile(`[^a-z0-9-]+`)
+var (
+	nonName = regexp.MustCompile(`[^a-z0-9-]+`)
+	dnsName = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$`)
+)
 
 // draftName is a DNS-1123 name from the kind and its main field, with a
 // short hash of the person's words so two requests do not collide.

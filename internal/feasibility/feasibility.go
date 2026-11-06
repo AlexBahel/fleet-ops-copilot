@@ -331,7 +331,7 @@ func (e *eval) task(t *swarmv1.FleetTask, creating bool) {
 	e.r.Eligible = map[string][]string{}
 	for _, m := range t.Spec.Actions {
 		e.member(m.Name, m.Action)
-		if cap := e.s.Config.PendingCap; cap > 0 && m.Action.Zone != "" && int32(pendingByZone[m.Action.Zone]) >= cap {
+		if cap := e.s.Config.PendingCap; cap > 0 && m.Action.Zone != "" && pendingByZone[m.Action.Zone] >= int(cap) {
 			e.warn(CodePendingCap, m.Name, "zone %s already has %d Pending FleetActions, at the namespace cap of %d; Swarmada refuses more until some are assigned", m.Action.Zone, pendingByZone[m.Action.Zone], cap)
 		}
 	}
@@ -396,10 +396,7 @@ func payloadOf(a swarmv1.FleetActionSpec) map[string]any {
 }
 
 func (e *eval) member(name string, a swarmv1.FleetActionSpec) {
-	explained := false
-	if a.Zone != "" && !e.zoneState(name, a) {
-		explained = true
-	}
+	explained := a.Zone != "" && !e.zoneState(name, a)
 	if wp, _ := payloadOf(a)["waypoint"].(string); wp != "" && a.Zone != "" {
 		if !e.waypointExists(a.Zone, wp) {
 			e.block(CodeWaypointNotFound, name, "waypoint %s is not declared in FleetZone %s or its ancestors", wp, a.Zone)

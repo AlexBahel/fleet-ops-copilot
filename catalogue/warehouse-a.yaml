@@ -139,7 +139,8 @@ kinds:
     request: ZoneMaintenance
     required: [zone, reason]
     optional: [mode, start]
-    defaults: {mode: Graceful}
+    # An empty start is "on approval".
+    defaults: {mode: Graceful, start: ""}
     results: [ZoneMaintenance status.phase, status.pausedRobots, status.windingDownRobots]
 
   - name: zone-stop

@@ -53,7 +53,9 @@ const (
 
 // Fields is the closed vocabulary of request fields a kind, a question or a
 // default may name.
-var Fields = []string{"location", "from", "to", "route", "robot", "zone", "times", "mode", "start", "reason", "task", "priority", "onFailure", "dock"}
+// "name" is the draft's name when the person gives one; every DraftTask kind
+// accepts it without listing it.
+var Fields = []string{"location", "from", "to", "route", "robot", "zone", "times", "mode", "start", "reason", "task", "priority", "onFailure", "dock", "name"}
 
 // fieldsFor lists the fields each request type can carry.
 var fieldsFor = map[string][]string{
