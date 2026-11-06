@@ -6,15 +6,17 @@ remove it.
 ## Not built yet
 
 - The five agent roles (Router, Diagnose, Dispatch, Zone ops, Reporter) and their tool
-  allow-lists. The tool-use loop (`internal/agent`) offers every tool.
+  allow-lists. The tool-use loop (`internal/agent`) offers every read tool, `check_task` and
+  `propose_task`; never a request tool or `whoami` (D74).
 - A login for the web UI (DESIGN D56). Without one, requests filed from the page are never
   approvable; `foc chat` is the client that files approvable requests.
 - OIDC for people (ruling R43, production path). On kind the people authenticate with a static
   token file (`hack/kind-people.sh`, test only, D60); the OIDC configuration is described in
   `docs/RUNBOOK.md` and has not been set up or run anywhere. Requester authentication has not
   seen an OIDC token (see "Not measured yet").
-- Conversation memory: each chat message is an independent agent run (D55). No streaming of
-  answers: the page and `foc chat` wait for the whole run.
+- Durable conversation state: foc-agent keeps conversations in memory (D75), so a restart loses
+  them and the chart runs one foc-agent replica (BACKLOG-v4, "Product"). No streaming of answers:
+  the page and `foc chat` wait for the whole run.
 - The air-gapped profile is not templated in the Helm chart; it is installed beside it from
   `config/airgap` (`make deploy-airgap`), and neither it nor the chart runs foc-agent with
   `-backend llamacpp`. `make deploy-kind` installs the plain manifests (`config/deploy`) on a kind
@@ -36,11 +38,17 @@ remove it.
   to new connections only (see "Egress in the air-gapped profile"): a pod started before the
   rule existed keeps its old connections, so restart foc-mcp and foc-agent after applying it.
 - More than one approver per request (`minApprovers`): one accepted decision approves.
-- A waypoint in a drafted task. `request_draft_task` takes an action's name, type, zone, priority,
-  required capabilities, preferred robot and dependencies (`internal/tools/requests.go`), and no payload, so a
-  Navigate action cannot say where to go. Scenario dispatch-04 asks for an inspection of a named
-  dock and the tool cannot express it: both Claude models failed all three runs of it, and the
-  failure is a product gap, not a model failure (ruling R49).
+- Locations reach the robot only through the action's payload, in this site's convention
+  (`{"waypoint", "x", "y"}`, D77): Swarmada v0.4 delivers no waypoint to an adapter (inventory C4),
+  so an adapter that does not read `x` and `y` does not know where to go. The quickstart's adapter
+  reads them. (Closes BACKLOG-v4 P1 in the copilot.)
+- **Patrol shape (R69).** A patrol is one Patrol member per waypoint of the route, run in order
+  `times` rounds (FleetTask `spec.flow`), because the quickstart's adapter drives each Patrol action
+  to one `x`,`y`. An adapter that patrols a whole route in one action would need a catalogue kind
+  with one member and the route in its payload.
+- What a robot found is not reported: an inspection, a patrol's observations and a survey's map
+  are class (b) (`docs/design/foc8-inventory.md`). The preview says so; a person reviews the
+  result on the robot's side. Needs a Swarmada result field for robot actions (draft 5, C1).
 
 ## Not measured yet
 
@@ -118,7 +126,49 @@ remove it.
   gate served. The refusal is covered by the policy unit tests (`internal/policy/policy_test.go`),
   an envtest test (`test/envtest/approval_test.go`) and the live test (`test/live`).
 
+- **Eval surface v4 has no model results.** No model has been run on the guided-request
+  architecture (FOC-8 made no cloud call); the record runs of 2026-11-05 are on v3 and are not
+  comparable (D81). On v4 the unsafe-write measure counts requests foc-agent filed after a
+  confirmation the scenario did not expect, not model write attempts (R69).
+- **Guided requests have not run on a cluster.** The dialogue, `check_task`, the confirmation
+  invariant, the execution re-check, `foc activate` and the follow-up are tested with the scripted
+  backend, unit tests, envtest and the fixture evaluations. In envtest the executor's dry runs reach
+  the CRD schema and the copilot's admission policies only; Swarmada's webhooks have not answered
+  one (no cluster run in FOC-8). Whether Swarmada's FleetTask webhook admits the activation patch
+  that also sets `fleetops.alexbahel.github.io/activated-by` has been checked against the envtest
+  stand-in only.
+- **`stallsAfterActivationProxy`** in results.json is a proxy: `check_task` re-run on the fixture
+  at the end of a run, not an observation of work left Pending by Swarmada.
+- **Fixture changes for v4.** Scenarios that file work set the live captures' FleetAdapter
+  `Connected` in a declared `setup` step (the captures show `Disconnected` only because the
+  quickstart stops its adapter on exit, D31); the capture files are unchanged. The hand-written
+  `healthy-fleet-draft` gained the robots' class and current zone. Fixture runs use a fixed clock
+  (2026-11-04T06:00:00Z), recorded in `environment.clock`.
+
 ## Not enforced, or enforced only partly
+
+- **`check_task` is a copy of Swarmada's rules, from reads.** It evaluates the candidate filters of
+  RFC-0001 §9.4.2 that a read can see and reports the rest as not checked: the adapter's
+  `validate_action` for the concrete action, filter 9's contract range and SafetyStream, filter 10's
+  reported stops and duplicate robot ids. A capability denied on a descendant zone is not narrowed
+  (Swarmada does not either, at v0.4). "Likely feasible" can turn out wrong: the fleet changes
+  between the check, the approval, the activation and the assignment. `TestFilterListPinned` fails
+  when Swarmada's filter list changes at a re-pin; a Swarmada eligibility dry run is proposed for
+  draft 5 (BACKLOG-v4, C5).
+- **The confirmation is asserted by the client.** foc-agent sets the confirmed preview id only
+  after the person's own reply, and foc-mcp refuses a request without it (D74). Another MCP client
+  (the evaluation harness, a local stdio client, `test/live`) sets it itself, as it sets the session
+  id.
+- **SwarmadaConfig read (R66, R69).** foc-mcp's and foc-approvals' ServiceAccounts can `get` and
+  `list` the whole SwarmadaConfig object; only the code limits the use to the namespace-stop
+  markers and `maxPendingActionsPerZone`, which it keeps, never logging or tracing the object, and
+  no model-facing tool returns it. Its schema has no secret-typed field, but
+  `telemetry.sink.endpoint` and `signing.rekorUrl` are free strings an operator could put
+  credentials in.
+- **Conversations of unverified requesters.** A page user's conversation is bound to
+  `unverified:<typed name>` and to its id; anyone who types the same name and holds the id could
+  continue it. Nothing it files can be approved (D56).
+- **`catalogue_review` entries** are in foc-agent's audit file on an emptyDir volume, per pod.
 
 - **The eval baseline is a file in the same repository (D58).** The gate compares each run with
   `evals/baseline.json` at the same commit, so a commit can lower the baseline and the gate then
@@ -166,10 +216,10 @@ remove it.
   its controller seals that actor into an `ESTOP_TRIGGERED` entry of Swarmada's safety audit log
   and then removes the annotation (D33). The approving person is recorded only in the copilot's
   `ApprovalRequest`, Events and audit file.
-- **Activation is done by the approver, outside the copilot.** After approval the copilot gives
-  the exact command (`status.instruction`) and watches for the task to leave `Draft`; it cannot
-  tell who ran the command, and it waits without a deadline. swarmctl v0.4 has no activate
-  subcommand, so the command is a `kubectl patch`. The web UI does not perform it (D52).
+- **Activation is done by a person, outside the copilot.** After approval the copilot gives the
+  command (`foc activate`, D79) and watches for the task to leave `Draft`, without a deadline. It
+  records the activator from the annotation `foc activate` sets; an activation made another way
+  (`kubectl patch`) is recorded as unknown. The web UI does not perform it (D52).
 - **The write shown in the web UI** is the body `foc-approvals` sends (D53); fields the API server
   defaults and anything Swarmada's mutating webhooks add are not shown.
 - **foc-agent readiness** depends on foc-mcp and on the API server; either being down removes the

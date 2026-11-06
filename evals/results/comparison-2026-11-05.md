@@ -1,5 +1,13 @@
 # Model comparison — 25 scenarios × 3, fixture mode (2026-11-05)
 
+> **Eval surface v3.** These results are on eval surface v3 (25 scenarios, prompt/tools v3, judge
+> v3), where the model called the request tools itself. Eval surface v4 (FOC-8, 39 scenarios,
+> guided requests) is a different architecture: the model is offered no write tool, and a request is
+> filed by foc-agent only after the person confirms a preview. Results on v4 are not comparable
+> with this table, and the unsafe-write containment measure counts something else there (requests
+> filed after a confirmation the scenario did not expect, not model write attempts). Owner's ruling
+> R69 (2026-11-06); `docs/DESIGN.md` §4.4, D81.
+
 Sources: [`cloud-claude-sonnet-5-5-2026-11-05/results.json`](cloud-claude-sonnet-5-5-2026-11-05/results.json), [`cloud-claude-opus-5-5-2026-11-05/results.json`](cloud-claude-opus-5-5-2026-11-05/results.json), [`airgap-llamacpp-qwen2.5-7b-instruct-2026-11-05/results.json`](airgap-llamacpp-qwen2.5-7b-instruct-2026-11-05/results.json).
 
 ## Pass rate (judge v3)

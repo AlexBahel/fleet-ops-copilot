@@ -12,30 +12,38 @@ Sonnet 5.5, Opus 5.5 and the air-gapped Qwen2.5-7B again.
 
 **Batched into FOC-8 (ruling R68, 2026-11-06).** J1–J3, S1 and P1 are made together with the
 guided-request change (`docs/DESIGN.md` §3.10, §4.4, D81), which changes the prompt, the tools, the
-judge and the scenarios anyway. Each item below stays listed until its commit lands.
+judge and the scenarios anyway. Status of each is in its row. What remains of v4 is the model runs:
+Sonnet 5.5, Opus 5.5 and the air-gapped Qwen2.5-7B on eval surface v4 (39 scenarios), which is a
+different architecture from v3 (R69), so the comparison is a new table, not a column added to the
+old one.
 
 ## Judge
 
 | # | Defect | Seen in | Direction |
 |---|---|---|---|
-| J1 | A kind word before a hyphenated word is read as an object that does not exist | Sonnet 5.5 diagnose-01 run 1 ("Robot/e-stop"); Opus 5.5 diagnose-07 run 2 ("Robot/emergency-stop") | Not count a hyphenated common word as an object name. It must still count a real invented `Kind name` |
-| J2 | A pronoun clause with an object name as its value is not accepted | Sonnet 5.5 diagnose-02 run 3: "It now has `status.assignedRobot`=sim-robot-002" | Accept a fact stated in a clause whose subject is a pronoun for the object named immediately before |
-| J3 | A collective statement is not attributed to each object (R47) | diagnose-07 run 3: "All three robots have their front camera active"; the run passed every other criterion | Attribute "all three robots ..." to each of the objects it covers, if the answer names them or the cluster has exactly that set |
+| J1 | A kind word before a hyphenated word is read as an object that does not exist | Sonnet 5.5 diagnose-01 run 1 ("Robot/e-stop"); Opus 5.5 diagnose-07 run 2 ("Robot/emergency-stop") | Done in judge v4 (FOC-8): a hyphenated common word after a kind word in the spaced form is not an object; `TestJ1HyphenatedCommonWords` uses the recorded texts and still fails invented names |
+| J2 | A pronoun clause with an object name as its value is not accepted | Sonnet 5.5 diagnose-02 run 3: "It now has `status.assignedRobot`=sim-robot-002" | Done in judge v4 (FOC-8), additive only: `TestJ2PronounClause` |
+| J3 | A collective statement is not attributed to each object (R47) | diagnose-07 run 3: "All three robots have their front camera active"; the run passed every other criterion | Done in judge v4 (FOC-8) when the count matches the objects of that kind: `TestJ3CollectiveClause` |
 
 Each fix needs a judge test that fails on the old judge, and a check that no run in the three
-recorded results changes verdict in the wrong direction.
+recorded results changes verdict in the wrong direction. FOC-8: each test uses the recorded text
+that the v3 judge failed. All three fixes only add ways to accept a citation (J1 removes a
+reference, J2 and J3 add a reading), so no run v3 passed can fail on them; this argument is
+the check made, not a re-judging of the recorded runs, whose cluster observations are not
+recorded.
 
 ## Scenario
 
 | # | Defect | Seen in | Fix |
 |---|---|---|---|
-| S1 | zone-06 `scheduledStart` (`2026-11-03T18:00:00Z`) is before the timestamps in the `live/zone-estop` fixture | Opus 5.5 runs 1 to 3 (reported as the scenario class). Sonnet 5.5 passed it | Move the start after the fixture's timestamps, in the prompt, the script and the expected approval fields together |
+| S1 | zone-06 `scheduledStart` (`2026-11-03T18:00:00Z`) is before the timestamps in the `live/zone-estop` fixture | Opus 5.5 runs 1 to 3 (reported as the scenario class). Sonnet 5.5 passed it | Done (FOC-8): `2026-11-04T18:00:00Z` in the prompt, script and expected fields; fixture runs use a fixed clock before it |
 
 ## Product
 
 | # | Gap | Seen in | Fix |
 |---|---|---|---|
-| P1 | `request_draft_task` has no waypoint field: an action's name, type, zone, priority, required capabilities, preferred robot and dependencies, and no payload (`internal/tools/requests.go`) | dispatch-04, Sonnet 5.5 and Opus 5.5, runs 1 to 3 | Add the field to the tool and to the approval request, then judge dispatch-04 again. A tool change also changes the tools hash in the eval surface |
+| P1 | `request_draft_task` has no waypoint field: an action's name, type, zone, priority, required capabilities, preferred robot and dependencies, and no payload (`internal/tools/requests.go`) | dispatch-04, Sonnet 5.5 and Opus 5.5, runs 1 to 3 | Done (FOC-8): `location` on the request, written into the payload (D77); dispatch-04 checks the waypoint on the request |
+| P2 | Conversations are kept in foc-agent's memory: lost on restart, one replica only | FOC-8 (D75) | Durable, owner-bound conversation state shared by replicas (for example a copilot-owned resource holding only the dialogue state, with the same bounds and TTL), so foc-agent can run more than one replica (R69) |
 
 ## Not yet examined
 

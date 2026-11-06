@@ -378,7 +378,8 @@ evaluation results record both (it is part of the eval surface, D81). It holds:
 Kinds in the file for the fictional warehouse: `inspect-damage`, `inspect-location`,
 `inspect-both` (class b), `move`, `deliver`, `charge`, `patrol` (class a), `survey` (class b,
 `Custom` `explore-floor`), `zone-maintenance`, `zone-stop` (class a, the existing request
-types), and `activate` (the existing activation request). Changing `resultReported` to true when
+types), and `activate` (the existing activation request). A DraftTask kind also takes `name`, the
+draft's name when the person gives one; otherwise the engine generates it. Changing `resultReported` to true when
 Swarmada can report a result (C1) changes one line of the preview and nothing in the dialogue
 (R67; a test flips it).
 
@@ -412,7 +413,9 @@ model does not write the question, the choices or the preview.
    catalogue order), at most four.
 5. **Combine small details** into one question where the catalogue says so (deliver asks "from
    where to where" as one question with pairs; zone maintenance asks mode and start together).
-6. **Defaults are shown in the preview, not asked**: priority `Normal`, any eligible robot,
+6. **Defaults are shown in the preview, not asked**: a question whose fields all have a value or a
+   default is skipped (a patrol runs one round, maintenance starts on approval, unless the person
+   says otherwise). Defaults: priority `Normal`, any eligible robot,
    failure handling report only, Swarmada's own retry (`onFailure: Requeue`, shown as "retries up
    to 3 times, then alerts"; "alert on first failure" is available through "Change something",
    R69), start when activated, a generated draft name.
@@ -599,8 +602,10 @@ namespace as `foc approve` does, and replaces the `kubectl patch` instruction.
 
 ### 4.2 Scenarios
 
-25 scenarios (`evals/scenarios/`), each run **N = 3** times per deployment.
-`TestScenariosLoad` (`evals/harness/judge_test.go`) pins the counts below.
+39 scenarios (`evals/scenarios/`), each run **N = 3** times per deployment.
+`TestScenariosLoad` (`evals/harness/judge_test.go`) pins the counts below. The 25 of eval
+surface v3 and the 14 guided scenarios added with v4 (§4.4, D81); the 12 v3 scenarios that filed or
+refused a request are conversations on v4.
 
 | Category | Count | Fixtures used (`live/` = captured from a quickstart run) |
 |---|---|---|
@@ -608,6 +613,7 @@ namespace as `foc approve` does, and replaces the `kubectl patch` instruction.
 | Dispatch | 6 | `live/healthy-fleet`, `live/battery-edge`, `live/hardware-fault`; hand-written `healthy-fleet-draft` |
 | Zone ops | 6 | `live/healthy-fleet`, `live/zone-estop` |
 | Safety refusals | 6 | clear a stop (`live/zone-estop`), cancel/release (`comms-flaky`), delete and self-approve (`healthy-fleet-draft`), edit a running task and maintenance with auto-resume (`live/healthy-fleet`) |
+| Guided requests | 14 | `live/healthy-fleet` (12), `live/battery-edge` (Charge below the battery floor); see §4.4 |
 
 A scenario uses a live-captured fixture wherever one holds the state it tests. Four hand-written
 fixtures remain, for states the live captures do not hold: `healthy-fleet-draft` (a held draft;
@@ -635,6 +641,9 @@ quickstart itself writes some status by hand (see "Honest notes — what's real 
   approval path; it does not measure model quality. All scripted scenarios must pass. The Go
   job in `.github/workflows/ci.yml` runs `make ci`; a repository-hygiene job runs alongside it
   (decision D26).
+- **Image** (`make test-image`, a CI step after `make ci`, D83): builds the binaries under umask 077
+  and the image, and runs each binary in it as user 65532; it fails rather than skips in CI when
+  Docker is not reachable.
 - **Model evals** (`make eval-cloud`, `make eval-airgap`) need an API key or the in-cluster
   model and are run on demand. Results are committed under `evals/results/<date>-<deployment>/`
   with raw traces. The regression threshold for model evals is set from the first measured
@@ -809,7 +818,11 @@ policies/          default policy files
 | D78 | Failure handling: members keep Swarmada's default `onFailure: Requeue` (3 retries, then alert), shown as "retries up to 3 times, then alerts", or `Alert` on first failure when the person changes it; `failurePolicy: FailFast`. After activation foc-approvals watches the task to a terminal phase and records `status.outcome`; with `PrepareFollowUp` it also records a proposed follow-up, which `foc chat --follow-up <request>` turns into a preview that needs a confirmation like any other request | R64: report only, or prepare a follow-up request, never automatic. Owner's ruling R69 (2026-11-06) keeps Swarmada's bounded retry as the default; the follow-up request, not the retry, is what is never automatic. |
 | D79 | `foc activate <request>` replaces the `kubectl patch` instruction: with the caller's kubeconfig it requires an `Approved` `ActivateTask` request, refuses a ServiceAccount caller, re-runs the feasibility evaluation with the caller's reads, refuses on a blocker, and sends one JSON patch that tests `spec.draft == true`, sets it false and sets `fleetops.alexbahel.github.io/activated-by` to the caller; the admission policy `fleetops-activated-by` admits that annotation only with the authenticated user's name; foc-approvals records the activator in its audit line | R63; owner's ruling R69 (2026-11-06): any person Swarmada allows to activate, never a ServiceAccount, Swarmada's own check decides, the activator is recorded. Before, the copilot could not tell who activated (KNOWN-LIMITS). |
 | D80 | foc-mcp (and foc-approvals) may `get`,`list` `swarmadaconfigs`, read only in code and never through a model-facing tool; the reader projects the namespace-stop annotation and marker and `spec.scheduling.maxPendingActionsPerZone` and drops the rest; the object is never logged or traced | Owner's ruling R66, 2026-11-06, conditional on SwarmadaConfig holding no secret material. Checked at the pin (`api/v1/swarmadaconfig_types.go`): no secret-typed field; `signing.trustRoots[].secretRef` and `signing.rekorPublicKey` are references (Secret name and key) to PEM public keys; `telemetry.sink.endpoint` and `signing.rekorUrl` are free strings that could carry credentials if an operator put them in a URL. Without the grant, `check_task` reports "namespace-wide stop and Pending cap not checked". Owner's ruling R69 keeps the grant with these limits; KNOWN-LIMITS says the ServiceAccount can read the whole object. |
-| D81 | Eval surface v4: prompt v4, judge v4 (BACKLOG-v4 J1–J3), S1 fixed, P1 closed, multi-turn scenarios with a scripted human responder, judge criterion 5 (dialogue) with a negative control per check, harness execution for executor re-check scenarios, the catalogue SHA-256 and the metrics `dialogue.questionsPerTask`, `capViolations`, `stallsAfterActivationProxy` (§4.4). Results on v3 and v4 are not comparable; v4 is a different architecture (the model cannot attempt a write) and the unsafe-write metric changes meaning, which every comparison table states (R69) | Owner's ruling R68, 2026-11-06: batch the v4 backlog into this surface change, so the three models are re-run once. |
+| D81 | Eval surface v4: prompt v4, judge v4 (BACKLOG-v4 J1–J3), S1 fixed, P1 closed, multi-turn scenarios with a scripted human responder, judge criterion 5 (dialogue) with a negative control per check, harness execution for executor re-check scenarios, the catalogue SHA-256 and the metrics `dialogue.questionsPerTask`, `capViolations`, `stallsAfterActivationProxy` (§4.4). Fixture runs use a fixed clock (2026-11-04T06:00:00Z) so timing checks do not depend on
+the date of the run. Scenarios that file work set the live captures' adapter `Connected` in a
+declared `setup` step (the captures show `Disconnected` because the quickstart stops it on exit,
+D31; the files are unchanged), and `healthy-fleet-draft` gains the robots' class and zone; without
+these, `check_task` correctly finds no eligible robot in those fixtures. Results on v3 and v4 are not comparable; v4 is a different architecture (the model cannot attempt a write) and the unsafe-write metric changes meaning, which every comparison table states (R69) | Owner's ruling R68, 2026-11-06: batch the v4 backlog into this surface change, so the three models are re-run once. |
 | D82 | `make foc-up`'s preflight resolves the Python the quickstart will run (`python3`, else `python`, on `PATH`, as `run.sh` does) and stops before creating anything if it cannot `import grpc` and `google.protobuf`, saying which interpreter and how to provide them | Owner's ruling R59, found 2026-11-05: the quickstart's simulated adapter runs on the host with that Python and imports `grpc`; the preflight makes a missing package a clear stop at the start instead of a failure later in the run. |
 | D83 | The Dockerfile copies the binaries with `COPY --chmod=0755`; a test builds the binaries under umask 077, builds the image, and runs each binary in it as user 65532 (`-h`, exit status checked) | Owner's ruling R60, found 2026-11-05: a plain `COPY` keeps the mode the host build gave the files, which depends on the builder's umask, so whether user 65532 can run them depended on the machine that built the image. |
 
