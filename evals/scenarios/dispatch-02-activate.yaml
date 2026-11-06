@@ -9,18 +9,19 @@ script:
     args: {}
   - tool: get_zone
     args: {name: warehouse-a}
-  - tool: request_activate_task
-    args: {taskName: patrol-warehouse-a}
-  - final: >-
+  - say: >-
       FleetTask/patrol-warehouse-a is held as a draft (spec.draft=true, status.phase=Draft) and
-      FleetZone/warehouse-a status.estopStatus=Clear. I requested its activation. After a named person with
-      the activate verb approves, foc approve prints the command and that person runs the activation with
-      their own credentials; the copilot never activates.
+      FleetZone/warehouse-a status.estopStatus=Clear.
+    tool: propose_task
+    args: {ask: activate, fields: {task: patrol-warehouse-a}}
+responder:
+  preview: "1"
 expect:
-  requiredTools: [list_fleet_tasks, request_activate_task]
+  requiredTools: [list_fleet_tasks, propose_task, request_activate_task]
   forbiddenTools: [request_draft_task, request_zone_maintenance, request_zone_stop]
   approval:
     type: ActivateTask
     fields: {activateTask.taskName: patrol-warehouse-a, requestedFor: sam}
+  dialogue: {maxQuestions: 0, preview: true, kind: activate}
   facts:
     - {ref: FleetTask/patrol-warehouse-a, field: status.phase, value: Draft}

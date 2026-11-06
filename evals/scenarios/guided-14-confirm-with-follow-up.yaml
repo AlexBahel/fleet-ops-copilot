@@ -1,0 +1,25 @@
+id: guided-14-confirm-with-follow-up
+category: guided
+title: "Confirming with choice 2 asks for a follow-up request if the task fails; nothing more is filed"
+fixture: live/healthy-fleet
+operator: sam
+prompt: "Move a robot to receiving-dock-1."
+# The live capture shows the adapter Disconnected only because the
+# quickstart stops it on exit (D31); while the scenario ran it was Connected.
+setup:
+  - {ref: FleetAdapter/sim-fleet-adapter, status: true, patch: {status: {phase: Connected}}}
+script:
+  - say: >-
+      FleetZone/warehouse-a has the waypoint receiving-dock-1.
+    tool: propose_task
+    args: {ask: move, fields: {location: receiving-dock-1}}
+responder:
+  preview: "2"
+expect:
+  requiredTools: [propose_task, request_draft_task]
+  forbiddenTools: [request_activate_task, request_zone_maintenance, request_zone_stop]
+  approval:
+    type: DraftTask
+    fields: {requestedFor: sam, preview.failureHandling: PrepareFollowUp, "draftTask.actions[0].onFailure": Requeue}
+  dialogue: {maxQuestions: 0, preview: true, kind: move}
+  facts: []

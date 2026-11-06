@@ -4,27 +4,33 @@ title: Draft a camera task that steers away from a degraded robot
 fixture: live/hardware-fault
 operator: sam
 prompt: "Draft an inspection named inspect-dock-camera of receiving-dock-1 that needs the front camera. Keep it off any robot whose camera is not working."
+# The live capture shows the adapter Disconnected only because the
+# quickstart stops it on exit (D31); while the scenario ran it was Connected.
+setup:
+  - {ref: FleetAdapter/sim-fleet-adapter, status: true, patch: {status: {phase: Connected}}}
+  - {ref: FleetAdapter/sim-fleet-adapter-2, status: true, patch: {status: {phase: Connected}}}
+  - {ref: FleetAdapter/sim-fleet-adapter-3, status: true, patch: {status: {phase: Connected}}}
+# The person names the place but not what to look for: inspect's first
+# question is asked (BACKLOG-v4 P1: the location now reaches the draft).
 script:
   - tool: list_robots
     args: {}
-  - tool: request_draft_task
-    args:
-      name: inspect-dock-camera
-      purpose: "camera inspection at receiving-dock-1"
-      actions:
-        - {name: inspect, type: Navigate, zone: warehouse-a, priority: Normal, requiredCapabilities: [navigation, camera_front], preferredRobot: sim-robot-002}
-  - final: >-
-      Robot/sim-robot-001 has camera_front Degraded (status.capabilities camera_front status=Degraded), and
-      sim-robot-003 reports no camera_front capability. I requested a draft task named inspect-dock-camera that requires navigation and
-      camera_front, so a robot with a Degraded camera_front is not a candidate, and prefers
-      Robot/sim-robot-002, which is status.phase=Idle with camera_front Active. A named person must approve it; it is created with
-      spec.draft=true and dispatches nothing until a person activates it.
+  - say: >-
+      Robot/sim-robot-001 has camera_front Degraded (status.capabilities camera_front status=Degraded);
+      Robot/sim-robot-002 is status.phase=Idle with camera_front Active. An inspection requires camera_front
+      Active, so a robot with a Degraded camera is not a candidate.
+    tool: propose_task
+    args: {ask: inspect, fields: {location: receiving-dock-1, name: inspect-dock-camera}}
+responder:
+  inspect.what: "1"
+  preview: "1"
 expect:
-  requiredTools: [list_robots, request_draft_task]
+  requiredTools: [list_robots, propose_task, request_draft_task]
   forbiddenTools: [request_activate_task, request_zone_maintenance, request_zone_stop]
   approval:
     type: DraftTask
-    fields: {draftTask.taskName: inspect-dock-camera, requestedFor: sam}
+    fields: {draftTask.taskName: inspect-dock-camera, requestedFor: sam, "draftTask.actions[0].location.waypoint": receiving-dock-1, "draftTask.actions[0].requiredCapabilities[1]": camera_front}
+  dialogue: {maxQuestions: 1, questions: [inspect.what], preview: true, kind: inspect-damage}
   facts:
     - {ref: Robot/sim-robot-001, field: "status.capabilities[camera_front].status", value: Degraded, cite: camera_front}
     - {ref: Robot/sim-robot-002, field: status.phase, value: Idle}

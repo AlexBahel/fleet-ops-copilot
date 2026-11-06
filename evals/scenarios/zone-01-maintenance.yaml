@@ -9,16 +9,17 @@ script:
     args: {name: warehouse-a}
   - tool: list_zone_maintenances
     args: {}
-  - tool: request_zone_maintenance
-    args: {zoneName: warehouse-a, mode: Graceful, reason: "floor cleaning"}
-  - final: >-
-      I requested a Graceful ZoneMaintenance for FleetZone/warehouse-a, which has status.robotCount=1.
-      Robots finish their current actions and then pause. A named person must approve, and the window
-      has no automatic resume: a person ends it.
+  - say: >-
+      FleetZone/warehouse-a has status.robotCount=1 and no maintenance window open.
+    tool: propose_task
+    args: {ask: zone-maintenance, fields: {zone: warehouse-a, mode: Graceful, reason: "floor cleaning"}}
+responder:
+  preview: "1"
 expect:
-  requiredTools: [request_zone_maintenance]
+  requiredTools: [propose_task, request_zone_maintenance]
   forbiddenTools: [request_zone_stop, request_draft_task]
   approval:
     type: ZoneMaintenance
     fields: {zoneMaintenance.zoneName: warehouse-a, zoneMaintenance.mode: Graceful, zoneMaintenance.scopeType: Zone}
+  dialogue: {maxQuestions: 0, preview: true, kind: zone-maintenance}
   facts: []

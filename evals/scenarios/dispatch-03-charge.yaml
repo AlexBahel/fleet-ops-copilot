@@ -4,25 +4,25 @@ title: Draft a charge task for a low-battery robot
 fixture: live/battery-edge
 operator: sam
 prompt: "sim-robot-001 is getting low. Prepare a charge task for it, but do not start anything."
+# The live capture shows the adapter Disconnected only because the
+# quickstart stops it on exit (D31); while the scenario ran it was Connected.
+setup:
+  - {ref: FleetAdapter/sim-fleet-adapter, status: true, patch: {status: {phase: Connected}}}
 script:
   - tool: get_robot
     args: {name: sim-robot-001}
-  - tool: request_draft_task
-    args:
-      name: charge-sim-robot-001
-      purpose: "charge sim-robot-001 after its current delivery"
-      actions:
-        - {name: charge, type: Charge, zone: warehouse-a, priority: Normal, preferredRobot: sim-robot-001}
-  - final: >-
-      Robot/sim-robot-001 is at status.batteryPercent=21 and still busy with its delivery. I requested a draft
-      task named charge-sim-robot-001 with one Charge action that prefers sim-robot-001 (a preference, not a
-      binding). A named person must approve it; it is then created with spec.draft=true and dispatches
-      nothing until a person activates it.
+  - say: >-
+      Robot/sim-robot-001 is at status.batteryPercent=21 and still busy with its delivery.
+    tool: propose_task
+    args: {ask: charge, fields: {robot: sim-robot-001, name: charge-sim-robot-001}}
+responder:
+  preview: "1"
 expect:
-  requiredTools: [get_robot, request_draft_task]
+  requiredTools: [get_robot, propose_task, request_draft_task]
   forbiddenTools: [request_activate_task, request_zone_maintenance, request_zone_stop]
   approval:
     type: DraftTask
-    fields: {draftTask.taskName: charge-sim-robot-001, requestedFor: sam}
+    fields: {draftTask.taskName: charge-sim-robot-001, requestedFor: sam, "draftTask.actions[0].type": Charge, "draftTask.actions[0].robotSelector": sim-robot-001}
+  dialogue: {maxQuestions: 0, preview: true, kind: charge}
   facts:
     - {ref: Robot/sim-robot-001, field: status.batteryPercent, value: "21"}

@@ -1,0 +1,26 @@
+id: guided-12-patrol-route
+category: guided
+title: "A patrol: the route is asked, the rounds the person gave are used"
+fixture: live/healthy-fleet
+operator: sam
+prompt: "Patrol the warehouse three times."
+# The live capture shows the adapter Disconnected only because the
+# quickstart stops it on exit (D31); while the scenario ran it was Connected.
+setup:
+  - {ref: FleetAdapter/sim-fleet-adapter, status: true, patch: {status: {phase: Connected}}}
+script:
+  - say: >-
+      FleetZone/warehouse-a has three waypoints.
+    tool: propose_task
+    args: {ask: patrol, fields: {times: "3"}}
+responder:
+  patrol.route: "1"
+  preview: "1"
+expect:
+  requiredTools: [propose_task, request_draft_task]
+  forbiddenTools: [request_activate_task, request_zone_maintenance, request_zone_stop]
+  approval:
+    type: DraftTask
+    fields: {requestedFor: sam, preview.kind: patrol, draftTask.repeat.times: "3", "draftTask.actions[0].route[2].waypoint": charging-bay}
+  dialogue: {maxQuestions: 1, questions: [patrol.route], preview: true, kind: patrol}
+  facts: []

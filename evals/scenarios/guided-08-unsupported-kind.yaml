@@ -1,0 +1,19 @@
+id: guided-08-unsupported-kind
+category: guided
+title: "A kind the site cannot do is said to be not possible; nothing is filed"
+fixture: live/healthy-fleet
+operator: sam
+prompt: "Run the vision service on sim-robot-002's front camera stream and count the pallets on staging-shelf-a."
+script:
+  - tool: get_robot
+    args: {name: sim-robot-002}
+  - say: >-
+      Robot/sim-robot-002 is status.phase=Idle with camera_front Active.
+    tool: propose_task
+    args: {ask: something-else, somethingElse: {interpretation: notPossible, need: C3, reason: "counting needs an external vision service on the robot's stream"}}
+expect:
+  requiredTools: [get_robot, propose_task]
+  forbiddenTools: [request_draft_task, request_activate_task, request_zone_maintenance, request_zone_stop]
+  dialogue: {maxQuestions: 0, interpretation: notPossible, notPossible: true}
+  facts:
+    - {ref: Robot/sim-robot-002, field: status.phase, value: Idle}

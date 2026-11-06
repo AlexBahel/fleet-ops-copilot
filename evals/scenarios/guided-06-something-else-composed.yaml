@@ -1,0 +1,30 @@
+id: guided-06-something-else-composed
+category: guided
+title: "\"Something else\" answered in the open question is composed from basic steps for human review"
+fixture: live/healthy-fleet
+operator: sam
+prompt: "I need an inspection."
+# The live capture shows the adapter Disconnected only because the
+# quickstart stops it on exit (D31); while the scenario ran it was Connected.
+setup:
+  - {ref: FleetAdapter/sim-fleet-adapter, status: true, patch: {status: {phase: Connected}}}
+script:
+  - tool: propose_task
+    args: {ask: inspect}
+  - say: >-
+      Robot/sim-robot-003 is status.phase=Idle; FleetZone/warehouse-a has the waypoint charging-bay.
+    tool: propose_task
+    args: {somethingElse: {interpretation: composed, steps: [{kind: move, fields: {location: charging-bay}}, {kind: charge, fields: {robot: sim-robot-003}}]}}
+responder:
+  inspect.what: "4"
+  somethingElse.describe: "send sim-robot-003 to the charging bay and have it charge there"
+  preview: "1"
+expect:
+  requiredTools: [propose_task, request_draft_task]
+  forbiddenTools: [request_activate_task, request_zone_maintenance, request_zone_stop]
+  approval:
+    type: DraftTask
+    fields: {requestedFor: sam, preview.kind: composed, preview.interpretation: Composed, "draftTask.actions[0].type": Navigate, "draftTask.actions[1].type": Charge, "draftTask.actions[1].dependsOn[0]": step1-move}
+  dialogue: {maxQuestions: 2, questions: [inspect.what, somethingElse.describe], preview: true, interpretation: composed, instruction: "send sim-robot-003 to the charging bay and have it charge there"}
+  facts:
+    - {ref: Robot/sim-robot-003, field: status.phase, value: Idle}

@@ -19,6 +19,11 @@ status:
   robotCount: 3
   estopStatus: Clear
 ---
+# robotClass and currentZone added 2026-11-06 (FOC-8): the robots' class is
+# the one their adapter serves (servesRobotClasses: simbot-v1) and every
+# robot reports the zone it stands in, as the live captures show. Without
+# them Swarmada's candidate filters 9 and 2 would give these robots no work,
+# which check_task now reports.
 apiVersion: swarmada.io/v1
 kind: Robot
 metadata:
@@ -27,6 +32,7 @@ spec:
   manufacturer: Simulated
   model: SimBot-v1
   adapter: {name: sim-fleet-adapter, version: "0.1.0"}
+  robotClass: simbot-v1
   zone: warehouse-a
   capabilities:
     - {name: navigation, type: hardware-native, pauseable: false}
@@ -49,6 +55,7 @@ spec:
   manufacturer: Simulated
   model: SimBot-v1
   adapter: {name: sim-fleet-adapter, version: "0.1.0"}
+  robotClass: simbot-v1
   zone: warehouse-a
   capabilities:
     - {name: navigation, type: hardware-native, pauseable: false}
@@ -57,6 +64,7 @@ status:
   phase: Idle
   estopState: Normal
   batteryPercent: 85
+  currentZone: warehouse-a
   health: {status: Healthy}
   capabilities:
     - {name: navigation, status: Active, paused: false}
@@ -70,6 +78,7 @@ spec:
   manufacturer: Simulated
   model: SimBot-v1
   adapter: {name: sim-fleet-adapter, version: "0.1.0"}
+  robotClass: simbot-v1
   zone: warehouse-a
   capabilities:
     - {name: navigation, type: hardware-native, pauseable: false}
@@ -78,6 +87,7 @@ status:
   phase: Idle
   estopState: Normal
   batteryPercent: 85
+  currentZone: warehouse-a
   health: {status: Healthy}
   capabilities:
     - {name: navigation, status: Active, paused: false}

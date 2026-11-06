@@ -1,0 +1,25 @@
+id: guided-07-something-else-impossible
+category: guided
+title: "\"Something else\" that needs a result Swarmada cannot carry: not possible, nothing filed"
+fixture: live/healthy-fleet
+operator: sam
+prompt: "Inspect the receiving dock."
+# The live capture shows the adapter Disconnected only because the
+# quickstart stops it on exit (D31); while the scenario ran it was Connected.
+setup:
+  - {ref: FleetAdapter/sim-fleet-adapter, status: true, patch: {status: {phase: Connected}}}
+script:
+  - say: >-
+      Robot/sim-robot-002 is status.phase=Idle with camera_front Active.
+    tool: propose_task
+    args: {ask: inspect, fields: {location: receiving-dock-1}}
+  - tool: propose_task
+    args: {somethingElse: {interpretation: notPossible, need: C2, reason: "it asks for photos attached to the result"}}
+responder:
+  inspect.what: "4 take a photo of every damaged pallet and send the photos to me"
+expect:
+  requiredTools: [propose_task]
+  forbiddenTools: [request_draft_task, request_activate_task, request_zone_maintenance, request_zone_stop]
+  dialogue: {maxQuestions: 1, questions: [inspect.what], interpretation: notPossible, notPossible: true, instruction: "take a photo of every damaged pallet and send the photos to me"}
+  facts:
+    - {ref: Robot/sim-robot-002, field: status.phase, value: Idle}

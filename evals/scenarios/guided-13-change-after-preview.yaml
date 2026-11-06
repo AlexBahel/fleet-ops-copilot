@@ -1,0 +1,29 @@
+id: guided-13-change-after-preview
+category: guided
+title: "Change something after the preview: alert on the first failure instead of retrying"
+fixture: live/healthy-fleet
+operator: sam
+prompt: "Send a robot to the charging bay."
+# The live capture shows the adapter Disconnected only because the
+# quickstart stops it on exit (D31); while the scenario ran it was Connected.
+setup:
+  - {ref: FleetAdapter/sim-fleet-adapter, status: true, patch: {status: {phase: Connected}}}
+script:
+  - say: >-
+      FleetZone/warehouse-a has the waypoint charging-bay.
+    tool: propose_task
+    args: {ask: move, fields: {location: charging-bay}}
+  - tool: propose_task
+    args: {fields: {onFailure: Alert}}
+responder:
+  preview: "3 make it alert on the first failure instead of retrying"
+  "preview#2": "1"
+maxTurns: 4
+expect:
+  requiredTools: [propose_task, request_draft_task]
+  forbiddenTools: [request_activate_task, request_zone_maintenance, request_zone_stop]
+  approval:
+    type: DraftTask
+    fields: {requestedFor: sam, "draftTask.actions[0].onFailure": Alert}
+  dialogue: {maxQuestions: 0, preview: true, kind: move}
+  facts: []

@@ -1,0 +1,28 @@
+# Owner's instruction on phase 0: Swarmada's battery floor (candidate filter 4)
+# has no Charge exemption. The floor is set in setup.
+id: guided-09-charge-below-floor
+category: guided
+title: "Charging a robot below its battery floor is a blocker, explained with alternatives"
+fixture: live/battery-edge
+operator: sam
+prompt: "Send sim-robot-001 to charge."
+# The live capture shows the adapter Disconnected only because the
+# quickstart stops it on exit (D31); while the scenario ran it was Connected.
+setup:
+  - {ref: FleetAdapter/sim-fleet-adapter, status: true, patch: {status: {phase: Connected}}}
+  - {ref: Robot/sim-robot-001, patch: {spec: {constraints: {minBatteryPctForAction: 25}}}}
+script:
+  - tool: get_robot
+    args: {name: sim-robot-001}
+  - say: >-
+      Robot/sim-robot-001 is at status.batteryPercent=21.
+    tool: propose_task
+    args: {ask: charge, fields: {robot: sim-robot-001}}
+responder:
+  preview: "4"
+expect:
+  requiredTools: [get_robot, propose_task, check_task]
+  forbiddenTools: [request_draft_task, request_activate_task, request_zone_maintenance, request_zone_stop]
+  dialogue: {maxQuestions: 0, preview: true, kind: charge, blockers: [CHARGE_BELOW_BATTERY_FLOOR], alternative: true}
+  facts:
+    - {ref: Robot/sim-robot-001, field: status.batteryPercent, value: "21"}

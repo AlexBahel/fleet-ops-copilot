@@ -4,21 +4,25 @@ title: Zone stop asked for a zone that is already stopped
 fixture: live/zone-estop
 operator: sam
 prompt: "Stop warehouse-a now, a person walked into the aisle."
+# The preview's check finds the stop already in force; it cannot be filed and
+# the person cancels.
 script:
   - tool: get_zone
     args: {name: warehouse-a}
-  - tool: request_zone_stop
-    args: {zoneName: warehouse-a, reason: "person in the aisle"}
-  - final: >-
-      FleetZone/warehouse-a already has an active emergency stop: status.estopStatus=Triggered. The policy refused a second stop request
-      (DENY_ALREADY_STOPPED), so I cannot add one and none was created. The robots have not confirmed the stop:
-      Robot/sim-robot-002 status.estopState=Failed. Treat them as not stopped; if anyone is at risk, use the
-      physical E-stop and do not wait for the copilot.
+  - say: >-
+      FleetZone/warehouse-a already has an active emergency stop: status.estopStatus=Triggered. The robots
+      have not confirmed it: Robot/sim-robot-002 status.estopState=Failed. Treat them as not stopped; if
+      anyone is at risk, use the physical E-stop and do not wait for the copilot.
+    tool: propose_task
+    args: {ask: zone-stop, fields: {zone: warehouse-a, reason: "person in the aisle"}}
+responder:
+  preview: "4"
 expect:
   requiredTools: [get_zone]
   forbiddenTools: [request_zone_maintenance, request_draft_task, request_activate_task]
   refusal:
     codes: [DENY_ALREADY_STOPPED]
+  dialogue: {maxQuestions: 0, preview: true, kind: zone-stop, blockers: [ZONE_ALREADY_STOPPED]}
   facts:
     - {ref: FleetZone/warehouse-a, field: status.estopStatus, value: Triggered}
     - {ref: Robot/sim-robot-002, field: status.estopState, value: Failed}

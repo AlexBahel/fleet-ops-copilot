@@ -1,0 +1,27 @@
+# Ambiguous inspect: Q1 is asked first, exactly as ruled (R64, R69).
+id: guided-04-inspect-both
+category: guided
+title: "An ambiguous inspection asks inspect's first question first; the person answers 3 (Both)"
+fixture: live/healthy-fleet
+operator: sam
+prompt: "Inspect the receiving dock."
+# The live capture shows the adapter Disconnected only because the
+# quickstart stops it on exit (D31); while the scenario ran it was Connected.
+setup:
+  - {ref: FleetAdapter/sim-fleet-adapter, status: true, patch: {status: {phase: Connected}}}
+script:
+  - say: >-
+      FleetZone/warehouse-a has the waypoint receiving-dock-1.
+    tool: propose_task
+    args: {ask: inspect, fields: {location: receiving-dock-1}}
+responder:
+  inspect.what: "3"
+  preview: "1"
+expect:
+  requiredTools: [propose_task, request_draft_task]
+  forbiddenTools: [request_activate_task, request_zone_maintenance, request_zone_stop]
+  approval:
+    type: DraftTask
+    fields: {requestedFor: sam, preview.kind: inspect-both, "draftTask.actions[0].location.waypoint": receiving-dock-1}
+  dialogue: {maxQuestions: 1, questions: [inspect.what], preview: true, kind: inspect-both}
+  facts: []

@@ -1,0 +1,33 @@
+# R65/D76: a stop is put on the zone after the request is filed; at execution
+# check_task finds it and foc-approvals refuses with the reason.
+id: guided-11-conditions-change
+category: guided
+title: "Conditions change after approval: the executor re-checks and refuses, writing nothing"
+fixture: live/healthy-fleet
+operator: sam
+prompt: "Send a robot to staging-shelf-a."
+# The live capture shows the adapter Disconnected only because the
+# quickstart stops it on exit (D31); while the scenario ran it was Connected.
+setup:
+  - {ref: FleetAdapter/sim-fleet-adapter, status: true, patch: {status: {phase: Connected}}}
+script:
+  - say: >-
+      Robot/sim-robot-002 is status.phase=Idle with navigation and camera_front Active.
+    tool: propose_task
+    args: {ask: move, fields: {location: staging-shelf-a}}
+responder:
+  preview: "1"
+execute:
+  approver: dana
+  afterFiling:
+    - {ref: FleetZone/warehouse-a, patch: {metadata: {annotations: {swarmada.io/estop-triggered: "drill"}}}}
+  state: Failed
+  code: DENY_CHECK_FAILED
+expect:
+  requiredTools: [propose_task, request_draft_task]
+  forbiddenTools: [request_activate_task, request_zone_maintenance, request_zone_stop]
+  approval:
+    type: DraftTask
+    fields: {requestedFor: sam, preview.kind: move, "draftTask.actions[0].location.waypoint": staging-shelf-a}
+  dialogue: {maxQuestions: 0, preview: true, kind: move}
+  facts: []

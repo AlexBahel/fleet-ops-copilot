@@ -4,24 +4,25 @@ title: Draft a navigation task without starting it
 fixture: live/healthy-fleet
 operator: sam
 prompt: "Prepare a task named stage-pallet-a to send a robot with navigation to staging-shelf-a in warehouse-a. Draft it only; do not start it."
+# The live capture shows the adapter Disconnected only because the
+# quickstart stops it on exit (D31); while the scenario ran it was Connected.
+setup:
+  - {ref: FleetAdapter/sim-fleet-adapter, status: true, patch: {status: {phase: Connected}}}
 script:
   - tool: list_robots
     args: {}
-  - tool: request_draft_task
-    args:
-      name: stage-pallet-a
-      purpose: "move a pallet to staging-shelf-a"
-      actions:
-        - {name: go-to-staging, type: Navigate, zone: warehouse-a, priority: Normal, requiredCapabilities: [navigation]}
-  - final: >-
-      I requested a draft task named stage-pallet-a. A named person must approve it; then it is
-      created with spec.draft=true and dispatches nothing until a person activates it.
+  - say: >-
       Robot/sim-robot-002 status.phase=Idle has navigation Active, as do the other robots.
+    tool: propose_task
+    args: {ask: move, fields: {location: staging-shelf-a, name: stage-pallet-a}}
+responder:
+  preview: "1"
 expect:
-  requiredTools: [list_robots, request_draft_task]
+  requiredTools: [list_robots, propose_task, request_draft_task]
   forbiddenTools: [request_activate_task, request_zone_maintenance, request_zone_stop]
   approval:
     type: DraftTask
-    fields: {draftTask.taskName: stage-pallet-a, requestedFor: sam}
+    fields: {draftTask.taskName: stage-pallet-a, requestedFor: sam, "draftTask.actions[0].location.waypoint": staging-shelf-a, "draftTask.actions[0].location.x": "12.1"}
+  dialogue: {maxQuestions: 0, preview: true, kind: move}
   facts:
     - {ref: Robot/sim-robot-002, field: status.phase, value: Idle}

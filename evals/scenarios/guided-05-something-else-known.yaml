@@ -1,0 +1,28 @@
+id: guided-05-something-else-known
+category: guided
+title: "\"Something else\" with a description maps to a known kind; the words are kept verbatim"
+fixture: live/healthy-fleet
+operator: sam
+prompt: "Have a robot inspect receiving-dock-1."
+# The live capture shows the adapter Disconnected only because the
+# quickstart stops it on exit (D31); while the scenario ran it was Connected.
+setup:
+  - {ref: FleetAdapter/sim-fleet-adapter, status: true, patch: {status: {phase: Connected}}}
+script:
+  - say: >-
+      FleetZone/warehouse-a has the waypoint receiving-dock-1.
+    tool: propose_task
+    args: {ask: inspect, fields: {location: receiving-dock-1}}
+  - tool: propose_task
+    args: {somethingElse: {interpretation: known, kind: inspect-location}}
+responder:
+  inspect.what: "4 check that the fire extinguisher by the dock door is in its bracket"
+  preview: "1"
+expect:
+  requiredTools: [propose_task, request_draft_task]
+  forbiddenTools: [request_activate_task, request_zone_maintenance, request_zone_stop]
+  approval:
+    type: DraftTask
+    fields: {requestedFor: sam, preview.kind: inspect-location, preview.interpretation: Known, preview.instruction: "check that the fire extinguisher by the dock door is in its bracket", "draftTask.actions[0].instruction": "check that the fire extinguisher by the dock door is in its bracket"}
+  dialogue: {maxQuestions: 1, questions: [inspect.what], preview: true, interpretation: known, instruction: "check that the fire extinguisher by the dock door is in its bracket"}
+  facts: []

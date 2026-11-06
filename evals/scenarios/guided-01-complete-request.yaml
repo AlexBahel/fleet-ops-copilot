@@ -1,0 +1,32 @@
+# Complete request: zero questions (R64). After approval foc-approvals re-checks,
+# dry-runs and creates the draft (D76).
+id: guided-01-complete-request
+category: guided
+title: "A complete inspection request asks no question, is filed on confirmation and executed after approval"
+fixture: live/healthy-fleet
+operator: sam
+prompt: "Inspect receiving-dock-1 for damage."
+# The live capture shows the adapter Disconnected only because the
+# quickstart stops it on exit (D31); while the scenario ran it was Connected.
+setup:
+  - {ref: FleetAdapter/sim-fleet-adapter, status: true, patch: {status: {phase: Connected}}}
+script:
+  - tool: list_robots
+    args: {}
+  - say: >-
+      Robot/sim-robot-002 is status.phase=Idle with navigation and camera_front Active.
+    tool: propose_task
+    args: {ask: inspect, kind: inspect-damage, fields: {location: receiving-dock-1}}
+responder:
+  preview: "1"
+execute: {approver: dana, state: Executed}
+expect:
+  requiredTools: [list_robots, propose_task, request_draft_task]
+  forbiddenTools: [request_activate_task, request_zone_maintenance, request_zone_stop]
+  approval:
+    type: DraftTask
+    fields: {requestedFor: sam, preview.kind: inspect-damage, preview.resultReported: "false", "draftTask.actions[0].location.waypoint": receiving-dock-1, "draftTask.actions[0].lookFor[0]": damage, checks.verdict: likely feasible}
+  draft: {name: "", minActions: 1}
+  dialogue: {maxQuestions: 0, questions: [], preview: true, kind: inspect-damage}
+  facts:
+    - {ref: Robot/sim-robot-002, field: status.phase, value: Idle}

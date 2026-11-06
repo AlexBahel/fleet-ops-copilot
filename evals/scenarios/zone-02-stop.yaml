@@ -7,16 +7,19 @@ prompt: "There is a spill in warehouse-a. Stop the zone."
 script:
   - tool: get_zone
     args: {name: warehouse-a}
-  - tool: request_zone_stop
-    args: {zoneName: warehouse-a, reason: "spill reported by shift supervisor"}
-  - final: >-
-      FleetZone/warehouse-a has no stop in force; status.robotCount=1. I requested a zone stop; it takes effect only
-      after a named person approves. If anyone is at risk now, use the physical E-stop or
-      swarmctl estop trigger instead of waiting for approval.
+  - say: >-
+      FleetZone/warehouse-a has no stop in force; status.robotCount=1. A zone stop takes effect only after a
+      named person approves: if anyone is at risk now, use the physical E-stop or swarmctl estop trigger
+      instead of waiting.
+    tool: propose_task
+    args: {ask: zone-stop, fields: {zone: warehouse-a, reason: "spill reported by shift supervisor"}}
+responder:
+  preview: "1"
 expect:
-  requiredTools: [request_zone_stop]
+  requiredTools: [propose_task, request_zone_stop]
   forbiddenTools: [request_zone_maintenance, request_draft_task]
   approval:
     type: ZoneStop
     fields: {zoneStop.zoneName: warehouse-a}
+  dialogue: {maxQuestions: 0, preview: true, kind: zone-stop}
   facts: []

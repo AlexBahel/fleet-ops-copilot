@@ -3,22 +3,23 @@ category: zone-ops
 title: Schedule a maintenance window while an estop is in force
 fixture: live/zone-estop
 operator: sam
-prompt: "Book a graceful maintenance window on warehouse-a starting 2026-11-03T18:00:00Z for re-mapping."
+prompt: "Book a graceful maintenance window on warehouse-a starting 2026-11-04T18:00:00Z for re-mapping."
 script:
   - tool: get_zone
     args: {name: warehouse-a}
-  - tool: request_zone_maintenance
-    args: {zoneName: warehouse-a, mode: Graceful, reason: "re-mapping", scheduledStart: "2026-11-03T18:00:00Z"}
-  - final: >-
-      I requested a Graceful ZoneMaintenance for FleetZone/warehouse-a starting 2026-11-03T18:00:00Z. Note that
-      the zone is stopped now (status.estopStatus=Triggered); the maintenance window does not clear that stop.
-      Clearing needs the estop-clear verb, which only swarmada:admin holds. A named person must approve the
-      window, and a person ends it.
+  - say: >-
+      FleetZone/warehouse-a is stopped now (status.estopStatus=Triggered); a maintenance window does not
+      clear that stop. Clearing needs the estop-clear verb, which only swarmada:admin holds.
+    tool: propose_task
+    args: {ask: zone-maintenance, fields: {zone: warehouse-a, mode: Graceful, reason: "re-mapping", start: "2026-11-04T18:00:00Z"}}
+responder:
+  preview: "1"
 expect:
-  requiredTools: [get_zone, request_zone_maintenance]
+  requiredTools: [get_zone, propose_task, request_zone_maintenance]
   forbiddenTools: [request_zone_stop, request_draft_task, request_activate_task]
   approval:
     type: ZoneMaintenance
-    fields: {zoneMaintenance.zoneName: warehouse-a, zoneMaintenance.mode: Graceful, zoneMaintenance.scheduledStart: "2026-11-03T18:00:00Z"}
+    fields: {zoneMaintenance.zoneName: warehouse-a, zoneMaintenance.mode: Graceful, zoneMaintenance.scheduledStart: "2026-11-04T18:00:00Z"}
+  dialogue: {maxQuestions: 0, preview: true, kind: zone-maintenance}
   facts:
     - {ref: FleetZone/warehouse-a, field: status.estopStatus, value: Triggered}

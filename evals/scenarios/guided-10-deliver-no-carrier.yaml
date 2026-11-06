@@ -1,0 +1,27 @@
+# Owner's instruction on phase 0: no quickstart robot declares the carrying
+# capability transport.payload.
+id: guided-10-deliver-no-carrier
+category: guided
+title: "A delivery no robot can carry is a blocker, explained with an alternative"
+fixture: live/healthy-fleet
+operator: sam
+prompt: "Bring a pallet from receiving-dock-1 to staging-shelf-a."
+# The live capture shows the adapter Disconnected only because the
+# quickstart stops it on exit (D31); while the scenario ran it was Connected.
+setup:
+  - {ref: FleetAdapter/sim-fleet-adapter, status: true, patch: {status: {phase: Connected}}}
+script:
+  - tool: list_robots
+    args: {}
+  - say: >-
+      Robot/sim-robot-002 is status.phase=Idle with navigation and camera_front Active.
+    tool: propose_task
+    args: {ask: deliver, fields: {from: receiving-dock-1, to: staging-shelf-a}}
+responder:
+  preview: "4"
+expect:
+  requiredTools: [list_robots, propose_task, check_task]
+  forbiddenTools: [request_draft_task, request_activate_task, request_zone_maintenance, request_zone_stop]
+  dialogue: {maxQuestions: 0, preview: true, kind: deliver, blockers: [NO_CARRYING_ROBOT], alternative: true}
+  facts:
+    - {ref: Robot/sim-robot-002, field: status.phase, value: Idle}
