@@ -124,19 +124,94 @@ defects found in the record runs.
 
 ## How to run
 
-Requires Docker, kind, kubectl, helm 3.8+, jq, openssl, curl, make, Go 1.25+ and python3 (see
-[`docs/RUNBOOK.md`](docs/RUNBOOK.md), section 0).
+### 1. Start
+
+Requires Docker (running), kind, kubectl, helm 3.8+, jq, openssl, curl, make, Go 1.25+ and
+python3 with the `grpcio` package: Swarmada's quickstart runs a simulated robot adapter in
+Python, and it stops with `No module named 'grpc'` without it. Use a virtual environment that
+has it (`python3 -m venv .venv && . .venv/bin/activate && pip install grpcio protobuf`). Full list:
+[`docs/RUNBOOK.md`](docs/RUNBOOK.md), section 0.
+
+foc-agent, the process that talks to the model, starts only when the API key Secret exists.
+Put the key in a file only you can read and pass it to `foc-up`, which creates the Secret; the
+key never appears on a command line:
+
+```bash
+(umask 077; pbpaste > ~/foc-key.txt)            # copy the key from the Claude Console first
+FOC_UP_ANTHROPIC_KEY_FILE=~/foc-key.txt make foc-up   # about 2 minutes on a Mac mini with warm image caches
+rm ~/foc-key.txt
+```
+
+`make foc-up` creates the kind cluster `foc-up`, runs Swarmada's quickstart at the commit `go.mod`
+pins, turns on Swarmada's admission webhooks, installs the chart into `foc-system`, and creates
+three fictional people with test-only tokens: **sam**, **dana** and **eve**. The last line is the
+total time. Everything it keeps is in `~/.local/state/fleet-ops-copilot/foc-up` (`$FOC_UP_DIR`),
+outside the repository; it never reads or writes `~/.kube/config`. Without a key file, plain
+`make foc-up` starts everything except foc-agent.
+
+To add the key to a stack that is already running, see RUNBOOK section 2. Check that all three
+workloads are ready:
+
+```bash
+export KUBECONFIG=~/.local/state/fleet-ops-copilot/foc-up/kubeconfig
+kubectl --context kind-foc-up -n foc-system get pods    # foc-agent, foc-approvals, foc-mcp: 1/1 Running
+```
+
+### 2. Ask questions
+
+Open the connection to foc-agent in a second terminal and leave it running:
+
+```bash
+kubectl --context kind-foc-up -n foc-system port-forward svc/foc-agent 8090:8090
+```
+
+Ask as a person, with that person's own kubeconfig. The copilot records who asked from the
+person's verified token, never from a typed name (RUNBOOK section 7):
+
+```bash
+P=~/.local/state/fleet-ops-copilot/foc-up/persons
+KUBECONFIG=$P/sam.kubeconfig bin/foc chat --context sam@foc-up "Which robots in warehouse-a are idle, and what is each one's battery?"
+```
+
+`bin/foc` is built by `make foc-up` (or `make build`). Three kinds of question show what the
+copilot does:
+
+| Ask | What happens |
+|---|---|
+| A question about the fleet, for example the one above | It calls read-only tools and answers with the objects and fields it read. |
+| A change, for example `"Pause zone warehouse-a for maintenance, graceful."` | It files an approval request and changes nothing. The person who asked cannot approve it. |
+| A forbidden action, for example `"Clear the emergency stop on warehouse-a."` | It refuses and gives the reason. Clearing stops, releasing robots, deleting, approving and editing running work are never available. |
+
+A request is decided by a different person, with their own kubeconfig:
+
+```bash
+KUBECONFIG=$P/dana.kubeconfig bin/foc requests -n warehouse-a --context dana@foc-up
+KUBECONFIG=$P/dana.kubeconfig bin/foc approve <request> -n warehouse-a --context dana@foc-up
+KUBECONFIG=$P/dana.kubeconfig bin/foc reject  <request> -n warehouse-a --context dana@foc-up -comment "<why>"
+```
+
+The web chat is at http://127.0.0.1:8090/ through the same port-forward. It shows pending
+requests and the exact `foc approve` / `foc reject` command; it cannot approve, and a request
+filed from it can only be rejected (RUNBOOK section 1, "Open the web UI").
+
+Each question is a call to the Claude API. At the measured rate, 100 requests cost about
+1.42 USD with Claude Sonnet 5.5 ([comparison](evals/results/comparison-2026-11-05.md)). For the
+air-gapped profile, which needs no API key, see RUNBOOK section 3.
+
+### 3. Finish
+
+```bash
+# stop the port-forward in the second terminal with Ctrl-C, then:
+make foc-down                  # removes the cluster foc-up, its kubeconfig and the people's tokens
+```
+
+### Other commands
 
 ```bash
 FOC_UP_DRY_RUN=1 make foc-up   # print every command that would change anything; run none
-make foc-up                    # kind cluster foc-up: Swarmada quickstart at the pin, its webhooks, the chart, people sam/dana/eve (test-only tokens)
-make foc-live                  # live approval paths, requests filed with sam's own token
-make foc-down                  # remove the cluster, its kubeconfig and the tokens
+FOC_UP_TRACING=1 make foc-up   # also install the development trace backend (RUNBOOK section 8)
+make foc-live                  # live approval paths on the foc-up stack, requests filed with sam's own token
 ```
-
-`FOC_UP_TRACING=1` adds the development trace backend (Collector and Jaeger, RUNBOOK section 8);
-`FOC_UP_ANTHROPIC_KEY_FILE=<file>` creates the API key Secret so foc-agent starts. Everything
-`foc-up` keeps is outside the repository, and it never reads or writes `~/.kube/config`.
 
 Without a cluster:
 
