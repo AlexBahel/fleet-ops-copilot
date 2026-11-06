@@ -46,6 +46,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/AlexBahel/fleet-ops-copilot/internal/audit"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/catalogue"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/conversation"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/llm"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/redact"
@@ -61,6 +64,7 @@ func main() {
 
 type config struct {
 	listen, mcpURL, backend, model, effort, llamaURL, script, namespaces, otlp string
+	catalogue, audit                                                           string
 	maxTurns, maxConcurrent                                                    int
 	chatTimeout                                                                time.Duration
 }
@@ -74,7 +78,9 @@ func parseFlags(args []string) (config, error) {
 	fs.StringVar(&c.model, "model", "", "claude: model id (default $FOC_CLAUDE_MODEL, else "+llm.DefaultClaudeModel+"); llamacpp: label of the served model (default "+llm.DefaultLlamaCppModel+")")
 	fs.StringVar(&c.effort, "effort", llm.DefaultClaudeEffort, "claude: output_config.effort")
 	fs.StringVar(&c.llamaURL, "llama-url", "", "llamacpp: llama-server base URL (default $"+llm.EnvLlamaCppURL+")")
-	fs.StringVar(&c.script, "script", "", "scripted: JSON file {\"steps\":[{\"calls\":[{\"name\":..,\"args\":{..}}]},{\"final\":..}]}, replayed from the start for every request")
+	fs.StringVar(&c.script, "script", "", "scripted: JSON file {\"steps\":[{\"calls\":[{\"name\":..,\"args\":{..}}]},{\"final\":..}]}, replayed from the start for every conversation")
+	fs.StringVar(&c.catalogue, "catalogue", "", "site catalogue file (docs/DESIGN.md §3.10.1); empty disables guided requests, and nothing can then be filed from a chat")
+	fs.StringVar(&c.audit, "audit", "", "JSONL audit file for catalogue_review entries (\"something else\" answers); empty records none")
 	fs.StringVar(&c.namespaces, "namespaces", "warehouse-a", "comma-separated namespaces whose ApprovalRequests the panel shows")
 	fs.IntVar(&c.maxTurns, "max-turns", 12, "model turns per request")
 	fs.IntVar(&c.maxConcurrent, "max-concurrent", 4, "chat requests in flight; more get HTTP 429")
@@ -217,10 +223,24 @@ func run(args []string) error {
 		return err
 	}
 	logger := log.New(os.Stderr, "foc-agent ", log.LstdFlags|log.LUTC)
+	var cat *catalogue.Catalogue
+	if c.catalogue != "" {
+		// A catalogue that does not validate stops foc-agent (D70).
+		if cat, err = catalogue.Load(c.catalogue); err != nil {
+			return err
+		}
+	}
+	var aw *audit.Writer
+	if c.audit != "" {
+		if aw, err = audit.Open(c.audit, red); err != nil {
+			return err
+		}
+	}
 	srv := &webui.Server{
 		Runner: &webui.AgentRunner{
 			Transport: webui.MCPURL(c.mcpURL), NewBackend: newBackend, BackendName: backendName,
 			MaxTurns: c.maxTurns, Tracer: tracing.Tracer(tp),
+			Catalogue: cat, Store: conversation.New(), Audit: aw, Requests: k, Redact: red.String,
 		},
 		Requests: k, Namespaces: splitList(c.namespaces), MaxConcurrent: c.maxConcurrent,
 		ChatTimeout: c.chatTimeout, Redactor: red, Log: logger,
@@ -236,7 +256,11 @@ func run(args []string) error {
 	if c.otlp != "" {
 		tracingState = "OTLP " + c.otlp
 	}
-	logger.Printf("listening on %s; backend %s; foc-mcp %s; namespaces %s; tracing %s", c.listen, backendName, c.mcpURL, c.namespaces, red.String(tracingState))
+	catState := "none (guided requests off)"
+	if cat != nil {
+		catState = fmt.Sprintf("%s version %d sha256 %s", c.catalogue, cat.Version, cat.SHA256)
+	}
+	logger.Printf("listening on %s; backend %s; foc-mcp %s; namespaces %s; catalogue %s; tracing %s", c.listen, backendName, c.mcpURL, c.namespaces, catState, red.String(tracingState))
 	if err := hs.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}

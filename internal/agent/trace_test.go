@@ -172,11 +172,13 @@ func TestLoopTraceAcrossMCPAndPolicy(t *testing.T) {
 		}
 		tools[attrs(s.Attributes)[tracing.AttrToolName].AsString()] = s
 	}
+	// A model's own request call carries no confirmed preview, so it is
+	// refused (D74); the span still records the policy decision.
 	stop := attrs(tools["request_zone_stop"].Attributes)
-	if stop[tracing.AttrPolicyCode].AsString() != "REQUIRE_APPROVAL" || stop[tracing.AttrPolicyRefused].AsBool() || !strings.HasPrefix(stop[tracing.AttrRequestCreated].AsString(), "ApprovalRequest/areq-") {
+	if stop[tracing.AttrPolicyCode].AsString() != "DENY_NOT_CONFIRMED" || !stop[tracing.AttrPolicyRefused].AsBool() {
 		t.Fatalf("zone stop tool span %v", tools["request_zone_stop"].Attributes)
 	}
-	if attrs(tools["request_zone_maintenance"].Attributes)[tracing.AttrPolicyCode].AsString() != "DENY_RELEASE" {
+	if attrs(tools["request_zone_maintenance"].Attributes)[tracing.AttrPolicyCode].AsString() != "DENY_NOT_CONFIRMED" {
 		t.Fatalf("maintenance tool span %v", tools["request_zone_maintenance"].Attributes)
 	}
 	if _, ok := attrs(tools["get_zone"].Attributes)[tracing.AttrPolicyCode]; ok {
@@ -193,7 +195,7 @@ func TestLoopTraceAcrossMCPAndPolicy(t *testing.T) {
 		a := attrs(s.Attributes)
 		codesSeen[parent] = a[tracing.AttrPolicyEffect].AsString() + "/" + a[tracing.AttrPolicyCode].AsString()
 	}
-	if codesSeen["request_zone_stop"] != "RequireApproval/REQUIRE_APPROVAL" || codesSeen["request_zone_maintenance"] != "Deny/DENY_RELEASE" {
+	if codesSeen["request_zone_stop"] != "Deny/DENY_NOT_CONFIRMED" || codesSeen["request_zone_maintenance"] != "Deny/DENY_NOT_CONFIRMED" {
 		t.Fatalf("policy spans by tool: %v", codesSeen)
 	}
 }

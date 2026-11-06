@@ -38,6 +38,7 @@ import (
 
 	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/agent"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/catalogue"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/llm"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/mcpserver"
@@ -58,9 +59,9 @@ type stubRunner struct {
 	block    chan struct{}
 }
 
-func (s *stubRunner) Run(ctx context.Context, token, op, sess, prompt string) (agent.Trace, error) {
+func (s *stubRunner) Run(ctx context.Context, in ChatInput) (ChatOutput, error) {
 	s.mu.Lock()
-	s.got = append(s.got, token+"|"+op+"|"+sess+"|"+prompt)
+	s.got = append(s.got, in.Token+"|"+in.Operator+"|"+in.SessionID+"|"+in.Message)
 	s.mu.Unlock()
 	if s.block != nil {
 		select {
@@ -68,7 +69,7 @@ func (s *stubRunner) Run(ctx context.Context, token, op, sess, prompt string) (a
 		case <-ctx.Done():
 		}
 	}
-	return s.trace, s.err
+	return ChatOutput{Trace: s.trace}, s.err
 }
 func (s *stubRunner) Ready(context.Context) error { return s.readyErr }
 func (s *stubRunner) Backend() string             { return "scripted" }
@@ -309,20 +310,35 @@ func TestChatFilesRequestThatPanelShows(t *testing.T) {
 	zone := &swarmv1.FleetZone{ObjectMeta: metav1.ObjectMeta{Name: "aisle-b", Namespace: "warehouse-a"}}
 	c := fake.NewClientBuilder().WithScheme(fleet.NewScheme()).WithObjects(zone).Build()
 	svc := &tools.Service{C: c, Engine: policy.New(p), Identity: "system:serviceaccount:foc-system:foc-mcp", DefaultNamespace: "warehouse-a"}
-	args, _ := json.Marshal(map[string]any{"zoneName": "aisle-b", "reason": "spill in aisle B"})
+	cat, err := catalogue.Load("../../catalogue/warehouse-a.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	args, _ := json.Marshal(map[string]any{"ask": "zone-stop", "fields": map[string]any{"zone": "aisle-b", "reason": "spill in aisle B"}})
 	runner := &AgentRunner{
 		Transport:   inMemoryMCP(t, mcpserver.New(svc)),
 		BackendName: "scripted",
+		Catalogue:   cat,
 		NewBackend: func() (llm.Backend, error) {
-			return &llm.Scripted{Steps: []llm.Step{{Calls: []llm.ToolCall{{ID: "1", Name: "request_zone_stop", Args: args}}}, {Final: "Requested a stop of FleetZone/aisle-b."}}}, nil
+			return &llm.Scripted{Steps: []llm.Step{{Calls: []llm.ToolCall{{ID: "1", Name: "propose_task", Args: args}}}}}, nil
 		},
 	}
 	ts := newServer(t, runner, c)
 	if res, body := get(t, ts.URL+"/readyz"); res.StatusCode != 200 {
 		t.Fatalf("readyz %d %s", res.StatusCode, body)
 	}
+	// The first message shows a preview and files nothing (D74).
 	code, out := postChat(t, ts, `{"operator":"jane@example.com","message":"stop aisle-b"}`, nil)
-	if code != 200 || len(out.ToolCalls) != 1 || out.ToolCalls[0].PolicyCode != "REQUIRE_APPROVAL" || !strings.HasPrefix(out.ToolCalls[0].Created, "ApprovalRequest/areq-") {
+	if code != 200 || out.Dialogue == nil || out.Dialogue.Outcome != "preview" || out.ConversationID == "" {
+		t.Fatalf("%d %+v", code, out)
+	}
+	var none focv1.ApprovalRequestList
+	if err := c.List(context.Background(), &none); err != nil || len(none.Items) != 0 {
+		t.Fatalf("filed before confirmation: %d %v", len(none.Items), err)
+	}
+	// "1" in the same conversation files it.
+	code, out = postChat(t, ts, `{"operator":"jane@example.com","sessionId":"`+out.SessionID+`","conversationId":"`+out.ConversationID+`","message":"1"}`, nil)
+	if code != 200 || out.Dialogue == nil || out.Dialogue.Outcome != "filed" || len(out.ToolCalls) != 1 || out.ToolCalls[0].PolicyCode != "REQUIRE_APPROVAL" || !strings.HasPrefix(out.ToolCalls[0].Created, "ApprovalRequest/areq-") {
 		t.Fatalf("%d %+v", code, out)
 	}
 	_, body := get(t, ts.URL+"/api/requests")
@@ -351,5 +367,38 @@ func TestChatFilesRequestThatPanelShows(t *testing.T) {
 	var z swarmv1.FleetZone
 	if err := c.Get(context.Background(), client.ObjectKeyFromObject(zone), &z); err != nil || len(z.Annotations) != 0 {
 		t.Fatalf("zone changed: %v %v", z.Annotations, err)
+	}
+}
+
+// D75 through the page: a conversation id is no use to another person.
+func TestConversationBoundToRequester(t *testing.T) {
+	p, err := policy.Load("../../policies/default.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := fake.NewClientBuilder().WithScheme(fleet.NewScheme()).Build()
+	svc := &tools.Service{C: c, Engine: policy.New(p), Identity: "system:serviceaccount:foc-system:foc-mcp", DefaultNamespace: "warehouse-a"}
+	cat, err := catalogue.Load("../../catalogue/warehouse-a.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := &AgentRunner{
+		Transport: inMemoryMCP(t, mcpserver.New(svc)), BackendName: "scripted", Catalogue: cat,
+		NewBackend: func() (llm.Backend, error) {
+			return &llm.Scripted{Steps: []llm.Step{{Final: "ok"}, {Final: "ok"}}}, nil
+		},
+	}
+	ts := newServer(t, runner, c)
+	_, jane := postChat(t, ts, `{"operator":"jane","message":"hello"}`, nil)
+	if jane.ConversationID == "" || jane.Notice != "" {
+		t.Fatalf("jane %+v", jane)
+	}
+	_, again := postChat(t, ts, `{"operator":"jane","conversationId":"`+jane.ConversationID+`","message":"hello again"}`, nil)
+	if again.ConversationID != jane.ConversationID || again.Notice != "" {
+		t.Fatalf("jane could not continue: %+v", again)
+	}
+	_, bob := postChat(t, ts, `{"operator":"bob","conversationId":"`+jane.ConversationID+`","message":"hello"}`, nil)
+	if bob.ConversationID == jane.ConversationID || bob.Notice == "" {
+		t.Fatalf("bob continued jane's conversation: %+v", bob)
 	}
 }

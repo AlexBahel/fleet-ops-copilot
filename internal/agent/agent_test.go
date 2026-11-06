@@ -100,7 +100,7 @@ func TestLoopTurnLimit(t *testing.T) {
 func TestSystemPromptPinned(t *testing.T) {
 	got := fmt.Sprintf("%x", sha256.Sum256([]byte(SystemPrompt)))
 	// v3 keeps the v2 text (the tool descriptions changed, D66).
-	if SystemPromptVersion != "v3" || got != "bf6b2f4865a96173c316f26d717eddf17c182b13a7d785f8b032cfe547e5e49f" {
+	if SystemPromptVersion != "v4" || got != "70cef1c86bfdd9b885dfe50c3787b2f3ea75c9ee8966fe4c6747ad666cc4b1ff" {
 		t.Fatalf("system prompt changed (version %s, sha256 %s): bump SystemPromptVersion, log it in DESIGN, update this test", SystemPromptVersion, got)
 	}
 }

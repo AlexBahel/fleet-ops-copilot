@@ -50,8 +50,9 @@ func fileStop(t *testing.T, url, token, operator, zone string) (string, string) 
 		t.Fatal(err)
 	}
 	defer func() { _ = cs.Close() }()
+	id, _ := tools.PreviewIDFor(tools.ZoneStopInput{ZoneName: zone, Reason: "authn test"})
 	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
-		Meta: mcp.Meta{mcpserver.MetaOperator: operator, mcpserver.MetaSession: "s-authn"},
+		Meta: mcp.Meta{mcpserver.MetaOperator: operator, mcpserver.MetaSession: "s-authn", mcpserver.MetaConfirmedPreview: id},
 		Name: "request_zone_stop", Arguments: map[string]any{"zoneName": zone, "reason": "authn test"},
 	})
 	if err != nil || res.IsError {
@@ -173,12 +174,7 @@ func TestRequesterIsAuthenticated(t *testing.T) {
 func TestFocAgentForwardsTheCallersToken(t *testing.T) {
 	f := newUIFixture(t, []string{swarmNS})
 	ensureZone(t, "authn-zone-5")
-	step := func(zone string) []llm.Step {
-		return []llm.Step{
-			{Calls: []llm.ToolCall{call("request_zone_stop", map[string]any{"zoneName": zone, "reason": "from foc chat"})}},
-			{Final: "Requested."},
-		}
-	}
+	step := func(zone string) []llm.Step { return []llm.Step{proposeStop(zone, "from foc chat")} }
 	name := f.chatAs(t, env.PersonToken("sam"), "dana", "stop authn-zone-5", step("authn-zone-5")...)
 	if v := f.views(t)[name]; v.RequestedFor != "sam" || v.Approve == "" || v.Unapprovable != "" {
 		t.Fatalf("token chat view %+v", v)

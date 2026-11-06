@@ -29,6 +29,9 @@ function save(kind, key, v) { try { store(kind)?.setItem(key, v); } catch (_) { 
 function drop(kind, key) { try { store(kind)?.removeItem(key); } catch (_) { /* storage blocked */ } }
 
 let sessionId = load("sessionStorage", "foc.session");
+// The conversation id is kept in this page's memory only (D75): a reload
+// starts a new conversation.
+let conversationId = "";
 
 function showSession() {
   $("session").textContent = sessionId ? "session " + sessionId : "new session";
@@ -79,11 +82,13 @@ async function send(ev) {
     const res = await fetch("api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ operator, sessionId, message }),
+      body: JSON.stringify({ operator, sessionId, conversationId, message }),
     });
     const out = await res.json();
     wait.remove();
     if (out.sessionId) { sessionId = out.sessionId; save("sessionStorage", "foc.session", sessionId); showSession(); }
+    if (out.conversationId) conversationId = out.conversationId;
+    if (out.notice) addMessage("pending", out.notice);
     if (out.requester) $("requester").textContent = "Requests from this page are recorded for " + out.requester + " and cannot be approved; a person can only reject them.";
     if (out.error) {
       const li = addMessage("error", out.error);
@@ -191,6 +196,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
   $("new-session").addEventListener("click", () => {
     sessionId = ""; drop("sessionStorage", "foc.session"); showSession();
+    conversationId = "";
     $("log").replaceChildren();
   });
   $("show-decided").addEventListener("change", refresh);

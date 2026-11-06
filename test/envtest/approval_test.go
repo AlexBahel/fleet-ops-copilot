@@ -176,7 +176,7 @@ func TestApprovalPathZoneMaintenance(t *testing.T) {
 	ctx := context.Background()
 	h := newHarness(t, nil)
 	ensureZone(t, "zm-zone")
-	res, err := h.svc.RequestZoneMaintenance(ctx, sess, tools.ZoneMaintenanceInput{ZoneName: "zm-zone", Mode: "Graceful", Reason: "floor cleaning"})
+	res, err := h.maintenance(ctx, sess, tools.ZoneMaintenanceInput{ZoneName: "zm-zone", Mode: "Graceful", Reason: "floor cleaning"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,7 +224,7 @@ func TestApprovalPathZoneStop(t *testing.T) {
 	ctx := context.Background()
 	h := newHarness(t, nil)
 	z := ensureZone(t, "stop-zone")
-	res, err := h.svc.RequestZoneStop(ctx, sess, tools.ZoneStopInput{ZoneName: "stop-zone", Reason: "spill in aisle 3"})
+	res, err := h.stop(ctx, sess, tools.ZoneStopInput{ZoneName: "stop-zone", Reason: "spill in aisle 3"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,7 +246,7 @@ func TestApprovalPathZoneStop(t *testing.T) {
 		t.Fatalf("estop actor/finalizer: %v %v", got.Annotations, got.Finalizers)
 	}
 	// A second request for the same zone is refused: it is already stopped.
-	res2, err := h.svc.RequestZoneStop(ctx, sess, tools.ZoneStopInput{ZoneName: "stop-zone", Reason: "again"})
+	res2, err := h.stop(ctx, sess, tools.ZoneStopInput{ZoneName: "stop-zone", Reason: "again"})
 	if err != nil || !res2.Refused || res2.Code != string(policy.CodeAlreadyStopped) {
 		t.Fatalf("second stop: %+v %v", res2, err)
 	}
@@ -261,7 +261,8 @@ func TestApprovalPathDraftAndActivation(t *testing.T) {
 	ctx := context.Background()
 	h := newHarness(t, nil)
 	ensureZone(t, swarmNS)
-	res, err := h.svc.RequestDraftTask(ctx, sess, tools.DraftTaskInput{Name: "move-to-staging", Purpose: "stage pallet", Actions: []tools.DraftActionInput{
+	ensureRobot(t, "envtest-robot-1", swarmNS, 90)
+	res, err := h.draft(ctx, sess, tools.DraftTaskInput{Name: "move-to-staging", Purpose: "stage pallet", Actions: []tools.DraftActionInput{
 		{Name: "go", Type: "Navigate", Zone: swarmNS, Priority: "Normal", RequiredCapabilities: []string{"navigation"}},
 	}})
 	if err != nil {
@@ -291,7 +292,7 @@ func TestApprovalPathDraftAndActivation(t *testing.T) {
 			t.Fatalf("%s activated a draft", sa)
 		}
 	}
-	act, err := h.svc.RequestActivateTask(ctx, sess, tools.ActivateTaskInput{TaskName: "move-to-staging"})
+	act, err := h.activate(ctx, sess, tools.ActivateTaskInput{TaskName: "move-to-staging"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -300,7 +301,7 @@ func TestApprovalPathDraftAndActivation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := approval.ActivationCommand(swarmNS, "move-to-staging")
+	want := approval.ActivationCommand(swarmNS, name)
 	if out.State != focv1.StateApproved || out.Instruction != want {
 		t.Fatalf("outcome %+v, want instruction %q", out, want)
 	}
@@ -327,12 +328,12 @@ func TestApprovalPathDraftAndActivation(t *testing.T) {
 		t.Fatalf("status %+v", r.Status)
 	}
 	// Activating again is refused: the task is no longer a draft.
-	again, err := h.svc.RequestActivateTask(ctx, sess, tools.ActivateTaskInput{TaskName: "move-to-staging"})
+	again, err := h.activate(ctx, sess, tools.ActivateTaskInput{TaskName: "move-to-staging"})
 	if err != nil || !again.Refused || again.Code != string(policy.CodeTaskNotDraft) {
 		t.Fatalf("second activation: %+v %v", again, err)
 	}
 	// A draft request for an existing name is refused before any request is made.
-	dup, err := h.svc.RequestDraftTask(ctx, sess, tools.DraftTaskInput{Name: "move-to-staging", Purpose: "p", Actions: []tools.DraftActionInput{{Name: "a", Type: "Navigate"}}})
+	dup, err := h.draft(ctx, sess, tools.DraftTaskInput{Name: "move-to-staging", Purpose: "p", Actions: []tools.DraftActionInput{{Name: "a", Type: "Navigate"}}})
 	if err != nil || !dup.Refused {
 		t.Fatalf("duplicate draft: %+v %v", dup, err)
 	}
@@ -345,7 +346,7 @@ func TestApprovalRefusals(t *testing.T) {
 	ctx := context.Background()
 	h := newHarness(t, nil)
 	ensureZone(t, "refuse-zone")
-	res, err := h.svc.RequestZoneMaintenance(ctx, sess, tools.ZoneMaintenanceInput{ZoneName: "refuse-zone", Reason: "inspection"})
+	res, err := h.maintenance(ctx, sess, tools.ZoneMaintenanceInput{ZoneName: "refuse-zone", Reason: "inspection"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -401,7 +402,7 @@ func TestApprovalExpiry(t *testing.T) {
 	ctx := context.Background()
 	h := newHarness(t, func(p *policy.File) { p.Approval.TTL = policy.Duration{Duration: 2 * time.Second} })
 	ensureZone(t, "expiry-zone")
-	res, err := h.svc.RequestZoneStop(ctx, sess, tools.ZoneStopInput{ZoneName: "expiry-zone", Reason: "drill"})
+	res, err := h.stop(ctx, sess, tools.ZoneStopInput{ZoneName: "expiry-zone", Reason: "drill"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -435,22 +436,22 @@ func TestPolicyRefusalsCreateNothing(t *testing.T) {
 		code policy.Code
 	}{
 		{"auto-resume", func() (tools.RequestResult, error) {
-			return h.svc.RequestZoneMaintenance(ctx, sess, tools.ZoneMaintenanceInput{ZoneName: "policy-zone", Reason: "r", AutoResumeAfterMinutes: 30})
+			return h.maintenance(ctx, sess, tools.ZoneMaintenanceInput{ZoneName: "policy-zone", Reason: "r", AutoResumeAfterMinutes: 30})
 		}, policy.CodeRelease},
 		{"estop gate off", func() (tools.RequestResult, error) {
-			return h.svc.RequestZoneMaintenance(ctx, sess, tools.ZoneMaintenanceInput{ZoneName: "policy-zone", Reason: "r", RequireEstopClearBeforeResume: &f})
+			return h.maintenance(ctx, sess, tools.ZoneMaintenanceInput{ZoneName: "policy-zone", Reason: "r", RequireEstopClearBeforeResume: &f})
 		}, policy.CodeField},
 		{"unknown zone", func() (tools.RequestResult, error) {
-			return h.svc.RequestZoneStop(ctx, sess, tools.ZoneStopInput{ZoneName: "nope", Reason: "r"})
+			return h.stop(ctx, sess, tools.ZoneStopInput{ZoneName: "nope", Reason: "r"})
 		}, policy.CodeZoneNotFound},
 		{"other namespace", func() (tools.RequestResult, error) {
-			return h.svc.RequestZoneStop(ctx, sess, tools.ZoneStopInput{Namespace: "default", ZoneName: "z", Reason: "r"})
+			return h.stop(ctx, sess, tools.ZoneStopInput{Namespace: "default", ZoneName: "z", Reason: "r"})
 		}, policy.CodeNamespace},
 		{"critical draft", func() (tools.RequestResult, error) {
-			return h.svc.RequestDraftTask(ctx, sess, tools.DraftTaskInput{Name: "crit", Purpose: "p", Actions: []tools.DraftActionInput{{Name: "a", Type: "Navigate", Priority: "Critical"}}})
+			return h.draft(ctx, sess, tools.DraftTaskInput{Name: "crit", Purpose: "p", Actions: []tools.DraftActionInput{{Name: "a", Type: "Navigate", Priority: "Critical"}}})
 		}, policy.CodeField},
 		{"no session identity", func() (tools.RequestResult, error) {
-			return h.svc.RequestZoneStop(ctx, tools.Session{}, tools.ZoneStopInput{ZoneName: "policy-zone", Reason: "r"})
+			return h.stop(ctx, tools.Session{}, tools.ZoneStopInput{ZoneName: "policy-zone", Reason: "r"})
 		}, policy.CodeMalformed},
 	}
 	for _, c := range cases {
@@ -493,7 +494,7 @@ func TestDraftGateFailsClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = setStandinFailurePolicy(context.Background(), "Fail") })
-	res, err := h.svc.RequestDraftTask(ctx, sess, tools.DraftTaskInput{Name: "gate-off", Purpose: "p", Actions: []tools.DraftActionInput{{Name: "a", Type: "Navigate"}}})
+	res, err := h.draft(ctx, sess, tools.DraftTaskInput{Name: "gate-off", Purpose: "p", Actions: []tools.DraftActionInput{{Name: "a", Type: "Navigate"}}})
 	if err != nil || !res.Refused || res.Code != string(policy.CodeDraftGateAbsent) {
 		t.Fatalf("got %+v %v (gate was %s)", res, err, name)
 	}

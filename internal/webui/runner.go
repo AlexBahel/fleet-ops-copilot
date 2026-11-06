@@ -18,20 +18,51 @@ package webui
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/trace"
 
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/agent"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/audit"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/catalogue"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/conversation"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/llm"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/mcpserver"
 )
 
-// AgentRunner answers each request with the agent loop (internal/agent)
-// over a fresh MCP session to foc-mcp and a fresh backend, so a foc-mcp
-// restart affects only requests in flight and no backend state is shared
-// between requests.
+// ChatInput is one person message.
+type ChatInput struct {
+	// Token is the caller's bearer token, forwarded to foc-mcp ("" for the page).
+	Token     string
+	Operator  string
+	SessionID string
+	// ConversationID continues a conversation of the same person (D75).
+	ConversationID string
+	// FollowUp names an ApprovalRequest whose prepared follow-up starts this
+	// conversation at its preview (D78).
+	FollowUp string
+	Message  string
+}
+
+// ChatOutput is the answer to one message.
+type ChatOutput struct {
+	Trace          agent.Trace
+	ConversationID string
+	// Notice says, when it applies, that the given conversation could not be
+	// continued and a new one was started.
+	Notice string
+}
+
+// AgentRunner answers each message with the agent (internal/agent) over a
+// fresh MCP session to foc-mcp, so a foc-mcp restart affects only messages
+// in flight. Conversations, with their dialogue state, are kept in Store,
+// bound to the requester foc-mcp verified (D75).
 type AgentRunner struct {
 	// Transport returns a new MCP client transport (streamable HTTP to
 	// foc-mcp in the cluster) that sends token, if any, as the caller's
@@ -42,6 +73,18 @@ type AgentRunner struct {
 	BackendName string
 	MaxTurns    int
 	Tracer      trace.Tracer
+	// Catalogue enables guided requests (D70); nil leaves plain answers.
+	Catalogue *catalogue.Catalogue
+	// Store holds conversations; nil makes one.
+	Store *conversation.Store
+	// Audit receives catalogue_review entries.
+	Audit *audit.Writer
+	// Requests reads an ApprovalRequest for a follow-up.
+	Requests client.Reader
+	// Redact masks secrets in the stored conversation text.
+	Redact func(string) string
+
+	once sync.Once
 }
 
 // MCPURL returns a Transport for foc-mcp's streamable HTTP endpoint.
@@ -57,18 +100,62 @@ func (a *AgentRunner) connect(ctx context.Context, token string) (*mcp.ClientSes
 	return cs, nil
 }
 
+// ErrBusy means another message of the same conversation is in flight.
+var ErrBusy = errors.New("another message of this conversation is still being answered")
+
 // Run implements Runner.
-func (a *AgentRunner) Run(ctx context.Context, token, operator, sessionID, prompt string) (agent.Trace, error) {
-	be, err := a.NewBackend()
+func (a *AgentRunner) Run(ctx context.Context, in ChatInput) (ChatOutput, error) {
+	a.once.Do(func() {
+		if a.Store == nil {
+			a.Store = conversation.New()
+		}
+	})
+	cs, err := a.connect(ctx, in.Token)
 	if err != nil {
-		return agent.Trace{Prompt: prompt}, fmt.Errorf("model backend: %w", err)
-	}
-	cs, err := a.connect(ctx, token)
-	if err != nil {
-		return agent.Trace{Prompt: prompt}, err
+		return ChatOutput{Trace: agent.Trace{Prompt: in.Message}}, err
 	}
 	defer func() { _ = cs.Close() }()
-	return (&agent.Loop{Backend: be, Session: cs, MaxTurns: a.MaxTurns, Tracer: a.Tracer}).Run(ctx, operator, sessionID, prompt)
+	who, err := agent.Whoami(ctx, cs, in.Operator)
+	if err != nil {
+		return ChatOutput{Trace: agent.Trace{Prompt: in.Message}}, fmt.Errorf("whoami: %w", err)
+	}
+	out := ChatOutput{ConversationID: in.ConversationID}
+	var conv *conversation.Conversation
+	if in.ConversationID != "" {
+		conv, _ = a.Store.Get(in.ConversationID, who.Requester)
+	}
+	if conv == nil || in.FollowUp != "" {
+		if in.ConversationID != "" && conv == nil {
+			out.Notice = "That conversation could not be continued (not yours, or expired); this is a new one."
+		}
+		be, err := a.NewBackend()
+		if err != nil {
+			return ChatOutput{Trace: agent.Trace{Prompt: in.Message}}, fmt.Errorf("model backend: %w", err)
+		}
+		out.ConversationID, conv = a.Store.Start(who.Requester, be)
+	}
+	if !conv.TryLock() {
+		return out, ErrBusy
+	}
+	defer conv.Unlock()
+	chat := &agent.Chat{Catalogue: a.Catalogue, MaxTurns: a.MaxTurns, Tracer: a.Tracer, Audit: a.Audit, Redact: a.Redact}
+	if in.FollowUp != "" {
+		var req focv1.ApprovalRequest
+		if a.Requests == nil {
+			return out, errors.New("follow-ups are not available: no request reader")
+		}
+		ns := ""
+		if a.Catalogue != nil {
+			ns = a.Catalogue.Namespace
+		}
+		if err := a.Requests.Get(ctx, client.ObjectKey{Namespace: ns, Name: in.FollowUp}, &req); err != nil {
+			return out, fmt.Errorf("reading %s: %w", in.FollowUp, err)
+		}
+		out.Trace, err = chat.FollowUp(ctx, cs, conv, who.Requester, in.SessionID, &req)
+		return out, err
+	}
+	out.Trace, err = chat.Turn(ctx, cs, conv, in.Operator, in.SessionID, in.Message)
+	return out, err
 }
 
 // Ready implements Runner: foc-mcp accepts a session and answers a ping.

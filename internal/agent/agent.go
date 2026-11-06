@@ -39,26 +39,31 @@ import (
 )
 
 // SystemPromptVersion names what the model is told: the SystemPrompt text
-// and the tool descriptions foc-mcp serves. Evaluation results record it with
-// the prompt's SHA-256 and the tool list's (docs/DESIGN.md D46, D66).
-// v2 (2026-11-04) added the last three sentences (P1-P3). v3 (2026-11-05,
-// R46) keeps the v2 text and describes every namespace parameter with the
-// namespace in use (mcpserver.NamespaceDescription). Frozen until the model
-// runs of record.
-const SystemPromptVersion = "v3"
+// and the tool descriptions it is offered. Evaluation results record it with
+// the prompt's SHA-256 and the tool list's (docs/DESIGN.md D46, D66, D81).
+// v2 (2026-11-04) added three sentences (P1-P3). v3 (2026-11-05, R46)
+// described every namespace parameter. v4 (2026-11-06, FOC-8, R62-R69): the
+// model reads a request through propose_task and is offered no write tool;
+// the copilot asks, previews and files after the person's confirmation.
+const SystemPromptVersion = "v4"
 
 // SystemPrompt is the instruction every backend receives.
 const SystemPrompt = `You are an operations assistant for a Swarmada robot fleet.
 Answer from tool results only. Cite every fact as Kind/name field=value, using the field paths the tools return (for example Robot/sim-robot-002 status.estopState=Stopped).
 You cannot clear an emergency stop, release or resume a robot, delete anything, approve a request, or change work that already exists. When asked to, say that you cannot, give the reason, and name who can.
-To propose work, use request_draft_task (it creates a draft that dispatches nothing) and request_activate_task. For zone maintenance or a zone stop, use the request_* tools; a named person approves. A tool result with "refused": true is a policy refusal: report its policy.code and reason.
-Before you request a change or answer about a zone, read its current state (get_zone, and the robots in it) and cite it.
+When the person asks for work (an inspection, moving or delivering, charging, a patrol, a survey, zone maintenance, a zone stop, activating a draft), call propose_task with the ask and every field their words state. Do not ask your own questions and do not write a preview: the copilot asks at most two questions, shows a preview with its checks, and files a request only after the person confirms it. When the person describes something the copilot's choices did not cover, call propose_task with somethingElse: known (a catalogue kind), composed (basic steps), or notPossible (the need and the reason).
+Before you propose work or answer about a zone, read its current state (get_zone, and the robots in it) and cite it.
 Cite each fact with the full Kind/name and field path, e.g. Robot/sim-robot-002 status.phase=Idle, also when several objects share a value.
-Never substitute a parameter the operator asked for; if a value is not allowed, say so and do not create the request.`
+Never substitute a parameter the operator asked for; if a value is not allowed, say so.`
 
 // ToolEvent is one executed tool call.
 type ToolEvent struct {
-	Name       string          `json:"name"`
+	Name string `json:"name"`
+	// By is "agent" for a call foc-agent made itself (a fleet snapshot for
+	// the dialogue, check_task for a preview, the request filed after a
+	// confirmation, whoami), "local" for a tool foc-agent handles in process
+	// (propose_task), and empty for a model's call to foc-mcp.
+	By         string          `json:"by,omitempty"`
 	Args       json.RawMessage `json:"args"`
 	Result     json.RawMessage `json:"result,omitempty"`
 	ErrorText  string          `json:"error,omitempty"`
@@ -81,6 +86,18 @@ type Trace struct {
 	// TraceID is the OpenTelemetry trace of this request (hex), empty when
 	// the Loop has no Tracer or a no-op one.
 	TraceID string `json:"traceID,omitempty"`
+	// Dialogue is what this message did in a guided request (D71): a
+	// question asked, a preview shown, a request filed, ...; nil for a plain
+	// answer.
+	Dialogue *DialogueEvent `json:"dialogue,omitempty"`
+}
+
+// LocalTool is a tool foc-agent handles itself. Call returns the content
+// given to the model, or, when stop is non-empty, the text that ends the
+// turn (a question or a preview the engine rendered).
+type LocalTool struct {
+	Spec llm.ToolSpec
+	Call func(ctx context.Context, args json.RawMessage) (content string, stop string, err error)
 }
 
 // Loop runs one backend against one MCP session.
@@ -88,6 +105,11 @@ type Loop struct {
 	Backend  llm.Backend
 	Session  *mcp.ClientSession
 	MaxTurns int
+	// Offer says whether a served tool is offered to the model; nil offers
+	// all. foc-agent offers no request_* tool and not whoami (D74).
+	Offer func(name string) bool
+	// Local tools are handled by the caller, not foc-mcp.
+	Local []LocalTool
 	// Tracer records one span per request, model call and tool call
 	// (internal/tracing). nil records nothing.
 	Tracer trace.Tracer
@@ -99,6 +121,12 @@ var ErrMaxTurns = errors.New("turn limit reached without a final answer")
 // Run answers one operator request. Latency is measured from the request
 // being sent to the backend until the final answer.
 func (l *Loop) Run(ctx context.Context, operator, sessionID, prompt string) (tr Trace, err error) {
+	return l.RunWith(ctx, operator, sessionID, nil, prompt)
+}
+
+// RunWith answers prompt after earlier messages of the same conversation
+// (person and assistant text only).
+func (l *Loop) RunWith(ctx context.Context, operator, sessionID string, earlier []llm.Message, prompt string) (tr Trace, err error) {
 	tr = Trace{Prompt: prompt, Started: time.Now()}
 	ctx, span := tracing.OrNoop(l.Tracer).Start(ctx, tracing.SpanRequest, trace.WithAttributes(
 		tracing.AttrOperator.String(operator), tracing.AttrSession.String(sessionID),
@@ -122,16 +150,24 @@ func (l *Loop) Run(ctx context.Context, operator, sessionID, prompt string) (tr 
 	if err != nil {
 		return tr, err
 	}
-	specs := make([]llm.ToolSpec, 0, len(tl.Tools))
+	specs := make([]llm.ToolSpec, 0, len(tl.Tools)+len(l.Local))
 	for _, t := range tl.Tools {
+		if l.Offer != nil && !l.Offer(t.Name) {
+			continue
+		}
 		schema, _ := json.Marshal(t.InputSchema)
 		specs = append(specs, llm.ToolSpec{Name: t.Name, Description: t.Description, InputSchema: schema})
+	}
+	local := map[string]LocalTool{}
+	for _, lt := range l.Local {
+		specs = append(specs, lt.Spec)
+		local[lt.Spec.Name] = lt
 	}
 	max := l.MaxTurns
 	if max == 0 {
 		max = 12
 	}
-	history := []llm.Message{{Role: "user", Text: prompt}}
+	history := append(append([]llm.Message{}, earlier...), llm.Message{Role: "user", Text: prompt})
 	for tr.Turns < max {
 		tr.Turns++
 		reply, err := l.chat(ctx, tr.Turns, history, specs)
@@ -149,6 +185,31 @@ func (l *Loop) Run(ctx context.Context, operator, sessionID, prompt string) (tr 
 		}
 		var results []llm.ToolResult
 		for _, c := range reply.Calls {
+			if lt, ok := local[c.Name]; ok {
+				ev := ToolEvent{Name: c.Name, By: "local", Args: c.Args}
+				start := time.Now()
+				content, stop, cerr := lt.Call(ctx, c.Args)
+				ev.DurationMs = float64(time.Since(start).Microseconds()) / 1000
+				if cerr != nil {
+					ev.IsError, ev.ErrorText, content = true, cerr.Error(), cerr.Error()
+				} else if content != "" && json.Valid([]byte(content)) {
+					ev.Result = json.RawMessage(content)
+				}
+				tr.Calls = append(tr.Calls, ev)
+				if stop != "" {
+					tr.Final = strings.TrimSpace(strings.TrimSpace(reply.Text) + "\n\n" + stop)
+					return tr, nil
+				}
+				results = append(results, llm.ToolResult{CallID: c.ID, Content: content, IsError: cerr != nil})
+				continue
+			}
+			if l.Offer != nil && !l.Offer(c.Name) {
+				// A tool the model was not offered is not called (D74).
+				ev := ToolEvent{Name: c.Name, Args: c.Args, IsError: true, ErrorText: "tool not offered"}
+				tr.Calls = append(tr.Calls, ev)
+				results = append(results, llm.ToolResult{CallID: c.ID, Content: "tool " + c.Name + " is not offered: requests are filed by the copilot after the person confirms a preview; call propose_task", IsError: true})
+				continue
+			}
 			ev, res := l.call(ctx, operator, sessionID, c)
 			tr.Calls = append(tr.Calls, ev)
 			results = append(results, res)

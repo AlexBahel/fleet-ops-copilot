@@ -188,7 +188,8 @@ func (e *env) mcpSession(t *testing.T, person string) *mcp.ClientSession {
 func (e *env) callAs(t *testing.T, person, asserted, tool string, args map[string]any) tools.RequestResult {
 	t.Helper()
 	res, err := e.mcpSession(t, person).CallTool(context.Background(), &mcp.CallToolParams{
-		Meta: mcp.Meta{mcpserver.MetaSession: e.session, mcpserver.MetaOperator: asserted}, Name: tool, Arguments: args,
+		Meta: mcp.Meta{mcpserver.MetaSession: e.session, mcpserver.MetaOperator: asserted, mcpserver.MetaConfirmedPreview: confirmFor(t, tool, args)},
+		Name: tool, Arguments: args,
 	})
 	if err != nil {
 		t.Fatalf("%s: %v", tool, err)
@@ -200,6 +201,39 @@ func (e *env) callAs(t *testing.T, person, asserted, tool string, args map[strin
 	}
 	t.Logf("%s by %s (token of %q, asserted %q) -> %s", tool, asserted, person, asserted, b)
 	return out
+}
+
+// confirmFor is the id of the preview a person confirmed for this request
+// (D74): the test acts as the person's own client, which sends it.
+func confirmFor(t *testing.T, tool string, args map[string]any) string {
+	t.Helper()
+	b, _ := json.Marshal(args)
+	var in any
+	switch tool {
+	case "request_draft_task":
+		var v tools.DraftTaskInput
+		_ = json.Unmarshal(b, &v)
+		in = v
+	case "request_activate_task":
+		var v tools.ActivateTaskInput
+		_ = json.Unmarshal(b, &v)
+		in = v
+	case "request_zone_maintenance":
+		var v tools.ZoneMaintenanceInput
+		_ = json.Unmarshal(b, &v)
+		in = v
+	case "request_zone_stop":
+		var v tools.ZoneStopInput
+		_ = json.Unmarshal(b, &v)
+		in = v
+	default:
+		return ""
+	}
+	id, err := tools.PreviewIDFor(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
 }
 
 // requestedFor returns spec.requestedFor of an ApprovalRequest.

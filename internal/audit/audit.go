@@ -60,6 +60,11 @@ const (
 	KindActivationObserved Kind = "activation_observed"
 	KindExecutionFailed    Kind = "execution_failed"
 	KindExpired            Kind = "expired"
+	// KindCatalogueReview records a "something else" answer for catalogue
+	// review: requester, the redacted text, the interpretation (D72).
+	KindCatalogueReview Kind = "catalogue_review"
+	// KindTaskOutcome records a drafted task's terminal result (D78).
+	KindTaskOutcome Kind = "task_outcome"
 )
 
 // Entry is one audit line.

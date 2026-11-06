@@ -41,6 +41,7 @@ import (
 	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/audit"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/catalogue"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/llm"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/mcpserver"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/policy"
@@ -73,8 +74,13 @@ func newUIFixture(t *testing.T, namespaces []string) *uiFixture {
 	h := newHarness(t, nil)
 	f := &uiFixture{h: h, mcp: httptest.NewServer(mcpserver.Handler(mcpserver.New(h.svc)))}
 	t.Cleanup(f.mcp.Close)
+	cat, err := catalogue.Load(repoRoot + "/catalogue/warehouse-a.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
 	runner := &webui.AgentRunner{
 		BackendName: "scripted",
+		Catalogue:   cat,
 		Transport:   webui.MCPURL(f.mcp.URL),
 		NewBackend: func() (llm.Backend, error) {
 			f.mu.Lock()
@@ -101,8 +107,12 @@ func (f *uiFixture) get(t *testing.T, path string) (int, string) {
 }
 
 type chatOut struct {
-	Answer    string `json:"answer"`
-	Error     string `json:"error"`
+	Answer         string `json:"answer"`
+	Error          string `json:"error"`
+	ConversationID string `json:"conversationId"`
+	Dialogue       *struct {
+		Outcome string `json:"outcome"`
+	} `json:"dialogue"`
 	ToolCalls []struct {
 		Name, PolicyCode, Created string
 		Refused                   bool
@@ -116,25 +126,34 @@ func (f *uiFixture) chat(t *testing.T, operator, message string, steps ...llm.St
 	return f.chatAs(t, "", operator, message, steps...)
 }
 
-// chatAs sends one message with a bearer token, as foc chat does.
+// chatAs sends one message with a bearer token, as foc chat does, then
+// confirms the preview it shows with "1" in the same conversation (D74).
 func (f *uiFixture) chatAs(t *testing.T, token, operator, message string, steps ...llm.Step) string {
 	t.Helper()
 	f.script(steps...)
-	body, _ := json.Marshal(map[string]string{"operator": operator, "message": message})
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, f.ts.URL+"/api/chat", strings.NewReader(string(body)))
-	req.Header.Set("Content-Type", "application/json")
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
+	post := func(body map[string]string) chatOut {
+		b, _ := json.Marshal(body)
+		req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, f.ts.URL+"/api/chat", strings.NewReader(string(b)))
+		req.Header.Set("Content-Type", "application/json")
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = res.Body.Close() }()
+		var out chatOut
+		if err := json.NewDecoder(res.Body).Decode(&out); err != nil || res.StatusCode != 200 {
+			t.Fatalf("chat: %d %+v %v", res.StatusCode, out, err)
+		}
+		return out
 	}
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
+	out := post(map[string]string{"operator": operator, "message": message})
+	if out.Dialogue == nil || out.Dialogue.Outcome != "preview" {
+		t.Fatalf("chat showed no preview: %+v", out)
 	}
-	defer func() { _ = res.Body.Close() }()
-	var out chatOut
-	if err := json.NewDecoder(res.Body).Decode(&out); err != nil || res.StatusCode != 200 {
-		t.Fatalf("chat: %d %+v %v", res.StatusCode, out, err)
-	}
+	out = post(map[string]string{"operator": operator, "conversationId": out.ConversationID, "message": "1"})
 	for _, c := range out.ToolCalls {
 		if strings.HasPrefix(c.Created, "ApprovalRequest/") {
 			return strings.TrimPrefix(c.Created, "ApprovalRequest/")
@@ -142,6 +161,11 @@ func (f *uiFixture) chatAs(t *testing.T, token, operator, message string, steps 
 	}
 	t.Fatalf("chat filed no request: %+v", out)
 	return ""
+}
+
+// proposeStop is the model's turn for a zone stop request.
+func proposeStop(zone, reason string) llm.Step {
+	return llm.Step{Calls: []llm.ToolCall{call("propose_task", map[string]any{"ask": "zone-stop", "fields": map[string]any{"zone": zone, "reason": reason}})}}
 }
 
 func (f *uiFixture) views(t *testing.T) map[string]requestview.View {
@@ -177,17 +201,19 @@ func TestWebUIShowsTheWriteThatIsExecuted(t *testing.T) {
 	f := newUIFixture(t, []string{swarmNS})
 	h := f.h
 	zone := ensureZone(t, "ui-zone")
+	ensureZone(t, swarmNS)
+	ensureRobot(t, "envtest-robot-1", swarmNS, 90)
 	if code, body := f.get(t, "/readyz"); code != 200 {
 		t.Fatalf("readyz as foc-agent: %d %s", code, body)
 	}
-	res, err := h.svc.RequestDraftTask(ctx, sess, tools.DraftTaskInput{Name: "ui-draft-1", Purpose: "stage pallet", Actions: []tools.DraftActionInput{
+	res, err := h.draft(ctx, sess, tools.DraftTaskInput{Name: "ui-draft-1", Purpose: "stage pallet", Actions: []tools.DraftActionInput{
 		{Name: "go", Type: "Navigate", Zone: swarmNS, Priority: "Normal", RequiredCapabilities: []string{"navigation"}},
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	draftName := reqName(t, res)
-	res, err = h.svc.RequestZoneStop(ctx, sess, tools.ZoneStopInput{ZoneName: "ui-zone", Reason: "ui: spill in aisle 4"})
+	res, err = h.stop(ctx, sess, tools.ZoneStopInput{ZoneName: "ui-zone", Reason: "ui: spill in aisle 4"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,9 +293,7 @@ func TestWebUIRequestCannotBeApproved(t *testing.T) {
 	ctx := context.Background()
 	f := newUIFixture(t, []string{swarmNS})
 	zone := ensureZone(t, "ui-zone-3")
-	name := f.chat(t, "sam", "stop ui-zone-3",
-		llm.Step{Calls: []llm.ToolCall{call("request_zone_stop", map[string]any{"zoneName": "ui-zone-3", "reason": "typed in the UI"})}},
-		llm.Step{Final: "Requested a stop of FleetZone/ui-zone-3."})
+	name := f.chat(t, "sam", "stop ui-zone-3", proposeStop("ui-zone-3", "typed in the UI"))
 	v := f.views(t)[name]
 	if v.RequestedFor != policy.UnverifiedPrefix+"sam" || v.Approve != "" || v.Reject != "foc reject "+name+" -n "+swarmNS ||
 		!strings.Contains(v.Unapprovable, string(policy.CodeRequesterUnverified)) {

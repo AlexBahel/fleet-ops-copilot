@@ -52,6 +52,7 @@ import (
 	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/agent"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/authn"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/conversation"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/policy"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/redact"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/requestview"
@@ -62,9 +63,8 @@ var staticFiles embed.FS
 
 // Runner answers one operator request.
 type Runner interface {
-	// Run answers one request; token is the caller's bearer token, forwarded
-	// to foc-mcp ("" for the page).
-	Run(ctx context.Context, token, operator, sessionID, prompt string) (agent.Trace, error)
+	// Run answers one message of a conversation.
+	Run(ctx context.Context, in ChatInput) (ChatOutput, error)
 	// Ready reports whether a request could be answered now (foc-mcp
 	// reachable).
 	Ready(ctx context.Context) error
@@ -100,6 +100,7 @@ var (
 	operatorRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._@:+-]{0,127}$`)
 	// Session ids become a label value on ApprovalRequests (fleet.SessionLabel).
 	sessionRE = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{6,61}[a-z0-9])$`)
+	requestRE = regexp.MustCompile(`^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$`)
 )
 
 // Handler returns the HTTP handler: the page, its API, /healthz and /readyz.
@@ -172,9 +173,11 @@ func (s *Server) requests(w http.ResponseWriter, r *http.Request) {
 }
 
 type chatRequest struct {
-	Operator  string `json:"operator"`
-	SessionID string `json:"sessionId"`
-	Message   string `json:"message"`
+	Operator       string `json:"operator"`
+	SessionID      string `json:"sessionId"`
+	ConversationID string `json:"conversationId"`
+	FollowUp       string `json:"followUp"`
+	Message        string `json:"message"`
 }
 
 // ToolCall is one tool call as the page lists it: no arguments or results,
@@ -189,6 +192,12 @@ type ToolCall struct {
 
 type chatResponse struct {
 	SessionID string `json:"sessionId"`
+	// ConversationID continues this conversation; the client keeps it (D75).
+	ConversationID string `json:"conversationId,omitempty"`
+	Notice         string `json:"notice,omitempty"`
+	// Dialogue is what the message did in a guided request: a question, a
+	// preview awaiting confirmation, a request filed, ...
+	Dialogue *agent.DialogueEvent `json:"dialogue,omitempty"`
 	// Requester is what any request filed by this message records as
 	// requestedFor when no token was sent; with a token foc-mcp decides it.
 	Requester string     `json:"requester,omitempty"`
@@ -224,11 +233,17 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 	case (token == "" || in.Operator != "") && !operatorRE.MatchString(in.Operator):
 		writeJSON(w, http.StatusBadRequest, chatResponse{Error: "operator: enter your Kubernetes username (letters, digits and . _ @ : + -, at most 128)"})
 		return
-	case in.Message == "" || len(in.Message) > maxMessage:
+	case (in.Message == "" && in.FollowUp == "") || len(in.Message) > maxMessage:
 		writeJSON(w, http.StatusBadRequest, chatResponse{Error: "message: between 1 and 8000 characters"})
 		return
 	case in.SessionID != "" && !sessionRE.MatchString(in.SessionID):
 		writeJSON(w, http.StatusBadRequest, chatResponse{Error: "sessionId: lower-case letters, digits and -, 8 to 63 characters"})
+		return
+	case in.ConversationID != "" && !conversation.IDPattern.MatchString(in.ConversationID):
+		writeJSON(w, http.StatusBadRequest, chatResponse{Error: "conversationId: the id a previous answer returned"})
+		return
+	case in.FollowUp != "" && !requestRE.MatchString(in.FollowUp):
+		writeJSON(w, http.StatusBadRequest, chatResponse{Error: "followUp: an ApprovalRequest name"})
 		return
 	}
 	if in.SessionID == "" {
@@ -253,9 +268,16 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 	if token == "" {
 		requester = policy.UnverifiedPrefix + in.Operator
 	}
-	tr, err := s.Runner.Run(ctx, token, in.Operator, in.SessionID, in.Message)
-	out := chatResponse{SessionID: in.SessionID, Requester: requester, Answer: tr.Final, Turns: tr.Turns, LatencyMs: tr.LatencyMs, ToolCalls: toolCalls(tr)}
+	res, err := s.Runner.Run(ctx, ChatInput{Token: token, Operator: in.Operator, SessionID: in.SessionID, ConversationID: in.ConversationID, FollowUp: in.FollowUp, Message: in.Message})
+	tr := res.Trace
+	out := chatResponse{SessionID: in.SessionID, ConversationID: res.ConversationID, Notice: res.Notice, Dialogue: tr.Dialogue,
+		Requester: requester, Answer: tr.Final, Turns: tr.Turns, LatencyMs: tr.LatencyMs, ToolCalls: toolCalls(tr)}
 	s.logf("chat operator=%s bearer=%t session=%s turns=%d tools=%d latency_ms=%.0f err=%v", in.Operator, token != "", in.SessionID, tr.Turns, len(tr.Calls), tr.LatencyMs, err)
+	if errors.Is(err, ErrBusy) {
+		out.Error = err.Error()
+		writeJSON(w, http.StatusConflict, out)
+		return
+	}
 	if err != nil {
 		out.Error = s.Redactor.String(err.Error())
 		writeJSON(w, http.StatusBadGateway, out)
