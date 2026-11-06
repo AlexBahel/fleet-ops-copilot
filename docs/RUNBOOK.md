@@ -469,10 +469,12 @@ KUBECONFIG=<your kubeconfig> foc activate <activation-request> -n warehouse-a [-
 ```
 
 `foc activate` refuses a ServiceAccount, a request that is not `Approved`, a task that is no longer
-a draft and a blocked check; then it sends one JSON patch that fails if the task changed, clears
-`spec.draft` and records you in `fleetops.alexbahel.github.io/activated-by` (an admission policy
-admits only your own name there). Swarmada checks your `activate` verb. foc-approvals records the
-activator on the request; an activation made with `kubectl patch` is recorded with the activator
+a draft and a blocked check. Then it records the activation as an `ApprovalDecision` of type
+`Activation` naming you (the same admission policy as an approval admits only your own name), and
+sends the plain `spec.draft=false` patch; nothing is added to the FleetTask. Swarmada checks your
+`activate` verb. Recording needs `create` on `approvaldecisions` (the `fleetops:approver` role).
+foc-approvals links the record to the request when the task leaves Draft (`status.activatedBy`,
+`status.activationRef`); an activation made with `kubectl patch` is recorded with the activator
 unknown.
 
 **Outcome and follow-up.** foc-approvals records the task's terminal phase on the DraftTask request

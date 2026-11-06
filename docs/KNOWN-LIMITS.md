@@ -134,9 +134,13 @@ remove it.
   invariant, the execution re-check, `foc activate` and the follow-up are tested with the scripted
   backend, unit tests, envtest and the fixture evaluations. In envtest the executor's dry runs reach
   the CRD schema and the copilot's admission policies only; Swarmada's webhooks have not answered
-  one (no cluster run in FOC-8). Whether Swarmada's FleetTask webhook admits the activation patch
-  that also sets `fleetops.alexbahel.github.io/activated-by` has been checked against the envtest
-  stand-in only.
+  one (no cluster run in FOC-8).
+- **The activation record names who ran `foc activate`, not who sent the patch.** The record is
+  bound to the authenticated person and is made just before the patch; Swarmada does not record
+  who cleared `spec.draft`. foc-approvals links the most recent record made after the approval and
+  lists earlier ones (for example one whose patch Swarmada refused), so with two people activating
+  at once the link can name the one whose patch lost. An activation made with `kubectl patch` and
+  no record is recorded as unknown.
 - **`stallsAfterActivationProxy`** in results.json is a proxy: `check_task` re-run on the fixture
   at the end of a run, not an observation of work left Pending by Swarmada.
 - **Fixture changes for v4.** Scenarios that file work set the live captures' FleetAdapter

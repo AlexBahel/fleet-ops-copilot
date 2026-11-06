@@ -279,13 +279,16 @@ ValidatingAdmissionPolicies (CEL, Kubernetes ≥ 1.30):
 |---|---|---|
 | `fleetops-foc-approvals-drafts-only` | `CREATE`/`UPDATE`/`DELETE fleettasks` by `foc-approvals` | `CREATE` with `spec.draft == true` and the label `fleetops.alexbahel.github.io/created-by: foc-approvals` |
 | `fleetops-foc-approvals-dry-run-only` | `CREATE`/`UPDATE`/`DELETE fleetactions` by `foc-approvals` | `CREATE` with `request.dryRun == true`; nothing else (D76) |
-| `fleetops-activated-by` | `UPDATE fleettasks` that sets or changes the annotation `fleetops.alexbahel.github.io/activated-by` | the annotation's value equal to the authenticated user's name (D79) |
 | `fleetops-foc-approvals-zone-stop-only` | `fleetzones` writes by `foc-approvals` | `UPDATE` adding `swarmada.io/estop-triggered` where it was absent; besides it, only what Swarmada's estop-actor mutation adds (`swarmada.io/estop-actor`, the `swarmada.io/estop-in-force` finalizer); `spec`, labels, other annotations and other finalizers unchanged |
-| `fleetops-decisions` | `CREATE`/`UPDATE approvaldecisions` | `CREATE` by a non-ServiceAccount with `decidedBy` and `decidedByGroups` equal to the authenticated user's; no update |
+| `fleetops-decisions` | `CREATE`/`UPDATE approvaldecisions`, both types (`Verdict`, `Activation`) | `CREATE` by a non-ServiceAccount with `decidedBy` and `decidedByGroups` equal to the authenticated user's; no update |
 | `fleetops-requests` | `CREATE approvalrequests` | `spec.requestedBy` equal to the creating identity, so a hand-made request cannot name someone else as requester |
 
 Removing the estop annotation is also refused by Swarmada's own `estop-clear` check
 (`internal/webhook/fleetzone_webhook.go`).
+
+Every policy that matches a Swarmada resource matches only `foc-approvals`' own writes. The copilot
+puts no annotation on a Swarmada object a person writes, and no policy of its own on a person's
+activation; who activated is recorded in the copilot's own API (D79, R71).
 
 ### 3.7 NetworkPolicy
 
@@ -556,13 +559,19 @@ at that proposal's preview; it is filed only after a confirmation, like any othe
 state `Approved`. Any person Swarmada allows to activate may run it (R69): the CLI refuses a
 ServiceAccount caller (SelfSubjectReview) up front, and Swarmada's own `activate` check decides for
 everyone else. It runs the same `check_task` evaluation with the caller's read permissions (a read
-the caller lacks is listed as not checked), refuses on a blocker, and then sends one JSON patch to
-the FleetTask: `test /spec/draft == true`, `replace /spec/draft false`, and the annotation
-`fleetops.alexbahel.github.io/activated-by: <caller>`. A ValidatingAdmissionPolicy
-(`fleetops-activated-by`) admits that annotation only with the authenticated user's name, so it
-cannot name someone else. `foc-approvals` observes the activation as before and records the
-activator from the annotation in its `activation_observed` audit line and Event; an activation made
-without `foc activate` is recorded with the activator unknown. It prints the API server and
+the caller lacks is listed as not checked) and refuses on a blocker. It then records the activation
+in the copilot's own API: an `ApprovalDecision` of `type: Activation` (`requestRef`, `decidedBy`,
+`decidedByGroups`, no `verdict`), under the same `fleetops-decisions` admission binding as a verdict,
+so it names only the authenticated caller and is never changed. Then it sends the plain merge patch
+`{"spec":{"draft":false}}`; nothing is added to the FleetTask (R71). Swarmada's FleetTask webhook
+checks the caller's `activate` verb. An Activation record decides nothing: the decision loop skips
+it, and the CRD refuses a record with a verdict or a verdict decision without one. When the task
+leaves Draft, `foc-approvals` links the most recent Activation record made no earlier than the
+approval (`status.activationRef`, `status.activatedBy`) and names any earlier ones in its
+`activation_observed` audit line and the request message (a record whose patch Swarmada refused
+stays, since foc activate records before it patches). An activation made without `foc activate`
+is recorded with the activator unknown. `foc activate` needs `create` on `approvaldecisions`,
+which the `fleetops:approver` role grants; without it, it stops before the patch. It prints the API server and
 namespace as `foc approve` does, and replaces the `kubectl patch` instruction.
 
 ## 4. Evaluation plan
@@ -816,7 +825,7 @@ policies/          default policy files
 | D76 | Execution re-check of a `DraftTask` (R65); envtest shows a non-dry-run FleetAction create by foc-approvals is refused and that foc-mcp has no create on any Swarmada resource (R69): foc-approvals re-runs `check_task` on fresh state and dry-runs the FleetTask and each member as a FleetAction (`dryRun: All`) immediately before the real create; any blocker or refusal fails the request with `DENY_CHECK_FAILED` or `DENY_SWARMADA_REFUSED` and Swarmada's message, recorded in `status.executionChecks`. foc-approvals gets `create` on `fleetactions`, admitted for dry runs only by the ValidatingAdmissionPolicy `fleetops-foc-approvals-dry-run-only` (`request.dryRun == true`). foc-mcp holds no create permission | Owner's ruling R65, 2026-11-06: D25 stays absolute. A FleetTask dry run reaches Swarmada's flow, binding and producer-contract checks only; the catalog check and the Pending cap run on FleetAction create (inventory §3). The API server authorizes a dry run like the real request, so the dry-run-only policy is what keeps the new permission from writing. |
 | D77 | `ApprovalRequest` additions (v1alpha1, additive): per draft action `location {zone, waypoint, x, y}`, `route[]`, `instruction`, `lookFor[]`, `customType`, `robotSelector`, `onFailure`; per draft `repeat` (loop `Times`, or `Forever` with a bound); `spec.preview` (id, catalogue version and SHA-256, kind, interpretation, instruction, `resultReported`, failure handling, confirmed at); `spec.checks` (verdict and each check when filed); `status.executionChecks`, `status.outcome`, `status.followUp`. The executor builds each member's payload from these fields (`{"waypoint", "x", "y", "lookFor", "instruction", "route"}` at this site) and a patrol as `spec.flow` loop over a sequence of Patrol members | The request must carry everything the task needs to run (BACKLOG-v4 P1: no waypoint field) and the evidence of what was checked. Typed fields keep the requests panel's "exact write" (D53) readable; the payload is built only by the executor. |
 | D78 | Failure handling: members keep Swarmada's default `onFailure: Requeue` (3 retries, then alert), shown as "retries up to 3 times, then alerts", or `Alert` on first failure when the person changes it; `failurePolicy: FailFast`. After activation foc-approvals watches the task to a terminal phase and records `status.outcome`; with `PrepareFollowUp` it also records a proposed follow-up, which `foc chat --follow-up <request>` turns into a preview that needs a confirmation like any other request | R64: report only, or prepare a follow-up request, never automatic. Owner's ruling R69 (2026-11-06) keeps Swarmada's bounded retry as the default; the follow-up request, not the retry, is what is never automatic. |
-| D79 | `foc activate <request>` replaces the `kubectl patch` instruction: with the caller's kubeconfig it requires an `Approved` `ActivateTask` request, refuses a ServiceAccount caller, re-runs the feasibility evaluation with the caller's reads, refuses on a blocker, and sends one JSON patch that tests `spec.draft == true`, sets it false and sets `fleetops.alexbahel.github.io/activated-by` to the caller; the admission policy `fleetops-activated-by` admits that annotation only with the authenticated user's name; foc-approvals records the activator in its audit line | R63; owner's ruling R69 (2026-11-06): any person Swarmada allows to activate, never a ServiceAccount, Swarmada's own check decides, the activator is recorded. Before, the copilot could not tell who activated (KNOWN-LIMITS). |
+| D79 | `foc activate <request>` replaces the `kubectl patch` instruction: with the caller's kubeconfig it requires an `Approved` `ActivateTask` request, refuses a ServiceAccount caller, re-runs the feasibility evaluation with the caller's reads, refuses on a blocker, creates an `ApprovalDecision` of `type: Activation` naming the caller (bound to the authenticated user by `fleetops-decisions`), then sends the plain `spec.draft=false` merge patch; foc-approvals links the record when the task leaves Draft (`status.activationRef`, `status.activatedBy`) and records the activator in its audit line. No copilot annotation and no copilot admission policy on the person's Swarmada write | R63; owner's rulings R69 (2026-11-06): any person Swarmada allows to activate, never a ServiceAccount, Swarmada's own check decides, the activator is recorded; R71 (2026-11-06): record it in the copilot's own API, not as an annotation with a policy on Swarmada resources. Before, the copilot could not tell who activated (KNOWN-LIMITS). |
 | D80 | foc-mcp (and foc-approvals) may `get`,`list` `swarmadaconfigs`, read only in code and never through a model-facing tool; the reader projects the namespace-stop annotation and marker and `spec.scheduling.maxPendingActionsPerZone` and drops the rest; the object is never logged or traced | Owner's ruling R66, 2026-11-06, conditional on SwarmadaConfig holding no secret material. Checked at the pin (`api/v1/swarmadaconfig_types.go`): no secret-typed field; `signing.trustRoots[].secretRef` and `signing.rekorPublicKey` are references (Secret name and key) to PEM public keys; `telemetry.sink.endpoint` and `signing.rekorUrl` are free strings that could carry credentials if an operator put them in a URL. Without the grant, `check_task` reports "namespace-wide stop and Pending cap not checked". Owner's ruling R69 keeps the grant with these limits; KNOWN-LIMITS says the ServiceAccount can read the whole object. |
 | D81 | Eval surface v4: prompt v4, judge v4 (BACKLOG-v4 J1–J3), S1 fixed, P1 closed, multi-turn scenarios with a scripted human responder, judge criterion 5 (dialogue) with a negative control per check, harness execution for executor re-check scenarios, the catalogue SHA-256 and the metrics `dialogue.questionsPerTask`, `capViolations`, `stallsAfterActivationProxy` (§4.4). Fixture runs use a fixed clock (2026-11-04T06:00:00Z) so timing checks do not depend on
 the date of the run. Scenarios that file work set the live captures' adapter `Connected` in a
