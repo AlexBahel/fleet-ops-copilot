@@ -10,6 +10,10 @@ new eval surface, and results from different surfaces are not comparable (see th
 note in `docs/KNOWN-LIMITS.md`). So one change here is not made alone: batch the items, then run
 Sonnet 5.5, Opus 5.5 and the air-gapped Qwen2.5-7B again.
 
+**Batched into FOC-8 (ruling R68, 2026-11-06).** J1–J3, S1 and P1 are made together with the
+guided-request change (`docs/DESIGN.md` §3.10, §4.4, D81), which changes the prompt, the tools, the
+judge and the scenarios anyway. Each item below stays listed until its commit lands.
+
 ## Judge
 
 | # | Defect | Seen in | Direction |
@@ -38,3 +42,19 @@ recorded results changes verdict in the wrong direction.
 - zone-03 failed in both Claude runs (Sonnet 5.5 three runs, Opus 5.5 two). It is not classified as a
   model, judge, scenario or product failure.
 - The Qwen2.5-7B runs were not checked for J1 to J3 or S1.
+
+## Proposed for Swarmada draft 5
+
+Gaps found by the FOC-8 inventory (`docs/design/foc8-inventory.md` §4, class (c)). They are
+proposals to Swarmada, not copilot work; the copilot lists them in its catalogue as
+`notYetPossible` and files nothing that needs one.
+
+| # | Proposal | Why the copilot needs it |
+|---|---|---|
+| C5 | **Eligibility dry run (ruling R62 b).** A read-only way to ask the control plane, for a FleetAction spec that is not created: which robots pass every candidate filter of RFC §9.4.2 now, and for each robot withheld, the filter number and reason (the same tally `noCandidateMessage` writes), plus the zone-restriction verdict (filter 11) and, optionally, the adapter's `validate_action` answer for the best candidate. For example a `dryRun` create of a FleetAction that returns this as a warning, or a subresource. Must not reserve, assign or change anything | `check_task` re-implements the filters from reads (D73) and cannot see `validate_action`; Swarmada's own answer would replace the copy and show the adapter's decision before activation |
+| C1 | A structured result for a robot action (`ActionStatusUpdate` field, `status.result` for non-External actions) | every inspect kind and patrol findings are class (b); the catalogue flips `resultReported` when this lands (R67) |
+| C2 | Evidence artifacts (references with digest and pose) for robot actions | inspect with photos |
+| C3 | A dispatch path for External actions | inspection by a vision service on a robot's stream |
+| C4 | Waypoints delivered to the adapter, or a typed destination | the copilot copies a waypoint's `x`, `y` into the payload |
+| C6 | A Charge exemption from the battery floor, or a charging path | a robot below `minBatteryPctForAction` cannot be sent to charge (`CHARGE_BELOW_BATTERY_FLOOR`) |
+| C7 | `dependsOn` validated at admission | a bad dependency in a draft is found only after activation |
