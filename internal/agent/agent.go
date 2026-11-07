@@ -45,7 +45,9 @@ import (
 // described every namespace parameter. v4 (2026-11-06, D81, R62-R69): the
 // model reads a request through propose_task and is offered no write tool;
 // the copilot asks, previews and files after the person's confirmation.
-const SystemPromptVersion = "v4"
+// v5 (2026-11-07, D90) keeps the v4 text; propose_task's schema is
+// narrowed to the site catalogue (D85).
+const SystemPromptVersion = "v5"
 
 // SystemPrompt is the instruction every backend receives.
 const SystemPrompt = `You are an operations assistant for a Swarmada robot fleet.

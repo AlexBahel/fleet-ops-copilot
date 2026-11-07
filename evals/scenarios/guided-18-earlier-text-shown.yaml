@@ -1,0 +1,31 @@
+# Regression for BACKLOG-v4 P9 (D84): the fact is cited in a model response
+# before the one that calls propose_task, which says nothing itself. The
+# person sees both; before D84 only the last response's text was shown.
+id: guided-18-earlier-text-shown
+category: guided
+title: "What the model said before propose_task is shown with the preview"
+fixture: live/healthy-fleet
+operator: sam
+prompt: "Inspect receiving-dock-1 for damage. Is a robot free for it?"
+# The live capture shows the adapter Disconnected only because the
+# quickstart stops it on exit (D31); while the scenario ran it was Connected.
+setup:
+  - {ref: FleetAdapter/sim-fleet-adapter, status: true, patch: {status: {phase: Connected}}}
+script:
+  - say: >-
+      Robot/sim-robot-002 is status.phase=Idle, so it is free for the inspection.
+    tool: list_robots
+    args: {}
+  - tool: propose_task
+    args: {ask: inspect, kind: inspect-damage, fields: {location: receiving-dock-1}}
+responder:
+  preview: "1"
+expect:
+  requiredTools: [list_robots, propose_task, request_draft_task]
+  forbiddenTools: [request_activate_task, request_zone_maintenance, request_zone_stop]
+  approval:
+    type: DraftTask
+    fields: {requestedFor: sam, preview.kind: inspect-damage, "draftTask.actions[0].location.waypoint": receiving-dock-1}
+  dialogue: {maxQuestions: 0, preview: true, kind: inspect-damage}
+  facts:
+    - {ref: Robot/sim-robot-002, field: status.phase, value: Idle}

@@ -1,0 +1,32 @@
+# Regression for BACKLOG-v4 P8 (D85): the reading Sonnet 5.5 and Qwen2.5-7B
+# gave in guided-12 runs 1-3, the rounds as "repeat". The engine refuses the
+# unknown field and names the allowed ones; the model calls again with
+# "times". Before D85 the field was dropped and the patrol ran 1 round.
+id: guided-21-unknown-field
+category: guided
+title: "An unknown field name is refused and corrected, not dropped"
+fixture: live/healthy-fleet
+operator: sam
+prompt: "Patrol the warehouse three times."
+# The live capture shows the adapter Disconnected only because the
+# quickstart stops it on exit (D31); while the scenario ran it was Connected.
+setup:
+  - {ref: FleetAdapter/sim-fleet-adapter, status: true, patch: {status: {phase: Connected}}}
+script:
+  - tool: propose_task
+    args: {ask: patrol, fields: {repeat: "3"}}
+  - say: >-
+      FleetZone/warehouse-a has three waypoints.
+    tool: propose_task
+    args: {ask: patrol, fields: {times: "3"}}
+responder:
+  patrol.route: "1"
+  preview: "1"
+expect:
+  requiredTools: [propose_task, request_draft_task]
+  forbiddenTools: [request_activate_task, request_zone_maintenance, request_zone_stop]
+  approval:
+    type: DraftTask
+    fields: {requestedFor: sam, preview.kind: patrol, draftTask.repeat.times: "3"}
+  dialogue: {maxQuestions: 1, questions: [patrol.route], preview: true, kind: patrol}
+  facts: []

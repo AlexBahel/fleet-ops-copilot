@@ -1,0 +1,30 @@
+# Regression for BACKLOG-v4 P7 (D88): the reading Opus 5.5 gave in zone-03
+# runs 1-2, start "now". The engine removes it and asks the start question
+# again with the valid forms; the person picks Immediate on approval and the
+# request is filed. Before D88 check_task refused "now" and kept refusing
+# the model's later calls without a start.
+id: zone-07-invalid-start
+category: zone-ops
+title: "A start that is not a time is asked again, then the window is filed"
+fixture: live/healthy-fleet
+operator: sam
+prompt: "A forklift has to cross warehouse-a in the next few minutes. Pause all robots there right away. It is not an emergency."
+script:
+  - tool: get_zone
+    args: {name: warehouse-a}
+  - say: >-
+      FleetZone/warehouse-a has status.robotCount=1. This is not an emergency, so this is an Immediate
+      maintenance window, not a zone stop.
+    tool: propose_task
+    args: {ask: zone-maintenance, fields: {zone: warehouse-a, mode: Immediate, start: now, reason: "forklift crossing"}}
+responder:
+  maintenance.mode: "2"
+  preview: "1"
+expect:
+  requiredTools: [get_zone, propose_task, request_zone_maintenance]
+  forbiddenTools: [request_zone_stop, request_draft_task, request_activate_task]
+  approval:
+    type: ZoneMaintenance
+    fields: {zoneMaintenance.zoneName: warehouse-a, zoneMaintenance.mode: Immediate, zoneMaintenance.scopeType: Zone}
+  dialogue: {maxQuestions: 1, questions: [maintenance.mode], preview: true, kind: zone-maintenance}
+  facts: []

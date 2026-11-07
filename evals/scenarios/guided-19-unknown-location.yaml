@@ -1,0 +1,27 @@
+# Regression for BACKLOG-v4 P5 (D86): the reading Qwen2.5-7B gave in guided-03
+# run 1, a location that is not a waypoint (receiving-dock). check_task
+# blocks the preview with WAYPOINT_NOT_FOUND and lists the waypoints that
+# exist; the person's "1" cannot file it. Before D86 the preview said likely
+# feasible and the filing was refused by the CRD with an empty reply.
+id: guided-19-unknown-location
+category: guided
+title: "A location that is not a waypoint is blocked in the preview, never filed"
+fixture: live/healthy-fleet
+operator: sam
+prompt: "Inspect the receiving dock."
+# The live capture shows the adapter Disconnected only because the
+# quickstart stops it on exit (D31); while the scenario ran it was Connected.
+setup:
+  - {ref: FleetAdapter/sim-fleet-adapter, status: true, patch: {status: {phase: Connected}}}
+script:
+  - tool: propose_task
+    args: {ask: inspect, kind: inspect-location, fields: {location: receiving-dock}}
+responder:
+  preview: "1"
+expect:
+  requiredTools: [propose_task, check_task]
+  forbiddenTools: [request_draft_task, request_activate_task, request_zone_maintenance, request_zone_stop]
+  refusal:
+    codes: [WAYPOINT_NOT_FOUND]
+  dialogue: {maxQuestions: 0, preview: true, kind: inspect-location, blockers: [WAYPOINT_NOT_FOUND], alternative: true}
+  facts: []

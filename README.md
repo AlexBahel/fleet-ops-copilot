@@ -133,7 +133,8 @@ scripted person answers the questions and the preview), Swarmada `558da47` throu
 copilot `39381c0` (clean tree), the same prompt, tools, judge, catalogue and scenario hashes.
 Generated 2026-11-07. Source:
 [`evals/results/comparison-2026-11-07.md`](evals/results/comparison-2026-11-07.md) and the three
-`results.json` files it links; the scripted self-test passes 126/126
+`results.json` files it links. The scripted self-test, now on eval surface v5 (D90: the defects these
+runs found fixed, 47 scenarios), passes 141/141
 ([`evals/results/fixtures/results.json`](evals/results/fixtures/results.json)).
 
 | | Claude Sonnet 5.5 | Claude Opus 5.5 | Qwen2.5-7B-Instruct (air-gapped) |
