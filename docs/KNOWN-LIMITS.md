@@ -20,7 +20,7 @@ remove it.
 - The air-gapped profile is not templated in the Helm chart; it is installed beside it from
   `config/airgap` (`make deploy-airgap`), and neither it nor the chart runs fleetops-agent with
   `-backend llamacpp`. `make deploy-kind` installs the plain manifests (`config/deploy`) on a kind
-  cluster; the image is built from binaries compiled on the host. `make foc-up` installs the
+  cluster; the image is built from binaries compiled on the host. `make demo` installs the
   chart (cloud profile); it has run on one machine (see "Not measured yet").
 - Tracing: no stdout exporter and no OTLP/HTTP exporter (OTLP/gRPC only), and no spans in
   `fleetops-approvals` for approval and execution (D54). `fleetops-eval -otlp-endpoint` (D65) traces the
@@ -72,19 +72,19 @@ remove it.
   single-node kind cluster (kind v0.33.0, CNI kindnet, Docker Desktop on arm64;
   `docs/evidence/airgap-2026-11-04/`), on no other CNI or node.
 - The Helm chart (`charts/fleet-ops-copilot`) with its optional tracing backend (OpenTelemetry
-  Collector and Jaeger, D61) has been installed by `make foc-up` on one single-node kind cluster
+  Collector and Jaeger, D61) has been installed by `make demo` on one single-node kind cluster
   (2026-11-05, `docs/evidence/airgap-2026-11-05/`): both backend pods became ready with the pod
   security settings and probes as rendered, and the Collector received OTLP and exported it to
   Jaeger. Its cloud-profile NetworkPolicy (off by default) has never been applied to a cluster,
   and `docs/RUNBOOK.md` (draft) has not been run as a sequence beyond section 0.
-- `make foc-up`, `make foc-down` and `make foc-live` (D59, D60) have run on one machine only
-  (Mac mini, Docker Desktop, kind v0.33.0, 2026-11-05): `make foc-up` twice from no cluster, each
+- `make demo`, `make demo-down` and `make test-live` (D59, D60) have run on one machine only
+  (Mac mini, Docker Desktop, kind v0.33.0, 2026-11-05): `make demo` twice from no cluster, each
   time with Docker's image and build caches already filled, so a cold machine has not been timed;
   the kind cluster with the static token file, Swarmada's quickstart and webhook overlay from the
-  writable module copy and the step order worked. `make foc-live` passed every subtest of phase
+  writable module copy and the step order worked. `make test-live` passed every subtest of phase
   `webhooks`, including `requester-is-authenticated-not-asserted`, after a test fix (a closed MCP
-  session reused across subtests). The two `make foc-up` timings and what bounds them are in
-  `docs/evidence/foc-up-2026-11-05/`, and the foc-live results in `docs/evidence/foc-live-2026-11-05/`;
+  session reused across subtests). The two `make demo` timings and what bounds them are in
+  `docs/evidence/foc-up-2026-11-05/`, and the test-live results in `docs/evidence/foc-live-2026-11-05/`;
   the full run logs are not committed. After the webhook overlay
   replaces the quickstart's overlay, whether the simulated adapter stays connected has not been
   observed.
@@ -93,7 +93,7 @@ remove it.
   came from `fleetops-eval -otlp-endpoint`, D65); they are tested with the scripted backend, envtest and an
   in-process OTLP receiver, and the page was checked once in a browser against a local test server.
   Requester authentication (D57) has been tested only with static person tokens (envtest, and
-  kind through `make foc-live`) and TokenRequest ServiceAccount tokens, not with OIDC tokens or exec-plugin credentials. The chart is checked with `helm lint --strict`,
+  kind through `make test-live`) and TokenRequest ServiceAccount tokens, not with OIDC tokens or exec-plugin credentials. The chart is checked with `helm lint --strict`,
   kubeconform and `make chart-parity` (its default render equals `config/`).
 - Claude sampling is at the API's defaults (D43): the Claude API rejects `temperature` on the
   models used, so repeated claude runs vary. Air-gapped measurements send the model publisher's
@@ -144,20 +144,20 @@ remove it.
 - **`fleetops activate` needs the `fleetops:approver` role** (`create approvaldecisions`), which also
   lets the holder approve or reject requests within their Swarmada permissions. A person who may
   only activate uses `kubectl patch`, and the activator is then not recorded (BACKLOG-v4 P3).
-- **foc-up's simulated fleet is three host processes.** The Swarmada quickstart stops its sim
-  adapter when it exits, so foc-up runs `hack/foc-sim-fleet.sh start`: one `sim_adapter.py` per
+- **the demo's simulated fleet is three host processes.** The Swarmada quickstart stops its sim
+  adapter when it exits, so make demo runs `hack/demo-sim-fleet.sh start`: one `sim_adapter.py` per
   robot and one port-forward, in the background on the host (PIDs in `$DEMO_DIR/sim-fleet/pids`,
   logs in `$DEMO_DIR/logs`), with sim-robot-002/003 moved to their own FleetAdapters
   (`sim-fleet-adapter-2`/`-3`, client certificates from Swarmada's `demo-ab-live` overlay), as the
   quickstart's all-live path does. If a process dies, the Robots go `Offline` and filing is refused
-  (R65 check); `hack/foc-sim-fleet.sh start` again restarts them. `make foc-down` stops them.
+  (R65 check); `hack/demo-sim-fleet.sh start` again restarts them. `make demo-down` stops them.
 - **A finding's inspect kind may come from a word list.** When a model reads a finding as "not
   possible" and gives no `lookFor`, the engine picks inspect-damage if the person's words contain a
   damage word (damage, dent, crack, broken, leak, scratch, torn, bent) and inspect-location
   otherwise (R73). The preview shows the kind, so the person can change it with choice 3.
 - **RobotClass `simbot-v1` is a demo workaround.** Swarmada's warehouse quickstart names it on its
   Robots but does not ship it, and Swarmada's Robot webhook refuses every Robot spec update while it
-  is missing. foc-up creates a minimal one (manufacturer, model, base adapter, the front camera),
+  is missing. make demo creates a minimal one (manufacturer, model, base adapter, the front camera),
   labelled `fleetops.alexbahel.github.io/demo-workaround: "true"`. It is not a model of real hardware.
 - **`stallsAfterActivationProxy`** in results.json is a proxy: `check_task` re-run on the fixture
   at the end of a run, not an observation of work left Pending by Swarmada.
@@ -216,10 +216,10 @@ remove it.
   token, so a request they file (through `fleetops chat` or any other client) records
   `unverified:<name>` and can only be rejected. A verified requester needs a token-backed person
   identity: on kind, the static token file for the fictional people (`hack/kind-people.sh`,
-  `make foc-up`, D60); in production, OIDC.
+  `make demo`, D60); in production, OIDC.
 - **The kind person tokens are not an identity system (D60).** A static token file has no expiry
   and no rotation, and a change needs an API server restart. Anyone who can read
-  `$DEMO_DIR/people/tokens.csv` (mode 600) or the node's `/etc/foc-people` can act as sam, dana
+  `$DEMO_DIR/people/tokens.csv` (mode 600) or the node's `/etc/fleetops-people` can act as sam, dana
   or eve on that cluster. It exists for fictional people on a local cluster, and no other.
 - **Requester tokens (D57).** The token reaches `fleetops-mcp` through `fleetops-agent` over plain HTTP
   inside the cluster, and both processes briefly hold a credential that is valid against the API
@@ -291,7 +291,7 @@ remove it.
 - **Live approval-path test** (`test/live`, D32) runs against Swarmada v0.4 with its webhooks
   served (`config/controlstream-tls` applied over the quickstart). It has run against a source tree
   identical to Swarmada `558da47` before the tag (labelled `558da47`, D48), and, through
-  `make foc-live` on the `make foc-up` stack, against `558da47` resolved through the `go.mod` pin:
+  `make test-live` on the `make demo` stack, against `558da47` resolved through the `go.mod` pin:
   every subtest of phase `webhooks` and `TestLiveSwarmadaAuditActor` passed on 2026-11-05 at copilot
   `738f848` (`docs/evidence/foc-live-2026-11-05/`). To read Swarmada's
   safety audit log it starts an ephemeral busybox container in the manager pod that mounts the

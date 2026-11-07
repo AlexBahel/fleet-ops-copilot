@@ -17,7 +17,7 @@ limitations under the License.
 // Command fleetops-capture writes a fixture file from the live state of one
 // Swarmada namespace, for the eval harness (evals/harness.LoadFixture).
 //
-//	fleetops-capture --context kind-foc-quickstart -n warehouse-a -scenario healthy-fleet \
+//	fleetops-capture --context kind-fleetops-quickstart -n warehouse-a -scenario healthy-fleet \
 //	    -source "Swarmada v0.4 quickstart, SCENARIO=healthy-fleet" -out evals/fixtures/live/healthy-fleet.yaml
 //
 // It reads with the caller's kubeconfig and writes nothing to the cluster.

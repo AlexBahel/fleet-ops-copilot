@@ -2,16 +2,16 @@
 # Copyright 2026 Alex Bahel
 # Licensed under the Apache License, Version 2.0 (see LICENSE).
 #
-# make foc-up: from an empty machine state to a running stack on a kind
+# make demo: from an empty machine state to a running stack on a kind
 # cluster, in one command, and the elapsed time at the end.
 #
-#   1. a kind cluster foc-up whose API server has the static token file for
+#   1. a kind cluster fleetops-demo whose API server has the static token file for
 #      the fictional people sam, dana and eve (R43, test only);
 #   2. Swarmada's warehouse quickstart at the commit go.mod pins;
 #   3. Swarmada's admission webhooks turned on (config/controlstream-tls, the
 #      overlay its `make deploy` applies; docs/RUNBOOK.md section 6);
-#   4. scripts/foc-up-preflight.sh (webhooks present, with endpoints, answering);
-#   4b. hack/foc-sim-fleet.sh start: the simulated fleet kept live (one sim
+#   4. scripts/demo-preflight.sh (webhooks present, with endpoints, answering);
+#   4b. hack/demo-sim-fleet.sh start: the simulated fleet kept live (one sim
 #      adapter per robot, in the background; RobotClass simbot-v1 as a
 #      labelled demo workaround), every Robot live (R73);
 #   5. the image built on the host and loaded into the cluster;
@@ -19,16 +19,16 @@
 #   7. the people's RoleBindings and token kubeconfigs;
 #   8. health checks.
 #
-#   CLUSTER=foc-up KUBECONFIG=<dedicated file> hack/foc-up.sh        (make foc-up sets both)
+#   CLUSTER=fleetops-demo KUBECONFIG=<dedicated file> hack/demo-up.sh        (make demo sets both)
 #
-# Cluster and kubeconfig rules are hack/lib/foc-guard.sh's: CLUSTER matches
-# ^foc-[a-z0-9-]+$, KUBECONFIG is a dedicated file and never ~/.kube/config
+# Cluster and kubeconfig rules are hack/lib/guard.sh's: CLUSTER matches
+# ^fleetops-[a-z0-9-]+$, KUBECONFIG is a dedicated file and never ~/.kube/config
 # (the Swarmada quickstart runs `kubectl config use-context`, kind writes its
 # context into KUBECONFIG). Every kubectl and helm call here names the
 # kubeconfig and the context kind-$CLUSTER.
 #
 # Environment (all optional):
-#   DEMO_DIR               working directory (default ~/.local/state/fleet-ops-copilot/foc-up, outside the repository: it holds tokens): people/ (tokens), persons/ (kubeconfigs),
+#   DEMO_DIR               working directory (default ~/.local/state/fleet-ops-copilot/demo, outside the repository: it holds tokens): people/ (tokens), persons/ (kubeconfigs),
 #                            swarmada/ (writable copy of the pinned module), logs/, last-run.txt
 #   DEMO_SCENARIO          Swarmada quickstart scenario (default healthy-fleet)
 #   DEMO_NODE_IMAGE        kind node image (default: kind v0.33.0's own default, pinned by digest)
@@ -44,13 +44,13 @@
 set -euo pipefail
 
 repo="$(cd "$(dirname "$0")/.." && pwd)"
-# shellcheck source=lib/foc-guard.sh
-source "$repo/hack/lib/foc-guard.sh"
-foc_guard foc-up.sh
+# shellcheck source=lib/guard.sh
+source "$repo/hack/lib/guard.sh"
+guard_cluster demo-up.sh
 export CLUSTER KUBECONFIG
 
 DRY="${DEMO_DRY_RUN:-0}"
-dir="${DEMO_DIR:-$HOME/.local/state/fleet-ops-copilot/foc-up}"
+dir="${DEMO_DIR:-$HOME/.local/state/fleet-ops-copilot/demo}"
 scenario="${DEMO_SCENARIO:-healthy-fleet}"
 # The default node image of kind v0.33.0 (pkg/apis/config/defaults/image.go).
 node_image="${DEMO_NODE_IMAGE:-kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5}"
@@ -58,7 +58,7 @@ img="${DEMO_IMAGE:-fleet-ops-copilot:dev}"
 ctx="kind-$CLUSTER"
 ns=fleetops-system
 swarm_ns="${SWARMADA_NAMESPACE:-warehouse-a}"
-foc_outside_repo foc-up.sh "$dir" "$repo"
+guard_outside_repo demo-up.sh "$dir" "$repo"
 mkdir -p "$dir/logs"
 chmod 700 "$dir"
 
@@ -69,16 +69,16 @@ stage() {
   stage_done
   stage_name="$1" stage_start=$SECONDS
   echo
-  echo "==> foc-up [$(fmt $((SECONDS - started)))] $1"
+  echo "==> demo [$(fmt $((SECONDS - started)))] $1"
 }
 stage_done() {
   [[ -n "$stage_name" ]] || return 0
   timings+="  $(printf '%-34s' "$stage_name") $(fmt $((SECONDS - stage_start)))"$'\n'
   stage_name=""
 }
-fail() { echo "foc-up: $*" >&2; exit 1; }
+fail() { echo "demo: $*" >&2; exit 1; }
 # shellcheck disable=SC2154 # rc is assigned inside the single-quoted trap body
-trap 'rc=$?; [[ $rc -eq 0 ]] || echo "foc-up: FAILED${stage_name:+ in stage \"$stage_name\"} after $(fmt $((SECONDS - started))) (exit $rc). Logs: $dir/logs. Start over with: make foc-down foc-up" >&2' EXIT
+trap 'rc=$?; [[ $rc -eq 0 ]] || echo "demo: FAILED${stage_name:+ in stage \"$stage_name\"} after $(fmt $((SECONDS - started))) (exit $rc). Logs: $dir/logs. Start over with: make demo-down demo" >&2' EXIT
 
 # x runs a command that changes something; with DEMO_DRY_RUN it only prints it.
 x() {
@@ -113,7 +113,7 @@ fi
 # google.protobuf. Check that interpreter now, before anything is created.
 py="$(command -v python3 || command -v python || true)"
 if [[ -n "$py" ]] && ! "$py" -c 'import grpc, google.protobuf' >/dev/null 2>&1; then
-  pymsg="the Swarmada quickstart's simulated adapter runs with $py, which cannot import grpc and google.protobuf. Put a Python with grpcio and protobuf first on PATH, for example: python3 -m venv ~/foc-venv && ~/foc-venv/bin/pip install grpcio protobuf && export PATH=\"\$HOME/foc-venv/bin:\$PATH\"; then run make foc-up again"
+  pymsg="the Swarmada quickstart's simulated adapter runs with $py, which cannot import grpc and google.protobuf. Put a Python with grpcio and protobuf first on PATH, for example: python3 -m venv ~/fleetops-venv && ~/fleetops-venv/bin/pip install grpcio protobuf && export PATH=\"\$HOME/fleetops-venv/bin:\$PATH\"; then run make demo again"
   if [[ "$DRY" == 1 ]]; then
     echo "  [dry-run] python check (a real run stops here): $pymsg"
   else
@@ -134,12 +134,12 @@ stage "people tokens (R43, test only)"
 "$repo/hack/kind-people.sh" gen "$dir/people"
 
 stage "kind cluster $CLUSTER"
-sed "s|@PEOPLE_DIR@|$dir/people|" "$repo/hack/kind/foc-cluster.yaml.tmpl" >"$dir/kind-config.yaml"
+sed "s|@PEOPLE_DIR@|$dir/people|" "$repo/hack/kind/demo-cluster.yaml.tmpl" >"$dir/kind-config.yaml"
 echo "  kind configuration: $dir/kind-config.yaml"
 exists=0
 if [[ "$DRY" != 1 ]] && kind get clusters 2>/dev/null | grep -qx "$CLUSTER"; then exists=1; fi
 if ((exists)); then
-  echo "  kind cluster $CLUSTER exists; reusing it (make foc-down first for a clean start)"
+  echo "  kind cluster $CLUSTER exists; reusing it (make demo-down first for a clean start)"
   [[ -f "$KUBECONFIG" ]] || kind export kubeconfig --name "$CLUSTER" --kubeconfig "$KUBECONFIG"
 else
   x kind create cluster --name "$CLUSTER" --image "$node_image" --config "$dir/kind-config.yaml" --kubeconfig "$KUBECONFIG" --wait 180s
@@ -156,7 +156,7 @@ for person in sam dana eve; do
   "$repo/hack/kind-people.sh" kubeconfig "$ctx" "$person" "$dir/people/tokens.csv" "$dir/persons/$person.kubeconfig" >/dev/null
   # kubectl auth whoami is a SelfSubjectReview, which every authenticated user may create.
   got="$(kubectl --kubeconfig "$dir/persons/$person.kubeconfig" --context "$person@$CLUSTER" auth whoami -o jsonpath='{.status.userInfo.username}' 2>/dev/null || true)"
-  [[ "$got" == "$person" ]] || fail "the API server authenticated $person's token as '${got:-nobody}': the static token file is not in effect on cluster $CLUSTER (kind configuration: $dir/kind-config.yaml). A cluster created without it needs: make foc-down foc-up"
+  [[ "$got" == "$person" ]] || fail "the API server authenticated $person's token as '${got:-nobody}': the static token file is not in effect on cluster $CLUSTER (kind configuration: $dir/kind-config.yaml). A cluster created without it needs: make demo-down demo"
   echo "  $person's token authenticates as $got"
 done
 
@@ -171,7 +171,7 @@ else
   sw_src="$(cd "$repo" && GOWORK=off go list -m -f '{{.Dir}}' "$sw_mod")"
   sw_ver="$(cd "$repo" && GOWORK=off go list -m -f '{{.Version}}' "$sw_mod")"
   [[ -z "$(cd "$repo" && GOWORK=off go list -m -f '{{if .Replace}}replaced{{end}}' "$sw_mod")" ]] \
-    || fail "go.mod replaces $sw_mod; foc-up runs the quickstart at the pinned commit only"
+    || fail "go.mod replaces $sw_mod; make demo runs the quickstart at the pinned commit only"
   [[ -n "$sw_src" && -d "$sw_src" ]] || fail "cannot find the $sw_mod module in the module cache"
 fi
 sw="$dir/swarmada"
@@ -179,17 +179,17 @@ echo "  Swarmada $sw_ver -> $sw (a writable copy: the module cache is read-only 
 if [[ "$DRY" == 1 ]]; then
   # shellcheck disable=SC2016 # $1 and $2 are for the inner sh, not expanded here
   x sh -c 'tar -C "$1" -cf - . | tar -C "$2" -xf - && chmod -R u+w "$2"' copy-module "$sw_src" "$sw"
-elif [[ "$(cat "$sw/.foc-up-version" 2>/dev/null)" != "$sw_ver" ]]; then
+elif [[ "$(cat "$sw/.demo-version" 2>/dev/null)" != "$sw_ver" ]]; then
   # tar, not cp -R: the module cache is mode 0555 and tar sets directory modes last.
   chmod -R u+w "$sw" 2>/dev/null || true
   rm -rf "$sw"; mkdir -p "$sw"
   tar -C "$sw_src" -cf - . | tar -C "$sw" -xf -
   chmod -R u+w "$sw"
-  echo "$sw_ver" >"$sw/.foc-up-version"
+  echo "$sw_ver" >"$sw/.demo-version"
 fi
 # CI=true switches the quickstart's pacing off. It leaves the simulated adapter
 # and a port-forward running in the background (pidfile /tmp/swq-$CLUSTER.pids);
-# make foc-down stops them (run.sh --clean).
+# make demo-down stops them (run.sh --clean).
 if [[ "$DRY" == 1 ]]; then
   x env QUICKSTART_CLUSTER="$CLUSTER" CI=true bash "$sw/examples/warehouse-quickstart/run.sh" --scenario "$scenario" --pace off
 else
@@ -204,21 +204,21 @@ x k -n system rollout status deploy/swarmada-controller-manager --timeout=300s
 
 stage "preflight: webhooks present and answering"
 if [[ "$DRY" == 1 ]]; then
-  x env KIND_CLUSTER="$CLUSTER" KUBECONFIG="$KUBECONFIG" "$repo/scripts/foc-up-preflight.sh"
+  x env KIND_CLUSTER="$CLUSTER" KUBECONFIG="$KUBECONFIG" "$repo/scripts/demo-preflight.sh"
 else
   # The CA injector and the webhook server need a moment after the rollout.
   ok=0
   for _ in $(seq 36); do
-    if KIND_CLUSTER="$CLUSTER" "$repo/scripts/foc-up-preflight.sh" >"$dir/logs/preflight.log" 2>&1; then ok=1; break; fi
+    if KIND_CLUSTER="$CLUSTER" "$repo/scripts/demo-preflight.sh" >"$dir/logs/preflight.log" 2>&1; then ok=1; break; fi
     sleep 5
   done
   cat "$dir/logs/preflight.log"
-  ((ok)) || fail "scripts/foc-up-preflight.sh still refuses after 3 minutes (output above)"
+  ((ok)) || fail "scripts/demo-preflight.sh still refuses after 3 minutes (output above)"
 fi
 
 # R73: the quickstart stopped its sim adapter on exit; keep all three robots live.
 stage "Swarmada sim fleet: three live adapters"
-x env DEMO_DIR="$dir" SWARMADA_NAMESPACE="$swarm_ns" "$repo/hack/foc-sim-fleet.sh" start
+x env DEMO_DIR="$dir" SWARMADA_NAMESPACE="$swarm_ns" "$repo/hack/demo-sim-fleet.sh" start
 
 # ---- 4. image, chart -------------------------------------------------------------
 stage "image $img"
@@ -272,16 +272,16 @@ fi
 stage_done
 total=$((SECONDS - started))
 {
-  echo "foc-up: $(date -u +%Y-%m-%dT%H:%M:%SZ) cluster $CLUSTER total $(fmt $total) (${total}s) dry-run=$DRY"
+  echo "demo: $(date -u +%Y-%m-%dT%H:%M:%SZ) cluster $CLUSTER total $(fmt $total) (${total}s) dry-run=$DRY"
   printf '%s' "$timings"
 } >"$dir/last-run.txt"
 echo
 printf '%s' "$timings"
 echo
 if [[ "$DRY" == 1 ]]; then
-  echo "foc-up: dry run finished in $(fmt $total). Nothing was created on a cluster."
+  echo "demo: dry run finished in $(fmt $total). Nothing was created on a cluster."
 else
-  echo "foc-up: stack running on $ctx in $(fmt $total) (${total}s)."
+  echo "demo: stack running on $ctx in $(fmt $total) (${total}s)."
 fi
 cat <<EOT
 
@@ -290,10 +290,10 @@ cat <<EOT
   people (test only, static tokens): $dir/persons/{sam,dana,eve}.kubeconfig  (context <person>@$CLUSTER)
   file a verified request:  kubectl --context $ctx -n $ns port-forward svc/fleetops-agent 8090:8090
                             KUBECONFIG=$dir/persons/sam.kubeconfig bin/fleetops chat --context sam@$CLUSTER "..."
-  verified-requester live run:  make foc-live
+  verified-requester live run:  make test-live
 EOT
 if [[ "${DEMO_TRACING:-0}" == 1 ]]; then
   echo "  traces:  kubectl --context $ctx -n $ns port-forward svc/fleetops-jaeger 16686:16686   (http://127.0.0.1:16686/)"
 fi
 echo "  sim fleet (3 adapters, background): PIDs $dir/sim-fleet/pids, logs $dir/logs/sim-adapter-*.log"
-echo "  tear down:  make foc-down"
+echo "  tear down:  make demo-down"

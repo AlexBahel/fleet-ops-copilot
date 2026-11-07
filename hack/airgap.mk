@@ -1,6 +1,6 @@
 # Air-gapped profile targets (docs/DESIGN.md §2, §3.5, §3.7), included by the
 # Makefile. Same rules as the live-cluster targets there: only kind clusters
-# named foc-*, and every kubectl names its context explicitly.
+# named fleetops-*, and every kubectl names its context explicitly.
 #
 # Single-node kind clusters only: the model sits in the node's /models
 # directory (config/airgap/llama-storage-hostpath.yaml).
@@ -22,16 +22,16 @@ KIND_NODE     = $(KIND_CLUSTER)-control-plane
 AIRGAP_NS     = fleetops-system
 KCTL          = kubectl --context kind-$(KIND_CLUSTER)
 
-define require_foc_cluster
-	@case "$(KIND_CLUSTER)" in foc-*) ;; *) echo "KIND_CLUSTER must be set and start with foc-"; exit 1;; esac
+define require_fleetops_cluster
+	@case "$(KIND_CLUSTER)" in fleetops-*) ;; *) echo "KIND_CLUSTER must be set and start with fleetops-"; exit 1;; esac
 endef
 
 validate-airgap: ## Schema-check config/airgap with kubeconform (KUBE_VERSION, default 1.34.0)
 	@command -v kubeconform >/dev/null || { echo "kubeconform not found"; exit 1; }
 	kubeconform -strict -summary -kubernetes-version $(or $(KUBE_VERSION),1.34.0) config/airgap/
 
-load-llama-image: ## Put the pinned llama.cpp server image into kind cluster KIND_CLUSTER (foc-*); pulls only if the host lacks it
-	$(require_foc_cluster)
+load-llama-image: ## Put the pinned llama.cpp server image into kind cluster KIND_CLUSTER (fleetops-*); pulls only if the host lacks it
+	$(require_fleetops_cluster)
 	@mkdir -p $(BIN)/airgap
 	docker image inspect $(LLAMA_REPO)@$(LLAMA_DIGEST) >/dev/null 2>&1 || docker pull --platform linux/$(ARCH) $(LLAMA_REPO)@$(LLAMA_DIGEST)
 	docker tag $(LLAMA_REPO)@$(LLAMA_DIGEST) $(LLAMA_IMG)
@@ -41,7 +41,7 @@ load-llama-image: ## Put the pinned llama.cpp server image into kind cluster KIN
 	docker exec $(KIND_NODE) crictl images | grep -E 'IMAGE|llama.cpp'
 
 load-llama-model: ## Copy the GGUF shards from MODEL_DIR into /models on the kind node, verified against MODEL_SUMS
-	$(require_foc_cluster)
+	$(require_fleetops_cluster)
 	@test -n "$(MODEL_DIR)" -a -n "$(MODEL_SUMS)" || { echo "set MODEL_DIR=<dir with the .gguf files> and MODEL_SUMS=<sha256sum file>"; exit 1; }
 	cd "$(MODEL_DIR)" && shasum -a 256 -c "$(abspath $(MODEL_SUMS))"
 	docker exec $(KIND_NODE) mkdir -p /models
@@ -49,8 +49,8 @@ load-llama-model: ## Copy the GGUF shards from MODEL_DIR into /models on the kin
 	docker exec $(KIND_NODE) chmod -R a+rX /models
 	docker exec -i $(KIND_NODE) sh -c 'cd /models && sha256sum -c -' < "$(MODEL_SUMS)"
 
-deploy-airgap: ## Apply llama-server and the egress NetworkPolicies to kind cluster KIND_CLUSTER (foc-*), plus the OTLP rule if the chart's trace backend is installed; restarts fleetops-mcp/fleetops-approvals
-	$(require_foc_cluster)
+deploy-airgap: ## Apply llama-server and the egress NetworkPolicies to kind cluster KIND_CLUSTER (fleetops-*), plus the OTLP rule if the chart's trace backend is installed; restarts fleetops-mcp/fleetops-approvals
+	$(require_fleetops_cluster)
 	@mkdir -p $(BIN)/airgap
 	$(KCTL) apply -f config/airgap/llama-storage-hostpath.yaml -f config/airgap/llama-server.yaml
 	$(KCTL) -n $(AIRGAP_NS) rollout status deploy/llama-server --timeout=900s
@@ -72,7 +72,7 @@ deploy-airgap: ## Apply llama-server and the egress NetworkPolicies to kind clus
 	else echo "fleetops-mcp/fleetops-approvals not deployed (make deploy-kind): API access under the policy not exercised"; fi
 
 verify-egress: ## Egress probe Job in fleetops-system: records egress at pod start, waits until the policy is in force, then passes only if every external target is blocked and the in-namespace control works
-	$(require_foc_cluster)
+	$(require_fleetops_cluster)
 	$(KCTL) -n $(AIRGAP_NS) delete job fleetops-egress-probe --ignore-not-found --wait
 	$(KCTL) -n $(AIRGAP_NS) apply -f config/airgap/egress-probe.yaml
 	@ok=0; for i in $$(seq 1 60); do \
@@ -84,7 +84,7 @@ verify-egress: ## Egress probe Job in fleetops-system: records egress at pod sta
 	if [ $$ok = 1 ]; then echo "verify-egress: PASS (after the policy was in force: external blocked, control reachable; the at-start line is not counted)"; else echo "verify-egress: FAIL"; exit 1; fi
 
 verify-egress-baseline: ## Same probe in a namespace WITHOUT the policy: must report open egress (shows the probe detects it from this network)
-	$(require_foc_cluster)
+	$(require_fleetops_cluster)
 	$(KCTL) create namespace fleetops-egress-baseline --dry-run=client -o yaml | $(KCTL) apply -f -
 	$(KCTL) -n fleetops-egress-baseline delete job fleetops-egress-probe --ignore-not-found --wait
 	sed -e 's|value: "http://llama-server:8080/health"|value: ""|' -e 's|value: "https://kubernetes.default.svc:443/healthz"|value: ""|' config/airgap/egress-probe.yaml | $(KCTL) -n fleetops-egress-baseline apply -f -

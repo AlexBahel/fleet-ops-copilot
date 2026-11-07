@@ -13,8 +13,8 @@
 #   hack/kind-people.sh gen DIR
 #       Writes DIR/tokens.csv (mode 600; DIR must be outside the repository; a random token per person, in the
 #       kube-apiserver --token-auth-file format) unless it exists. The file
-#       must exist before the cluster is created: hack/foc-up.sh does that and
-#       wires it into the kind configuration (hack/kind/foc-cluster.yaml.tmpl).
+#       must exist before the cluster is created: hack/demo-up.sh does that and
+#       wires it into the kind configuration (hack/kind/demo-cluster.yaml.tmpl).
 #   hack/kind-people.sh bind CONTEXT NAMESPACE...
 #       Binds each person's ClusterRoles in each namespace (RoleBindings,
 #       applied, so it can be repeated). The ClusterRoles fleetops:approver
@@ -25,8 +25,8 @@
 #       The token is read from TOKENS_FILE and written to OUT; it is never
 #       printed and never on a command line.
 #
-# CONTEXT is kind-foc-*; KUBECONFIG must name a dedicated file, never
-# ~/.kube/config (hack/lib/foc-guard.sh; test: test/scripts/guard_test.go).
+# CONTEXT is kind-fleetops-*; KUBECONFIG must name a dedicated file, never
+# ~/.kube/config (hack/lib/guard.sh; test: test/scripts/guard_test.go).
 set -euo pipefail
 
 # name|group|ClusterRoles bound in each namespace. Keep equal to
@@ -42,12 +42,12 @@ die() { echo "kind-people.sh: $*" >&2; exit 1; }
 
 guard() {
   local ctx="$1"
-  [[ "$ctx" == kind-foc-* ]] || die "CONTEXT must be kind-foc-* (got '$ctx')"
-  # shellcheck disable=SC2034 # read by foc_guard (hack/lib/foc-guard.sh)
+  [[ "$ctx" == kind-fleetops-* ]] || die "CONTEXT must be kind-fleetops-* (got '$ctx')"
+  # shellcheck disable=SC2034 # read by guard_cluster (hack/lib/guard.sh)
   CLUSTER="${ctx#kind-}"
-  # shellcheck source=lib/foc-guard.sh
-  source "$(dirname "$0")/lib/foc-guard.sh"
-  foc_guard kind-people.sh
+  # shellcheck source=lib/guard.sh
+  source "$(dirname "$0")/lib/guard.sh"
+  guard_cluster kind-people.sh
 }
 
 cmd="${1:-}"; [[ -n "$cmd" ]] || usage
@@ -56,9 +56,9 @@ case "$cmd" in
   gen)
     [[ $# -eq 1 ]] || usage
     dir="$1"
-    # shellcheck source=lib/foc-guard.sh
-    source "$(dirname "$0")/lib/foc-guard.sh"
-    foc_outside_repo kind-people.sh "$dir" "$(cd "$(dirname "$0")/.." && pwd)"
+    # shellcheck source=lib/guard.sh
+    source "$(dirname "$0")/lib/guard.sh"
+    guard_outside_repo kind-people.sh "$dir" "$(cd "$(dirname "$0")/.." && pwd)"
     chmod 700 "$dir"
     if [[ -s "$dir/tokens.csv" ]]; then
       echo "kind-people: $dir/tokens.csv exists; keeping it"

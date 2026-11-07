@@ -14,6 +14,6 @@ COPY --chmod=0755 bin/linux-${TARGETARCH}/fleetops-mcp bin/linux-${TARGETARCH}/f
 # --chmod also sets the mode of the parent directories COPY creates
 # (/etc/fleetops, /etc/fleetops/policies), so it is 0755 here: 0644 left them
 # untraversable for user 65532, and the policy and catalogue mounted under
-# /etc/fleetops unreadable (seen on foc-up, 2026-11-07).
+# /etc/fleetops unreadable (seen on the demo stack, 2026-11-07).
 COPY --chmod=0755 policies/default.yaml /etc/fleetops/policies/default.yaml
 USER 65532:65532

@@ -9,7 +9,7 @@
 #
 #   hack/kind-person.sh CONTEXT USER GROUP KUBECONFIG_OUT
 #
-# CONTEXT is an admin context on a foc-* kind cluster. The new context in
+# CONTEXT is an admin context on a fleetops-* kind cluster. The new context in
 # KUBECONFIG_OUT is named USER@<cluster>. The private key never leaves
 # KUBECONFIG_OUT.
 #
@@ -19,7 +19,7 @@
 # hack/kind-people.sh (static tokens, R43, test only).
 set -euo pipefail
 ctx="$1" user="$2" group="$3" out="$4"
-[[ "$ctx" == kind-foc-* ]] || { echo "CONTEXT must be kind-foc-*" >&2; exit 1; }
+[[ "$ctx" == kind-fleetops-* ]] || { echo "CONTEXT must be kind-fleetops-*" >&2; exit 1; }
 cluster="${ctx#kind-}"
 work="$(mktemp -d)"; trap 'rm -rf "$work"' EXIT
 openssl genrsa -out "$work/key.pem" 2048 2>/dev/null

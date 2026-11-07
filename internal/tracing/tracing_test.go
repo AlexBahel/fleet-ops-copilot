@@ -164,7 +164,7 @@ func TestSetupExportsOTLPToCollector(t *testing.T) {
 	defer gs.Stop()
 
 	ctx := context.Background()
-	tp, shutdown, err := Setup(ctx, Config{Endpoint: "http://" + lis.Addr().String(), ServiceName: "foc-test", Redactor: redact.New()})
+	tp, shutdown, err := Setup(ctx, Config{Endpoint: "http://" + lis.Addr().String(), ServiceName: "fleetops-test", Redactor: redact.New()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +200,7 @@ func TestSetupExportsOTLPToCollector(t *testing.T) {
 			}
 		}
 	}
-	if len(names) != 1 || names[0] != SpanRequest || service != "foc-test" {
+	if len(names) != 1 || names[0] != SpanRequest || service != "fleetops-test" {
 		t.Fatalf("collector got spans %v, service %q", names, service)
 	}
 }

@@ -170,7 +170,7 @@ func (e *env) mcpSession(t *testing.T, person string) *mcp.ClientSession {
 			t.Fatalf("no token for %q in FLEETOPS_LIVE_TOKENS_FILE", person)
 		}
 	}
-	cs, err := mcp.NewClient(&mcp.Implementation{Name: "foc-live-test", Version: "0"}, nil).
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "fleetops-live-test", Version: "0"}, nil).
 		Connect(context.Background(), mcpserver.ClientTransport(e.mcpURL, token), nil)
 	if err != nil {
 		t.Fatalf("connecting to fleetops-mcp at %s as %q: %v", e.mcpURL, person, err)
@@ -367,7 +367,7 @@ func TestLiveDraftGateAbsent(t *testing.T) {
 			t.Logf("validating webhook served: %s/%s", c.Name, w.Name)
 		}
 	}
-	name := fmt.Sprintf("foc-live-nogate-%d", time.Now().Unix())
+	name := fmt.Sprintf("fleetops-live-nogate-%d", time.Now().Unix())
 	r := e.call(t, operator, "request_draft_task", map[string]any{
 		"name": name, "purpose": "live check: draft gate absent",
 		"actions": []map[string]any{{"name": "inspect", "type": "Navigate", "zone": zone}},
@@ -387,7 +387,7 @@ func TestLiveApprovalPaths(t *testing.T) {
 	e := setup(t, "webhooks")
 	ctx := context.Background()
 	stamp := time.Now().Unix()
-	draft := fmt.Sprintf("foc-live-draft-%d", stamp)
+	draft := fmt.Sprintf("fleetops-live-draft-%d", stamp)
 	var zmName string
 	stopReason := fmt.Sprintf("live check %d: spill reported in aisle (fictional)", stamp)
 
@@ -472,9 +472,9 @@ func TestLiveApprovalPaths(t *testing.T) {
 	t.Run("activate-refused-to-serviceaccounts", func(t *testing.T) {
 		// A ServiceAccount that RBAC allows to activate (swarmada:fleet-manager)
 		// is still refused by Swarmada's FleetTask webhook.
-		sa := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "foc-live-probe", Namespace: ns}}
+		sa := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "fleetops-live-probe", Namespace: ns}}
 		rb := &rbacv1.RoleBinding{
-			ObjectMeta: metav1.ObjectMeta{Name: "foc-live-probe-fleet-manager", Namespace: ns},
+			ObjectMeta: metav1.ObjectMeta{Name: "fleetops-live-probe-fleet-manager", Namespace: ns},
 			RoleRef:    rbacv1.RoleRef{APIGroup: "rbac.authorization.k8s.io", Kind: "ClusterRole", Name: "swarmada:fleet-manager"},
 			Subjects:   []rbacv1.Subject{{Kind: "ServiceAccount", Name: sa.Name, Namespace: ns}},
 		}
@@ -486,7 +486,7 @@ func TestLiveApprovalPaths(t *testing.T) {
 		t.Cleanup(func() { _ = e.admin.Delete(ctx, rb); _ = e.admin.Delete(ctx, sa) })
 		time.Sleep(2 * time.Second)
 		patch := client.RawPatch(types.MergePatchType, []byte(`{"spec":{"draft":false}}`))
-		for _, who := range []struct{ ns, sa string }{{ns, "foc-live-probe"}, {"fleetops-system", "fleetops-approvals"}, {"fleetops-system", "fleetops-mcp"}, {"fleetops-system", "fleetops-agent"}} {
+		for _, who := range []struct{ ns, sa string }{{ns, "fleetops-live-probe"}, {"fleetops-system", "fleetops-approvals"}, {"fleetops-system", "fleetops-mcp"}, {"fleetops-system", "fleetops-agent"}} {
 			c := e.saClient(t, who.ns, who.sa)
 			err := c.Patch(ctx, &swarmv1.FleetTask{ObjectMeta: metav1.ObjectMeta{Name: draft, Namespace: ns}}, patch)
 			t.Logf("activate as system:serviceaccount:%s:%s -> %v", who.ns, who.sa, err)
@@ -593,12 +593,12 @@ func TestLiveApprovalPaths(t *testing.T) {
 			}
 		}
 		// sam's token, _meta asserts dana: requestedFor is sam.
-		forged := requestName(t, e.callAs(t, "sam", "dana", "request_draft_task", draftArgs(fmt.Sprintf("foc-live-forged-%d", stamp))))
+		forged := requestName(t, e.callAs(t, "sam", "dana", "request_draft_task", draftArgs(fmt.Sprintf("fleetops-live-forged-%d", stamp))))
 		if got := e.requestedFor(t, forged); got != "sam" {
 			t.Errorf("requestedFor %q, want sam (the asserted name dana must have no effect)", got)
 		}
 		// No token, _meta asserts dana: unverified, and dana's own approval is refused.
-		anon := fmt.Sprintf("foc-live-unverified-%d", stamp)
+		anon := fmt.Sprintf("fleetops-live-unverified-%d", stamp)
 		unverified := requestName(t, e.callAs(t, "", "dana", "request_draft_task", draftArgs(anon)))
 		if got := e.requestedFor(t, unverified); got != "unverified:dana" {
 			t.Errorf("requestedFor %q, want unverified:dana", got)
@@ -625,7 +625,7 @@ func TestLiveApprovalPaths(t *testing.T) {
 
 	t.Run("executor-writes-only-after-named-approval", func(t *testing.T) {
 		// No decision: nothing is written.
-		pendingDraft := fmt.Sprintf("foc-live-pending-%d", stamp)
+		pendingDraft := fmt.Sprintf("fleetops-live-pending-%d", stamp)
 		req := requestName(t, e.call(t, operator, "request_draft_task", map[string]any{
 			"name": pendingDraft, "purpose": "live check: no decision, no write",
 			"actions": []map[string]any{{"name": "inspect", "type": "Navigate", "zone": zone}},
@@ -648,7 +648,7 @@ func TestLiveApprovalPaths(t *testing.T) {
 		}
 
 		// The requester approving their own request: refused, nothing written.
-		selfDraft := fmt.Sprintf("foc-live-self-%d", stamp)
+		selfDraft := fmt.Sprintf("fleetops-live-self-%d", stamp)
 		req = requestName(t, e.call(t, e.approverUser, "request_draft_task", map[string]any{
 			"name": selfDraft, "purpose": "live check: self-approval is refused",
 			"actions": []map[string]any{{"name": "inspect", "type": "Navigate", "zone": zone}},

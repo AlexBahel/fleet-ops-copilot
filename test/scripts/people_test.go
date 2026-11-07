@@ -161,12 +161,12 @@ func TestKindPeopleKubeconfig(t *testing.T) {
 	}
 	out := filepath.Join(t.TempDir(), "persons", "sam.kubeconfig")
 	vars := map[string]string{"KUBECONFIG": e.dedicated(t)}
-	stdout, err := e.runScript(t, "hack/kind-people.sh", vars, "kubeconfig", "kind-foc-test-1", "sam", tokens, out)
+	stdout, err := e.runScript(t, "hack/kind-people.sh", vars, "kubeconfig", "kind-fleetops-test-1", "sam", tokens, out)
 	if err != nil {
 		t.Fatalf("kubeconfig: %v\n%s", err, stdout)
 	}
-	if strings.TrimSpace(stdout) != "sam@foc-test-1" {
-		t.Errorf("printed %q, want the context name sam@foc-test-1", stdout)
+	if strings.TrimSpace(stdout) != "sam@fleetops-test-1" {
+		t.Errorf("printed %q, want the context name sam@fleetops-test-1", stdout)
 	}
 	if strings.Contains(stdout, samToken) {
 		t.Error("the token was printed")
@@ -204,14 +204,14 @@ func TestKindPeopleKubeconfig(t *testing.T) {
 	if len(kc.Users) != 1 || kc.Users[0].Name != "sam" || kc.Users[0].User.Token != samToken {
 		t.Errorf("users %+v: want one user, sam, with sam's token", redactedUsers(kc.Users))
 	}
-	if len(kc.Contexts) != 1 || kc.Contexts[0].Name != "sam@foc-test-1" || kc.Contexts[0].Context.User != "sam" || kc.Contexts[0].Context.Cluster != "foc-test-1" {
+	if len(kc.Contexts) != 1 || kc.Contexts[0].Name != "sam@fleetops-test-1" || kc.Contexts[0].Context.User != "sam" || kc.Contexts[0].Context.Cluster != "fleetops-test-1" {
 		t.Errorf("contexts %+v", kc.Contexts)
 	}
 	if len(kc.Clusters) != 1 || kc.Clusters[0].Cluster.Server != "https://127.0.0.1:40123" || kc.Clusters[0].Cluster.CertificateAuthorityData != base64.StdEncoding.EncodeToString([]byte("fake-ca")) {
 		t.Errorf("clusters %+v", kc.Clusters)
 	}
 	// A person that is not in the token file gets nothing.
-	if out, err := e.runScript(t, "hack/kind-people.sh", vars, "kubeconfig", "kind-foc-test-1", "mallory", tokens, filepath.Join(t.TempDir(), "m")); err == nil || !strings.Contains(out, "no token for 'mallory'") {
+	if out, err := e.runScript(t, "hack/kind-people.sh", vars, "kubeconfig", "kind-fleetops-test-1", "mallory", tokens, filepath.Join(t.TempDir(), "m")); err == nil || !strings.Contains(out, "no token for 'mallory'") {
 		t.Errorf("unknown person: err=%v\n%s", err, out)
 	}
 }
@@ -239,10 +239,10 @@ func TestKindPeopleRefuses(t *testing.T) {
 	for _, c := range []struct {
 		name, ctx, kubeconfig, want string
 	}{
-		{"context not fleetops", "kind-prod", e.dedicated(t), "CONTEXT must be kind-foc-*"},
-		{"docker-desktop", "docker-desktop", e.dedicated(t), "CONTEXT must be kind-foc-*"},
-		{"default kubeconfig", "kind-foc-test-1", filepath.Join(e.home, ".kube", "config"), "resolves to ~/.kube/config"},
-		{"kubeconfig unset", "kind-foc-test-1", "", "KUBECONFIG must be set"},
+		{"context not fleetops", "kind-prod", e.dedicated(t), "CONTEXT must be kind-fleetops-*"},
+		{"docker-desktop", "docker-desktop", e.dedicated(t), "CONTEXT must be kind-fleetops-*"},
+		{"default kubeconfig", "kind-fleetops-test-1", filepath.Join(e.home, ".kube", "config"), "resolves to ~/.kube/config"},
+		{"kubeconfig unset", "kind-fleetops-test-1", "", "KUBECONFIG must be set"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			_ = os.Remove(e.calls)
@@ -264,12 +264,12 @@ func TestKindPeopleRefuses(t *testing.T) {
 	}
 }
 
-// The kind configuration foc-up renders mounts the token directory into the
+// The kind configuration demo-up.sh renders mounts the token directory into the
 // node and passes --token-auth-file to the API server, with no placeholder
 // left.
 func TestKindConfigTemplate(t *testing.T) {
-	tmpl := readFile(t, "../../hack/kind/foc-cluster.yaml.tmpl")
-	rendered := strings.ReplaceAll(tmpl, "@PEOPLE_DIR@", "/work/foc-up/people")
+	tmpl := readFile(t, "../../hack/kind/demo-cluster.yaml.tmpl")
+	rendered := strings.ReplaceAll(tmpl, "@PEOPLE_DIR@", "/work/demo/people")
 	if strings.Contains(rendered, "@") {
 		t.Error("a placeholder is left after rendering")
 	}
@@ -291,7 +291,7 @@ func TestKindConfigTemplate(t *testing.T) {
 		t.Fatalf("config %+v", cfg)
 	}
 	m := cfg.Nodes[0].ExtraMounts
-	if len(m) != 1 || m[0].HostPath != "/work/foc-up/people" || !m[0].ReadOnly {
+	if len(m) != 1 || m[0].HostPath != "/work/demo/people" || !m[0].ReadOnly {
 		t.Fatalf("extraMounts %+v: want the token directory, read-only", m)
 	}
 	if len(cfg.KubeadmConfigPatches) != 1 {
@@ -319,26 +319,26 @@ func TestKindConfigTemplate(t *testing.T) {
 	}
 }
 
-// make foc-up with DEMO_DRY_RUN=1 prints the plan: the steps in order, the
+// make demo with DEMO_DRY_RUN=1 prints the plan: the steps in order, the
 // kubeconfig and context on every kubectl and helm line, Swarmada's webhook
 // overlay, the chart, and creates the token file and kind configuration.
-func TestFocUpDryRunPlan(t *testing.T) {
+func TestDemoUpDryRunPlan(t *testing.T) {
 	e := newEnv(t)
 	work := t.TempDir()
 	kc := e.dedicated(t)
-	out, err := e.runScript(t, "hack/foc-up.sh", map[string]string{
-		"CLUSTER": "foc-test-1", "KUBECONFIG": kc, "DEMO_DIR": work, "DEMO_DRY_RUN": "1", "DEMO_TRACING": "1",
+	out, err := e.runScript(t, "hack/demo-up.sh", map[string]string{
+		"CLUSTER": "fleetops-test-1", "KUBECONFIG": kc, "DEMO_DIR": work, "DEMO_DRY_RUN": "1", "DEMO_TRACING": "1",
 	})
 	if err != nil {
 		t.Fatalf("dry run failed: %v\n%s", err, out)
 	}
 	order := []string{
-		"people tokens", "kind create cluster --name foc-test-1", "--config " + filepath.Join(work, "kind-config.yaml"),
-		"kind-people.sh kubeconfig kind-foc-test-1 sam", "warehouse-quickstart/run.sh --scenario healthy-fleet",
-		"apply -k " + filepath.Join(work, "swarmada", "config", "controlstream-tls"), "foc-up-preflight.sh",
-		"hack/foc-sim-fleet.sh start",
-		"make -C", "kind load docker-image fleet-ops-copilot:dev --name foc-test-1",
-		"upgrade --install fleetops", "tracing.backend.enabled=true", "kind-people.sh bind kind-foc-test-1 warehouse-a",
+		"people tokens", "kind create cluster --name fleetops-test-1", "--config " + filepath.Join(work, "kind-config.yaml"),
+		"kind-people.sh kubeconfig kind-fleetops-test-1 sam", "warehouse-quickstart/run.sh --scenario healthy-fleet",
+		"apply -k " + filepath.Join(work, "swarmada", "config", "controlstream-tls"), "demo-preflight.sh",
+		"hack/demo-sim-fleet.sh start",
+		"make -C", "kind load docker-image fleet-ops-copilot:dev --name fleetops-test-1",
+		"upgrade --install fleetops", "tracing.backend.enabled=true", "kind-people.sh bind kind-fleetops-test-1 warehouse-a",
 		"rollout status deploy/fleetops-mcp deploy/fleetops-approvals", "dry run finished",
 	}
 	at := 0
@@ -351,7 +351,7 @@ func TestFocUpDryRunPlan(t *testing.T) {
 	}
 	for _, l := range strings.Split(out, "\n") {
 		if strings.Contains(l, "[dry-run] kubectl ") || strings.Contains(l, "[dry-run] helm ") {
-			hasCtx := strings.Contains(l, "--context kind-foc-test-1 ") || strings.Contains(l, "--kube-context kind-foc-test-1 ")
+			hasCtx := strings.Contains(l, "--context kind-fleetops-test-1 ") || strings.Contains(l, "--kube-context kind-fleetops-test-1 ")
 			if !strings.Contains(l, "--kubeconfig "+kc) || !hasCtx {
 				t.Errorf("a cluster command without the dedicated kubeconfig and explicit context: %s", l)
 			}
@@ -376,23 +376,23 @@ func TestFocUpDryRunPlan(t *testing.T) {
 }
 
 // The tokens, the kubeconfigs and the Swarmada copy never go in the work tree:
-// foc-up, foc-down and kind-people gen refuse a directory inside the repository.
+// demo-up.sh, demo-down.sh and kind-people gen refuse a directory inside the repository.
 func TestTokenDirectoryMustBeOutsideRepo(t *testing.T) {
 	repo, err := filepath.Abs("../..")
 	if err != nil {
 		t.Fatal(err)
 	}
-	inside := filepath.Join(repo, "local", "foc-up-test-should-not-exist")
+	inside := filepath.Join(repo, "local", "demo-test-should-not-exist")
 	t.Cleanup(func() { _ = os.RemoveAll(inside) })
 	e := newEnv(t)
 	kc := e.dedicated(t)
-	vars := map[string]string{"CLUSTER": "foc-test-1", "KUBECONFIG": kc, "DEMO_DIR": inside, "DEMO_DRY_RUN": "1"}
+	vars := map[string]string{"CLUSTER": "fleetops-test-1", "KUBECONFIG": kc, "DEMO_DIR": inside, "DEMO_DRY_RUN": "1"}
 	for _, c := range []struct {
 		name, script string
 		args         []string
 	}{
-		{"foc-up", "hack/foc-up.sh", nil},
-		{"foc-down", "hack/foc-down.sh", nil},
+		{"demo-up", "hack/demo-up.sh", nil},
+		{"demo-down", "hack/demo-down.sh", nil},
 		{"kind-people gen", "hack/kind-people.sh", []string{"gen", filepath.Join(inside, "people")}},
 		{"repository root", "hack/kind-people.sh", []string{"gen", repo}},
 	} {
@@ -423,21 +423,21 @@ func TestTokenDirectoryMustBeOutsideRepo(t *testing.T) {
 }
 
 // Without DEMO_DIR the default is outside the repository.
-func TestFocUpDefaultDirectoryIsOutsideRepo(t *testing.T) {
+func TestDemoUpDefaultDirectoryIsOutsideRepo(t *testing.T) {
 	e := newEnv(t)
-	out, err := e.runScript(t, "hack/foc-up.sh", map[string]string{"CLUSTER": "foc-test-1", "KUBECONFIG": e.dedicated(t), "DEMO_DRY_RUN": "1"})
+	out, err := e.runScript(t, "hack/demo-up.sh", map[string]string{"CLUSTER": "fleetops-test-1", "KUBECONFIG": e.dedicated(t), "DEMO_DRY_RUN": "1"})
 	if err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}
-	want := filepath.Join(e.home, ".local", "state", "fleet-ops-copilot", "foc-up")
+	want := filepath.Join(e.home, ".local", "state", "fleet-ops-copilot", "demo")
 	if _, err := os.Stat(filepath.Join(want, "people", "tokens.csv")); err != nil {
 		t.Errorf("tokens.csv not under %s: %v\n%s", want, err, out)
 	}
 }
 
-// R59: a real foc-up run stops at the tools stage, before any cluster
+// R59: a real make demo run stops at the tools stage, before any cluster
 // command, when the Python the quickstart will use cannot import grpc.
-func TestFocUpStopsWhenQuickstartPythonLacksGrpc(t *testing.T) {
+func TestDemoUpStopsWhenQuickstartPythonLacksGrpc(t *testing.T) {
 	e := newEnv(t)
 	for _, name := range []string{"docker", "helm", "jq", "openssl"} {
 		stub := "#!/bin/sh\necho \"" + name + " $*\" >> '" + e.calls + "'\nexit 0\n"
@@ -449,7 +449,7 @@ func TestFocUpStopsWhenQuickstartPythonLacksGrpc(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(e.stubs, "python3"), []byte(py), 0o700); err != nil { //nolint:gosec // G306: executable stub in t.TempDir()
 		t.Fatal(err)
 	}
-	out, err := e.runScript(t, "hack/foc-up.sh", map[string]string{"CLUSTER": "foc-test-1", "KUBECONFIG": e.dedicated(t), "DEMO_DIR": t.TempDir()})
+	out, err := e.runScript(t, "hack/demo-up.sh", map[string]string{"CLUSTER": "fleetops-test-1", "KUBECONFIG": e.dedicated(t), "DEMO_DIR": t.TempDir()})
 	if err == nil || !strings.Contains(out, "cannot import grpc and google.protobuf") || !strings.Contains(out, "pip install grpcio protobuf") {
 		t.Fatalf("want a stop naming the missing packages, got err=%v\n%s", err, out)
 	}

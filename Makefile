@@ -7,7 +7,7 @@ SETUP_ENVTEST_VERSION ?= v0.0.0-20260305142021-f9589b9f2b9d
 GO ?= go
 BIN := bin
 
-.PHONY: help build vet lint fmt test test-envtest eval-fixtures eval-baseline generate check-no-local all ci envtest-assets image deploy-kind test-live foc-up foc-down foc-live baseline-lowered
+.PHONY: help build vet lint fmt test test-envtest eval-fixtures eval-baseline generate check-no-local all ci envtest-assets image deploy-kind test-live-go demo demo-down test-live baseline-lowered
 
 help: ## List targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
@@ -58,7 +58,7 @@ check-no-local: ## Fail if anything under local/ or go.work is tracked
 # Air-gapped profile (llama.cpp): load-llama-image, load-llama-model, deploy-airgap, verify-egress.
 include hack/airgap.mk
 
-# ---- Live cluster (kind, foc-* only) ----------------------------------------
+# ---- Live cluster (kind, fleetops-* only) ----------------------------------------
 # Every kubectl and kind command names the cluster explicitly; the current
 # context of any kubeconfig is never used or changed.
 KIND_CLUSTER ?=
@@ -72,8 +72,8 @@ image: ## Build the fleetops-mcp/fleetops-approvals/fleetops-agent image (binari
 	CGO_ENABLED=0 GOOS=linux GOARCH=$(ARCH) $(GO) build -o $(BIN)/linux-$(ARCH)/ ./cmd/fleetops-mcp ./cmd/fleetops-approvals ./cmd/fleetops-agent
 	docker build --platform linux/$(ARCH) -t $(IMG) .
 
-deploy-kind: image ## Install CRDs, RBAC, admission policies, fleetops-mcp, fleetops-approvals and fleetops-agent into kind cluster KIND_CLUSTER (foc-*)
-	@case "$(KIND_CLUSTER)" in foc-*) ;; *) echo "KIND_CLUSTER must be set and start with foc-"; exit 1;; esac
+deploy-kind: image ## Install CRDs, RBAC, admission policies, fleetops-mcp, fleetops-approvals and fleetops-agent into kind cluster KIND_CLUSTER (fleetops-*)
+	@case "$(KIND_CLUSTER)" in fleetops-*) ;; *) echo "KIND_CLUSTER must be set and start with fleetops-"; exit 1;; esac
 	kind load docker-image $(IMG) --name $(KIND_CLUSTER)
 	kubectl --context kind-$(KIND_CLUSTER) apply -f config/crd/ -f config/rbac/ -f config/admission/
 	kubectl --context kind-$(KIND_CLUSTER) -n fleetops-system create configmap fleetops-policy \
@@ -87,29 +87,29 @@ deploy-kind: image ## Install CRDs, RBAC, admission policies, fleetops-mcp, flee
 	kubectl --context kind-$(KIND_CLUSTER) -n fleetops-system rollout status deploy/fleetops-mcp deploy/fleetops-approvals --timeout=180s
 	@echo "fleetops-agent starts once Secret fleet-ops-copilot-claude (key ANTHROPIC_API_KEY) exists in fleetops-system; not waited for here."
 
-test-live: build ## Approval paths against a live cluster (hack/live-approval-path.sh sets the environment)
+test-live-go: build ## Go live tests of the approval paths (hack/live-approval-path.sh sets their environment; make test-live runs them on the demo stack)
 	$(GO) test -tags live -count=1 -v -timeout 900s ./test/live/...
 
-# ---- foc-up: an empty machine to a running stack on kind --------------------
+# ---- demo: an empty machine to a running stack on kind ----------------------
 # Needs Docker, kind, kubectl, helm, jq, openssl, python3 (for Swarmada's live
 # quickstart). Every command names the dedicated kubeconfig below and the
 # context kind-$(FLEETOPS_CLUSTER); ~/.kube/config is never read or written
-# (hack/lib/foc-guard.sh). DEMO_* variables (hack/foc-up.sh header) pass through
+# (hack/lib/guard.sh). DEMO_* variables (hack/demo-up.sh header) pass through
 # from the environment: DEMO_DRY_RUN=1, DEMO_TRACING=1, DEMO_ANTHROPIC_KEY_FILE.
-FLEETOPS_CLUSTER ?= foc-up
+FLEETOPS_CLUSTER ?= fleetops-demo
 # Outside the repository on purpose: it holds the people's bearer tokens (the scripts refuse a directory inside it).
-DEMO_DIR ?= $(HOME)/.local/state/fleet-ops-copilot/foc-up
+DEMO_DIR ?= $(HOME)/.local/state/fleet-ops-copilot/demo
 FLEETOPS_KUBECONFIG ?= $(DEMO_DIR)/kubeconfig
 # Compared with the base revision: BASE=<revision> (default: merge base with origin/main).
 BASE ?=
 
-foc-up: ## kind cluster foc-up with person tokens, Swarmada quickstart at the go.mod pin, its webhooks, the chart, health checks; prints the elapsed time (DEMO_DRY_RUN=1 prints the plan)
-	CLUSTER=$(FLEETOPS_CLUSTER) KUBECONFIG=$(FLEETOPS_KUBECONFIG) DEMO_DIR=$(DEMO_DIR) hack/foc-up.sh
+demo: ## kind cluster fleetops-demo with person tokens, Swarmada quickstart at the go.mod pin, its webhooks, the chart, health checks; prints the elapsed time (DEMO_DRY_RUN=1 prints the plan)
+	CLUSTER=$(FLEETOPS_CLUSTER) KUBECONFIG=$(FLEETOPS_KUBECONFIG) DEMO_DIR=$(DEMO_DIR) hack/demo-up.sh
 
-foc-down: ## Remove the foc-up cluster, its kubeconfig and the people's tokens
-	CLUSTER=$(FLEETOPS_CLUSTER) KUBECONFIG=$(FLEETOPS_KUBECONFIG) DEMO_DIR=$(DEMO_DIR) hack/foc-down.sh
+demo-down: ## Remove the demo cluster, its kubeconfig and the people's tokens
+	CLUSTER=$(FLEETOPS_CLUSTER) KUBECONFIG=$(FLEETOPS_KUBECONFIG) DEMO_DIR=$(DEMO_DIR) hack/demo-down.sh
 
-foc-live: build ## Live approval paths on the foc-up stack, requests filed by sam's verified token (phase webhooks)
+test-live: build ## Live approval paths on the demo stack, requests filed by sam's verified token (phase webhooks)
 	CLUSTER=$(FLEETOPS_CLUSTER) KUBECONFIG=$(FLEETOPS_KUBECONFIG) PHASE=webhooks WORK=$(DEMO_DIR)/live \
 		TOKENS_FILE=$(DEMO_DIR)/people/tokens.csv EVIDENCE_DIR=$(DEMO_DIR)/live hack/live-approval-path.sh
 

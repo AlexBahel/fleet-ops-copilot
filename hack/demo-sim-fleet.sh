@@ -2,8 +2,8 @@
 # Copyright 2026 Alex Bahel
 # Licensed under the Apache License, Version 2.0 (see LICENSE).
 #
-# hack/foc-sim-fleet.sh start|stop — keeps the Swarmada quickstart's simulated
-# fleet live on the foc-up stack (R73, BACKLOG-v4 P4).
+# hack/demo-sim-fleet.sh start|stop — keeps the Swarmada quickstart's simulated
+# fleet live on the demo stack (R73, BACKLOG-v4 P4).
 #
 # The quickstart stops its sim adapter when it exits, so every Robot goes
 # Offline and nothing can be filed (the filing check, R65). start runs one
@@ -27,7 +27,7 @@
 # stop kills only the processes in the pidfile whose command line is still
 # the one recorded (a reused PID is left alone), adapters first.
 #
-#   CLUSTER=foc-up KUBECONFIG=<dedicated file> DEMO_DIR=<dir> hack/foc-sim-fleet.sh start
+#   CLUSTER=fleetops-demo KUBECONFIG=<dedicated file> DEMO_DIR=<dir> hack/demo-sim-fleet.sh start
 #
 # Environment (optional): SWARMADA_NAMESPACE (default warehouse-a),
 # FLEETOPS_SIM_CS_PORT (local ControlStream port, default 19443),
@@ -35,14 +35,14 @@
 set -euo pipefail
 
 repo="$(cd "$(dirname "$0")/.." && pwd)"
-# shellcheck source=lib/foc-guard.sh
-source "$repo/hack/lib/foc-guard.sh"
-foc_guard foc-sim-fleet.sh
+# shellcheck source=lib/guard.sh
+source "$repo/hack/lib/guard.sh"
+guard_cluster demo-sim-fleet.sh
 export CLUSTER KUBECONFIG
 
 cmd="${1:-}"
-dir="${DEMO_DIR:-$HOME/.local/state/fleet-ops-copilot/foc-up}"
-foc_outside_repo foc-sim-fleet.sh "$dir" "$repo"
+dir="${DEMO_DIR:-$HOME/.local/state/fleet-ops-copilot/demo}"
+guard_outside_repo demo-sim-fleet.sh "$dir" "$repo"
 ctx="kind-$CLUSTER"
 ns="${SWARMADA_NAMESPACE:-warehouse-a}"
 mgr=system
@@ -58,7 +58,7 @@ label="fleetops.alexbahel.github.io/demo-workaround"
 
 k() { kubectl --kubeconfig "$KUBECONFIG" --context "$ctx" "$@"; }
 say() { echo "  sim fleet: $*"; }
-fail() { echo "foc-sim-fleet.sh: $*" >&2; exit 1; }
+fail() { echo "demo-sim-fleet.sh: $*" >&2; exit 1; }
 
 # ours PID PATTERN: the process is alive and still runs what we started.
 ours() { local c; c="$(ps -p "$1" -o command= 2>/dev/null || true)"; [[ -n "$c" && "$c" == *"$2"* ]]; }
@@ -96,7 +96,7 @@ metadata:
   namespace: $ns
   labels: {$label: "true"}
   annotations:
-    $label: "Swarmada's warehouse quickstart names RobotClass simbot-v1 on its Robots but does not ship it; foc-up creates it so that a Robot spec can be updated (docs/KNOWN-LIMITS.md)"
+    $label: "Swarmada's warehouse quickstart names RobotClass simbot-v1 on its Robots but does not ship it; make demo creates it so that a Robot spec can be updated (docs/KNOWN-LIMITS.md)"
 spec:
   manufacturer: Simulated
   model: SimBot-v1
@@ -199,7 +199,7 @@ ready() {
 case "$cmd" in
 start)
   mkdir -p "$run" "$logs"; chmod 700 "$run"
-  [[ -f "$sw/adapters/simulation/sim_adapter.py" ]] || fail "no quickstart tree at $sw (run make foc-up)"
+  [[ -f "$sw/adapters/simulation/sim_adapter.py" ]] || fail "no quickstart tree at $sw (run make demo)"
   stop >/dev/null
   # A start that fails leaves nothing running.
   # shellcheck disable=SC2154 # rc is assigned inside the single-quoted trap body
@@ -212,5 +212,5 @@ start)
   ready
   ;;
 stop) stop ;;
-*) echo "usage: hack/foc-sim-fleet.sh start|stop" >&2; exit 2 ;;
+*) echo "usage: hack/demo-sim-fleet.sh start|stop" >&2; exit 2 ;;
 esac

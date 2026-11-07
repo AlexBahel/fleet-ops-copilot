@@ -107,14 +107,14 @@ func TestLlamaDeployment(t *testing.T) {
 	pod := func(name string, phase corev1.PodPhase) *corev1.Pod {
 		return &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "fleetops-system", Labels: sel},
-			Spec:       corev1.PodSpec{NodeName: "foc-up-control-plane"},
+			Spec:       corev1.PodSpec{NodeName: "fleetops-demo-control-plane"},
 			Status: corev1.PodStatus{Phase: phase, ContainerStatuses: []corev1.ContainerStatus{{
 				Name: "llama-server", ImageID: "ghcr.io/ggml-org/llama.cpp@sha256:abc", RestartCount: 0,
 			}}},
 		}
 	}
 	node := &corev1.Node{
-		ObjectMeta: metav1.ObjectMeta{Name: "foc-up-control-plane"},
+		ObjectMeta: metav1.ObjectMeta{Name: "fleetops-demo-control-plane"},
 		Status: corev1.NodeStatus{
 			Capacity: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("8"), corev1.ResourceMemory: resource.MustParse("22526144Ki")},
 			NodeInfo: corev1.NodeSystemInfo{KubeletVersion: "v1.37.0", OSImage: "Debian", KernelVersion: "6.12", Architecture: "arm64", ContainerRuntimeVersion: "containerd://2.3.4"},

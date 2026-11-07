@@ -12,19 +12,19 @@
 #
 # Required environment:
 #   SWARMADA_DIR  a Swarmada checkout at the pinned commit (read only; nothing in it is edited)
-#   CLUSTER       kind cluster name; must match ^foc-[a-z0-9-]+$
+#   CLUSTER       kind cluster name; must match ^fleetops-[a-z0-9-]+$
 #   KUBECONFIG    a kubeconfig file used only for this cluster (kind writes its context there,
 #                 so no other kubeconfig's current-context changes)
 #   SWARMCTL      path to a swarmctl binary built from SWARMADA_DIR
 # Optional: SOURCE_NOTE (appended to each fixture's Source line), SCENARIOS (space-separated).
-# Refuses before doing anything unless CLUSTER matches ^foc-[a-z0-9-]+$ and KUBECONFIG
-# names a dedicated file, never ~/.kube/config (hack/lib/foc-guard.sh; test:
+# Refuses before doing anything unless CLUSTER matches ^fleetops-[a-z0-9-]+$ and KUBECONFIG
+# names a dedicated file, never ~/.kube/config (hack/lib/guard.sh; test:
 # test/scripts/guard_test.go).
 set -euo pipefail
 
-# shellcheck source=lib/foc-guard.sh
-source "$(dirname "$0")/lib/foc-guard.sh"
-foc_guard capture-live-fixtures.sh
+# shellcheck source=lib/guard.sh
+source "$(dirname "$0")/lib/guard.sh"
+guard_cluster capture-live-fixtures.sh
 : "${SWARMADA_DIR:?}" "${SWARMCTL:?}"
 CTX="kind-$CLUSTER"
 REPO="$(cd "$(dirname "$0")/.." && pwd)"

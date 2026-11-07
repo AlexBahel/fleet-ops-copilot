@@ -1,4 +1,4 @@
-# kind cluster configuration for `make foc-up` (hack/foc-up.sh renders it:
+# kind cluster configuration for `make demo` (hack/demo-up.sh renders it:
 # @PEOPLE_DIR@ becomes the absolute path of the directory that holds
 # tokens.csv, made by hack/kind-people.sh gen).
 #
@@ -6,7 +6,7 @@
 # that the fictional people sam, dana and eve authenticate with bearer tokens,
 # and so can be verified requesters (D57) in the live tests. A static token
 # file is not an identity system: no expiry, no rotation, readable by anyone
-# who can read the file or the node's /etc/foc-people. Never use it on a
+# who can read the file or the node's /etc/fleetops-people. Never use it on a
 # cluster that holds anything real. In production the people authenticate
 # with OIDC (docs/RUNBOOK.md, "People and bearer tokens: kind and OIDC").
 #
@@ -19,17 +19,17 @@ nodes:
   - role: control-plane
     extraMounts:
       - hostPath: @PEOPLE_DIR@
-        containerPath: /etc/foc-people
+        containerPath: /etc/fleetops-people
         readOnly: true
 kubeadmConfigPatches:
   - |
     kind: ClusterConfiguration
     apiServer:
       extraArgs:
-        token-auth-file: /etc/foc-people/tokens.csv
+        token-auth-file: /etc/fleetops-people/tokens.csv
       extraVolumes:
-        - name: foc-people
-          hostPath: /etc/foc-people
-          mountPath: /etc/foc-people
+        - name: fleetops-people
+          hostPath: /etc/fleetops-people
+          mountPath: /etc/fleetops-people
           readOnly: true
           pathType: Directory

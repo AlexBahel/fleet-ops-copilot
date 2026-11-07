@@ -2,18 +2,18 @@
 # Copyright 2026 Alex Bahel
 # Licensed under the Apache License, Version 2.0 (see LICENSE).
 #
-# Preflight for `make foc-up`, run after Swarmada is up and before the chart is
+# Preflight for `make demo`, run after Swarmada is up and before the chart is
 # installed. Exits 0 only if every check passes; otherwise prints what failed
 # and exits 1. Read-only apart from one server-side dry run, which the API
 # server does not persist.
 #
-#   KIND_CLUSTER=foc-<name> KUBECONFIG=<dedicated file> scripts/foc-up-preflight.sh
+#   KIND_CLUSTER=fleetops-<name> KUBECONFIG=<dedicated file> scripts/demo-preflight.sh
 #
-# Cluster: only kind cluster KIND_CLUSTER (foc-*), only through context
-# kind-$KIND_CLUSTER, only from a KUBECONFIG file that holds foc-* contexts and
+# Cluster: only kind cluster KIND_CLUSTER (fleetops-*), only through context
+# kind-$KIND_CLUSTER, only from a KUBECONFIG file that holds fleetops-* contexts and
 # nothing else. Every kubectl call names --kubeconfig and --context; the
 # current context of any kubeconfig is never read or changed. Names of
-# contexts that are not foc-* are counted, never printed.
+# contexts that are not fleetops-* are counted, never printed.
 #
 # Swarmada's admission webhooks: the Swarmada quickstart serves none
 # (docs/DESIGN.md D32), and without the FleetTask webhook a draft is not an
@@ -42,8 +42,8 @@ done
 
 # ---- cluster and kubeconfig --------------------------------------------------
 : "${KIND_CLUSTER:=}"
-[[ "$KIND_CLUSTER" =~ ^foc-[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]] \
-  || fail "KIND_CLUSTER must be set to a kind cluster name starting with foc- (got '${KIND_CLUSTER}')"
+[[ "$KIND_CLUSTER" =~ ^fleetops-[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]] \
+  || fail "KIND_CLUSTER must be set to a kind cluster name starting with fleetops- (got '${KIND_CLUSTER}')"
 ctx="kind-$KIND_CLUSTER"
 
 : "${KUBECONFIG:=}"
@@ -58,11 +58,11 @@ ok "dedicated kubeconfig $kc"
 k() { kubectl --kubeconfig "$kc" --context "$ctx" "$@"; }
 
 contexts="$(kubectl --kubeconfig "$kc" config view -o jsonpath='{range .contexts[*]}{.name}{"\n"}{end}')"
-others="$(printf '%s\n' "$contexts" | grep -cv '^kind-foc-' || true)"
+others="$(printf '%s\n' "$contexts" | grep -cv '^kind-fleetops-' || true)"
 [[ -z "$contexts" ]] && others=0
-[[ "$others" -eq 0 ]] || fail "KUBECONFIG holds $others context(s) not named kind-foc-*; use a file with foc-* contexts only"
+[[ "$others" -eq 0 ]] || fail "KUBECONFIG holds $others context(s) not named kind-fleetops-*; use a file with fleetops-* contexts only"
 printf '%s\n' "$contexts" | grep -qx "$ctx" || fail "KUBECONFIG has no context $ctx"
-ok "every context in the file is kind-foc-*; $ctx present"
+ok "every context in the file is kind-fleetops-*; $ctx present"
 
 server="$(kubectl --kubeconfig "$kc" config view --minify --context "$ctx" -o jsonpath='{.clusters[0].cluster.server}')"
 [[ "$server" =~ ^https://(127\.0\.0\.1|localhost|\[::1\]):[0-9]+$ ]] \
@@ -130,14 +130,14 @@ done < <(sort -u <<<"$services")
 # The FleetTask webhook answers: dry run of a held draft.
 sns="${SWARMADA_NAMESPACE:-warehouse-a}"
 k get namespace "$sns" >/dev/null 2>&1 || fail "namespace $sns does not exist (set SWARMADA_NAMESPACE)"
-probe="foc-preflight-$(date +%s)"
+probe="fleetops-preflight-$(date +%s)"
 set +e
 out="$(k -n "$sns" create --dry-run=server -f - 2>&1 <<YAML
 apiVersion: swarmada.io/v1
 kind: FleetTask
 metadata:
   name: $probe
-  labels: {fleetops.alexbahel.github.io/created-by: foc-preflight}
+  labels: {fleetops.alexbahel.github.io/created-by: fleetops-preflight}
 spec:
   draft: true
   actions:

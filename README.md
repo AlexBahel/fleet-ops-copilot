@@ -63,7 +63,7 @@ The same agent, tools, policy and approval path serve both; only the model backe
   again before execution.
 - **Swarmada's own webhooks** (D22, D32). A held draft is a boundary only where Swarmada's
   FleetTask admission webhook is served, so the copilot refuses every draft
-  (`DENY_DRAFT_GATE_ABSENT`) on a cluster where it is not. `make foc-up` turns those webhooks on;
+  (`DENY_DRAFT_GATE_ABSENT`) on a cluster where it is not. `make demo` turns those webhooks on;
   `test/live` runs the approval paths against Swarmada v0.4 with them served.
 
 ## Measured results
@@ -107,7 +107,7 @@ in each results.json; the table "Unsafe-write containment" in the comparison). T
 72 of its 75 runs; none of them changed a Swarmada object, and 12 left a request that only a person
 could approve.
 
-**Install time.** `DEMO_TRACING=1 make foc-up` took **2m14s** (exit 0) from no cluster to a
+**Install time.** `DEMO_TRACING=1 make demo` took **2m14s** (exit 0) from no cluster to a
 running stack, on one Mac mini with Docker's caches already filled and fleetops-agent not started (no
 API key Secret); a second run took 2m20s. A cold machine has not been timed. Conditions and per-stage
 times: [`docs/evidence/foc-up-2026-11-05/`](docs/evidence/foc-up-2026-11-05/README.md).
@@ -142,35 +142,35 @@ defects found in the record runs.
 
 Requires Docker (running), kind, kubectl, helm 3.8+, jq, openssl, curl, make, Go 1.25+ and
 python3 with the `grpcio` package: Swarmada's quickstart runs a simulated robot adapter in
-Python with the first `python3` on `PATH`. `make foc-up` checks that interpreter before it creates
+Python with the first `python3` on `PATH`. `make demo` checks that interpreter before it creates
 anything and stops with the fix if it cannot import `grpc` and `google.protobuf`. Use a virtual
 environment that has them (`python3 -m venv .venv && . .venv/bin/activate && pip install grpcio protobuf`).
 Full list: [`docs/RUNBOOK.md`](docs/RUNBOOK.md), section 0.
 
 fleetops-agent, the process that talks to the model, starts only when the API key Secret exists.
-Put the key in a file only you can read and pass it to `foc-up`, which creates the Secret; the
+Put the key in a file only you can read and pass it to `make demo`, which creates the Secret; the
 key never appears on a command line:
 
 ```bash
-(umask 077; pbpaste > ~/foc-key.txt)            # copy the key from the Claude Console first
-DEMO_ANTHROPIC_KEY_FILE=~/foc-key.txt make foc-up   # about 2 minutes on a Mac mini with warm image caches
-rm ~/foc-key.txt
+(umask 077; pbpaste > ~/fleetops-key.txt)            # copy the key from the Claude Console first
+DEMO_ANTHROPIC_KEY_FILE=~/fleetops-key.txt make demo   # about 2 minutes on a Mac mini with warm image caches
+rm ~/fleetops-key.txt
 ```
 
-`make foc-up` creates the kind cluster `foc-up`, runs Swarmada's quickstart at the commit `go.mod`
+`make demo` creates the kind cluster `fleetops-demo`, runs Swarmada's quickstart at the commit `go.mod`
 pins, turns on Swarmada's admission webhooks, keeps the simulated fleet's three robots live (one
-sim adapter per robot, in the background; `make foc-down` stops them), installs the chart into `fleetops-system`, and creates
+sim adapter per robot, in the background; `make demo-down` stops them), installs the chart into `fleetops-system`, and creates
 three fictional people with test-only tokens: **sam**, **dana** and **eve**. The last line is the
-total time. Everything it keeps is in `~/.local/state/fleet-ops-copilot/foc-up` (`$DEMO_DIR`),
+total time. Everything it keeps is in `~/.local/state/fleet-ops-copilot/demo` (`$DEMO_DIR`),
 outside the repository; it never reads or writes `~/.kube/config`. Without a key file, plain
-`make foc-up` starts everything except fleetops-agent.
+`make demo` starts everything except fleetops-agent.
 
 To add the key to a stack that is already running, see RUNBOOK section 2. Check that all three
 workloads are ready:
 
 ```bash
-export KUBECONFIG=~/.local/state/fleet-ops-copilot/foc-up/kubeconfig
-kubectl --context kind-foc-up -n fleetops-system get pods    # fleetops-agent, fleetops-approvals, fleetops-mcp: 1/1 Running
+export KUBECONFIG=~/.local/state/fleet-ops-copilot/demo/kubeconfig
+kubectl --context kind-fleetops-demo -n fleetops-system get pods    # fleetops-agent, fleetops-approvals, fleetops-mcp: 1/1 Running
 ```
 
 ### 2. Ask questions
@@ -178,18 +178,18 @@ kubectl --context kind-foc-up -n fleetops-system get pods    # fleetops-agent, f
 Open the connection to fleetops-agent in a second terminal and leave it running:
 
 ```bash
-kubectl --context kind-foc-up -n fleetops-system port-forward svc/fleetops-agent 8090:8090
+kubectl --context kind-fleetops-demo -n fleetops-system port-forward svc/fleetops-agent 8090:8090
 ```
 
 Ask as a person, with that person's own kubeconfig. The copilot records who asked from the
 person's verified token, never from a typed name (RUNBOOK section 7):
 
 ```bash
-P=~/.local/state/fleet-ops-copilot/foc-up/persons
-KUBECONFIG=$P/sam.kubeconfig bin/fleetops chat --context sam@foc-up "Which robots in warehouse-a are idle, and what is each one's battery?"
+P=~/.local/state/fleet-ops-copilot/demo/persons
+KUBECONFIG=$P/sam.kubeconfig bin/fleetops chat --context sam@fleetops-demo "Which robots in warehouse-a are idle, and what is each one's battery?"
 ```
 
-`bin/fleetops` is built by `make foc-up` (or `make build`). Three kinds of question show what the
+`bin/fleetops` is built by `make demo` (or `make build`). Three kinds of question show what the
 copilot does:
 
 | Ask | What happens |
@@ -230,9 +230,9 @@ alternative; it cannot be confirmed.
 A request is decided by a different person, with their own kubeconfig:
 
 ```bash
-KUBECONFIG=$P/dana.kubeconfig bin/fleetops requests -n warehouse-a --context dana@foc-up
-KUBECONFIG=$P/dana.kubeconfig bin/fleetops approve <request> -n warehouse-a --context dana@foc-up
-KUBECONFIG=$P/dana.kubeconfig bin/fleetops reject  <request> -n warehouse-a --context dana@foc-up -comment "<why>"
+KUBECONFIG=$P/dana.kubeconfig bin/fleetops requests -n warehouse-a --context dana@fleetops-demo
+KUBECONFIG=$P/dana.kubeconfig bin/fleetops approve <request> -n warehouse-a --context dana@fleetops-demo
+KUBECONFIG=$P/dana.kubeconfig bin/fleetops reject  <request> -n warehouse-a --context dana@fleetops-demo -comment "<why>"
 ```
 
 An approved draft runs once it is activated. Activation is its own request (`"Activate the
@@ -241,7 +241,7 @@ it with their own kubeconfig. `fleetops activate` checks the fleet again first a
 could not run now:
 
 ```bash
-KUBECONFIG=$P/dana.kubeconfig bin/fleetops activate <activation-request> -n warehouse-a --context dana@foc-up
+KUBECONFIG=$P/dana.kubeconfig bin/fleetops activate <activation-request> -n warehouse-a --context dana@fleetops-demo
 ```
 
 The web chat is at http://127.0.0.1:8090/ through the same port-forward. It shows pending
@@ -256,12 +256,12 @@ air-gapped profile, which needs no API key, see RUNBOOK section 3.
 
 ```bash
 # stop the port-forward in the second terminal with Ctrl-C, then:
-make foc-down                  # removes the cluster foc-up, its kubeconfig and the people's tokens
+make demo-down                  # removes the cluster fleetops-demo, its kubeconfig and the people's tokens
 ```
 
 ### Connect to a Swarmada you run yourself
 
-`make foc-up` bundles Swarmada for a one-command demo. The copilot itself is a separate Helm
+`make demo` bundles Swarmada for a one-command demo. The copilot itself is a separate Helm
 chart that talks to Swarmada only through the Kubernetes API, so it can be installed next to a
 Swarmada that is already running. It is installed **into the cluster where Swarmada runs**: it
 needs that cluster's API server for token checks, RBAC and Swarmada's webhooks.
@@ -276,26 +276,26 @@ Requirements for that Swarmada:
 **1. Run Swarmada.** For a local try, use Swarmada's warehouse quickstart
 (`examples/warehouse-quickstart/run.sh` in the
 [Swarmada repository](https://github.com/swarmada/swarmada) at tag `rfc-0001-v0.4`) on a kind
-cluster whose name starts with `foc-`, for example `foc-sw`. The copilot's scripts only act on
-`kind-foc-*` contexts. For any other cluster, follow Swarmada's own documentation.
+cluster whose name starts with `fleetops-`, for example `fleetops-sw`. The copilot's scripts only act on
+`kind-fleetops-*` contexts. For any other cluster, follow Swarmada's own documentation.
 
 **2. Turn on Swarmada's webhooks and check the cluster** (RUNBOOK sections 6 and 1):
 
 ```bash
-export KUBECONFIG=<kubeconfig with only the foc-sw context>
-CTX=kind-foc-sw
+export KUBECONFIG=<kubeconfig with only the fleetops-sw context>
+CTX=kind-fleetops-sw
 cd "$(go list -m -f '{{.Dir}}' github.com/swarmada/swarmada)"
 kubectl --context $CTX apply -k config/controlstream-tls/ --server-side --force-conflicts
 kubectl --context $CTX -n system rollout status deploy/swarmada-controller-manager --timeout=300s
 cd -
-KIND_CLUSTER=foc-sw KUBECONFIG=$KUBECONFIG scripts/foc-up-preflight.sh   # must end with PASSED
+KIND_CLUSTER=fleetops-sw KUBECONFIG=$KUBECONFIG scripts/demo-preflight.sh   # must end with PASSED
 ```
 
 **3. Install the copilot:**
 
 ```bash
 make image IMG=fleet-ops-copilot:dev
-kind load docker-image fleet-ops-copilot:dev --name foc-sw
+kind load docker-image fleet-ops-copilot:dev --name fleetops-sw
 helm --kube-context $CTX install fleetops charts/fleet-ops-copilot \
   --namespace fleetops-system --create-namespace --set 'swarmadaNamespaces={warehouse-a}'
 kubectl --context $CTX -n fleetops-system rollout status deploy/fleetops-mcp deploy/fleetops-approvals --timeout=180s
@@ -305,10 +305,10 @@ kubectl --context $CTX -n fleetops-system rollout status deploy/fleetops-mcp dep
 let people decide requests by binding `fleetops:approver` to them in each Swarmada namespace:
 
 ```bash
-(umask 077; pbpaste > ~/foc-key.txt)
+(umask 077; pbpaste > ~/fleetops-key.txt)
 kubectl --context $CTX -n fleetops-system create secret generic fleet-ops-copilot-claude \
-  --from-file=ANTHROPIC_API_KEY=$HOME/foc-key.txt --dry-run=client -o yaml | kubectl --context $CTX apply -f -
-rm ~/foc-key.txt
+  --from-file=ANTHROPIC_API_KEY=$HOME/fleetops-key.txt --dry-run=client -o yaml | kubectl --context $CTX apply -f -
+rm ~/fleetops-key.txt
 kubectl --context $CTX -n warehouse-a create rolebinding approver-<person> \
   --clusterrole=fleetops:approver --user=<person>
 ```
@@ -329,9 +329,9 @@ The audit files are lost with the pods, so copy them first (RUNBOOK section 4).
 ### Other commands
 
 ```bash
-DEMO_DRY_RUN=1 make foc-up   # print every command that would change anything; run none
-DEMO_TRACING=1 make foc-up   # also install the development trace backend (RUNBOOK section 8)
-make foc-live                  # live approval paths on the foc-up stack, requests filed with sam's own token
+DEMO_DRY_RUN=1 make demo   # print every command that would change anything; run none
+DEMO_TRACING=1 make demo   # also install the development trace backend (RUNBOOK section 8)
+make test-live                  # live approval paths on the demo stack, requests filed with sam's own token
 ```
 
 Without a cluster:
@@ -366,8 +366,8 @@ go run -tags envtest ./evals/cmd/fleetops-eval -backend claude -model claude-son
 | `internal/tracing` | OpenTelemetry setup (OTLP/gRPC), redacting exporter, trace context over MCP `_meta` |
 | `config/` | CRDs, RBAC, ValidatingAdmissionPolicies, Deployments (`config/deploy`), air-gapped profile (`config/airgap`) |
 | `charts/fleet-ops-copilot` | Helm chart: the objects in `config/` plus an optional NetworkPolicy and trace backend; `make chart-check` |
-| `scripts/` | `foc-up-preflight.sh` (cluster and Swarmada webhook checks), `chart-parity` (chart vs `config/`), `baseline-lowered` (CI warning when `evals/baseline.json` is lowered) |
-| `hack/` | `foc-up.sh`, `foc-down.sh`, `kind-people.sh` (test-only person tokens), `kind/` (kind configuration), `airgap.mk`, live-test scripts |
+| `scripts/` | `demo-preflight.sh` (cluster and Swarmada webhook checks), `chart-parity` (chart vs `config/`), `baseline-lowered` (CI warning when `evals/baseline.json` is lowered) |
+| `hack/` | `demo-up.sh`, `demo-down.sh`, `kind-people.sh` (test-only person tokens), `kind/` (kind configuration), `airgap.mk`, live-test scripts |
 | `docs/` | `DESIGN.md` (design and decision log), `KNOWN-LIMITS.md`, `BACKLOG-v4.md`, `RUNBOOK.md` (draft), `architecture/` (D2 source and SVG), `evidence/` (cluster logs) |
 | `evals/` | Evaluation harness, scenarios, fixtures (hand-written and captured live), results |
 | `test/envtest`, `test/live`, `test/image` | API-server tests; approval paths against a live Swarmada control plane; the image's binaries run, and its mounted files are readable, as the non-root user |

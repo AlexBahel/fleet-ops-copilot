@@ -343,7 +343,7 @@ func TestParseReply(t *testing.T) {
 
 // D72: a "something else" description that the model answers with a plain
 // kind (not a somethingElse reading) is logged for catalogue review too;
-// seen with Sonnet 5.5 on the foc-up stack, 2026-11-07.
+// seen with Sonnet 5.5 on the demo stack, 2026-11-07.
 func TestSomethingElseAnsweredWithAKindIsLogged(t *testing.T) {
 	var logged []ReviewEntry
 	e := &Engine{Cat: cat(t), Review: func(r ReviewEntry) { logged = append(logged, r) }}

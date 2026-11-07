@@ -3,28 +3,28 @@
 # Licensed under the Apache License, Version 2.0 (see LICENSE).
 #
 # Runs test/live against a kind cluster that runs Swarmada v0.4 and the
-# copilot (make foc-up, or make deploy-kind). The people are the fictional sam,
+# copilot (make demo, or make deploy-kind). The people are the fictional sam,
 # dana and eve with bearer tokens from the static token file hack/kind-people.sh
 # made (R43, test only): requests are filed with sam's or dana's own token, so
 # the requester is verified (D57), and dana approves with her token's
 # kubeconfig. The script binds the people's roles in warehouse-a
-# (hack/kind-people.sh bind), port-forwards fleetops-mcp, and runs `make test-live`.
+# (hack/kind-people.sh bind), port-forwards fleetops-mcp, and runs `make test-live-go`.
 # With PHASE=webhooks it then copies Swarmada's safety audit log out of the
 # manager pod (an ephemeral busybox container that mounts the manager's
 # audit-log volume read-only, as the manager's user) and runs
 # TestLiveSwarmadaAuditActor against the copy.
 #
-#   CLUSTER=foc-x KUBECONFIG=<file with context kind-foc-x> PHASE=webhooks|no-webhooks \
+#   CLUSTER=fleetops-x KUBECONFIG=<file with context kind-fleetops-x> PHASE=webhooks|no-webhooks \
 #   WORK=<dir for the person's kubeconfig> TOKENS_FILE=<people/tokens.csv> \
 #   [EVIDENCE_DIR=<dir>] hack/live-approval-path.sh
 #
-# Refuses before doing anything unless CLUSTER matches ^foc-[a-z0-9-]+$ and KUBECONFIG
-# names a dedicated file, never ~/.kube/config (hack/lib/foc-guard.sh; test:
+# Refuses before doing anything unless CLUSTER matches ^fleetops-[a-z0-9-]+$ and KUBECONFIG
+# names a dedicated file, never ~/.kube/config (hack/lib/guard.sh; test:
 # test/scripts/guard_test.go).
 set -euo pipefail
-# shellcheck source=lib/foc-guard.sh
-source "$(dirname "$0")/lib/foc-guard.sh"
-foc_guard live-approval-path.sh
+# shellcheck source=lib/guard.sh
+source "$(dirname "$0")/lib/guard.sh"
+guard_cluster live-approval-path.sh
 : "${PHASE:?}" "${WORK:?}" "${TOKENS_FILE:?TOKENS_FILE must name the token file made by hack/kind-people.sh gen}"
 ctx="kind-$CLUSTER"
 repo="$(cd "$(dirname "$0")/.." && pwd)"
@@ -43,7 +43,7 @@ export FLEETOPS_LIVE_ADMIN_CONTEXT="$ctx" FLEETOPS_LIVE_APPROVER_CONTEXT="$appro
   FLEETOPS_LIVE_EVIDENCE_DIR="${EVIDENCE_DIR:-}"
 cd "$repo"
 rc=0
-make test-live || rc=$?
+make test-live-go || rc=$?
 if [[ "$PHASE" == webhooks ]]; then
   pod="$(kubectl --context "$ctx" -n system get pods -o name | grep swarmada-controller-manager | head -1)"
   probe="fleetopsaudit-$(date +%s)"

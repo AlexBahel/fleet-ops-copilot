@@ -76,14 +76,14 @@ pod. Where a pod must not have that window, use a CNI whose documentation says
 it enforces policy before the pod's containers start, and check it with
 `make verify-egress`; this repository has not checked which CNIs do.
 
-## Make targets (kind clusters named `foc-*` only)
+## Make targets (kind clusters named `fleetops-*` only)
 
 ```sh
-make load-llama-image KIND_CLUSTER=foc-airgap          # image into the node
-make load-llama-model KIND_CLUSTER=foc-airgap MODEL_DIR=<dir> MODEL_SUMS=<sha256sum file>
-make deploy-airgap    KIND_CLUSTER=foc-airgap
-make verify-egress-baseline KIND_CLUSTER=foc-airgap
-make verify-egress    KIND_CLUSTER=foc-airgap
+make load-llama-image KIND_CLUSTER=fleetops-airgap          # image into the node
+make load-llama-model KIND_CLUSTER=fleetops-airgap MODEL_DIR=<dir> MODEL_SUMS=<sha256sum file>
+make deploy-airgap    KIND_CLUSTER=fleetops-airgap
+make verify-egress-baseline KIND_CLUSTER=fleetops-airgap
+make verify-egress    KIND_CLUSTER=fleetops-airgap
 ```
 
 ## Limits

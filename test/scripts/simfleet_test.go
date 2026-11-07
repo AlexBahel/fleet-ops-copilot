@@ -27,7 +27,7 @@ import (
 	"time"
 )
 
-// simFleet sets up stubs for hack/foc-sim-fleet.sh: kubectl answers the
+// simFleet sets up stubs for hack/demo-sim-fleet.sh: kubectl answers the
 // reads it makes (secrets, phases) and runs port-forward until killed;
 // python3 stands for sim_adapter.py and runs until killed. phase is what
 // every Robot reports.
@@ -68,7 +68,7 @@ sleep 300 & wait
 	if err := os.WriteFile(filepath.Join(work, "swarmada", "adapters", "simulation", "sim_adapter.py"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	vars := map[string]string{"CLUSTER": "foc-test-1", "KUBECONFIG": e.dedicated(t), "DEMO_DIR": work, "FLEETOPS_SIM_READY_TIMEOUT": "3"}
+	vars := map[string]string{"CLUSTER": "fleetops-test-1", "KUBECONFIG": e.dedicated(t), "DEMO_DIR": work, "FLEETOPS_SIM_READY_TIMEOUT": "3"}
 	return e, work, vars
 }
 
@@ -114,7 +114,7 @@ func waitDead(pid int) bool {
 // those processes.
 func TestSimFleetStartStop(t *testing.T) {
 	e, work, vars := simFleet(t, "Idle")
-	out, err := e.runScript(t, "hack/foc-sim-fleet.sh", vars, "start")
+	out, err := e.runScript(t, "hack/demo-sim-fleet.sh", vars, "start")
 	if err != nil {
 		t.Fatalf("start: %v\n%s", err, out)
 	}
@@ -167,7 +167,7 @@ func TestSimFleetStartStop(t *testing.T) {
 		t.Errorf("sim-robot-002 repointed before sim-fleet-adapter-2 was seen Connected:\n%s", calls)
 	}
 	for _, l := range strings.Split(strings.TrimSpace(calls), "\n") {
-		if strings.HasPrefix(l, "kubectl ") && (!strings.Contains(l, "--kubeconfig "+vars["KUBECONFIG"]) || !strings.Contains(l, "--context kind-foc-test-1")) {
+		if strings.HasPrefix(l, "kubectl ") && (!strings.Contains(l, "--kubeconfig "+vars["KUBECONFIG"]) || !strings.Contains(l, "--context kind-fleetops-test-1")) {
 			t.Errorf("kubectl without the dedicated kubeconfig and context: %s", l)
 		}
 	}
@@ -180,7 +180,7 @@ func TestSimFleetStartStop(t *testing.T) {
 		t.Errorf("start output:\n%s", out)
 	}
 
-	out, err = e.runScript(t, "hack/foc-sim-fleet.sh", vars, "stop")
+	out, err = e.runScript(t, "hack/demo-sim-fleet.sh", vars, "stop")
 	if err != nil || !strings.Contains(out, "stopped 4 process(es)") {
 		t.Fatalf("stop: %v\n%s", err, out)
 	}
@@ -193,7 +193,7 @@ func TestSimFleetStartStop(t *testing.T) {
 		t.Errorf("pidfile left behind: %v", err)
 	}
 	// stop again: nothing to do.
-	if out, err := e.runScript(t, "hack/foc-sim-fleet.sh", vars, "stop"); err != nil || !strings.Contains(out, "not running") {
+	if out, err := e.runScript(t, "hack/demo-sim-fleet.sh", vars, "stop"); err != nil || !strings.Contains(out, "not running") {
 		t.Fatalf("second stop: %v\n%s", err, out)
 	}
 }
@@ -214,7 +214,7 @@ func TestSimFleetStopLeavesOtherProcessesAlone(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(work, "sim-fleet", "pids"), []byte(line), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	out, err := e.runScript(t, "hack/foc-sim-fleet.sh", vars, "stop")
+	out, err := e.runScript(t, "hack/demo-sim-fleet.sh", vars, "stop")
 	if err != nil || !strings.Contains(out, "left alone") || !strings.Contains(out, "stopped 0 process(es)") {
 		t.Fatalf("stop: %v\n%s", err, out)
 	}
@@ -227,7 +227,7 @@ func TestSimFleetStopLeavesOtherProcessesAlone(t *testing.T) {
 // and leaves nothing running.
 func TestSimFleetStartFailsAndCleansUp(t *testing.T) {
 	e, work, vars := simFleet(t, "Offline")
-	out, err := e.runScript(t, "hack/foc-sim-fleet.sh", vars, "start")
+	out, err := e.runScript(t, "hack/demo-sim-fleet.sh", vars, "start")
 	if err == nil || !strings.Contains(out, "not live after 3s: Robot/sim-robot-001") {
 		t.Fatalf("want a failure naming the Robots, got %v\n%s", err, out)
 	}

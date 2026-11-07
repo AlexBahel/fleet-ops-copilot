@@ -4,8 +4,8 @@
 // Package scripts tests the shell scripts under hack/ that act on a live kind
 // cluster, without a cluster: every external command a script could run
 // (kubectl, curl, make, go, swarmctl, kind) is replaced by a stub that only
-// records its arguments. Each script must refuse a non-foc cluster name and the
-// default kubeconfig (hack/lib/foc-guard.sh) before running anything.
+// records its arguments. Each script must refuse a non-fleetops cluster name and the
+// default kubeconfig (hack/lib/guard.sh) before running anything.
 package scripts
 
 import (
@@ -73,14 +73,14 @@ var scripts = []script{
 		},
 		accept: func(t *testing.T, calls []string) {
 			requireContext(t, calls, true)
-			if !slices.Contains(calls, "make test-live") {
-				t.Errorf("make test-live did not run; calls: %q", calls)
+			if !slices.Contains(calls, "make test-live-go") {
+				t.Errorf("make test-live-go did not run; calls: %q", calls)
 			}
 		},
 	},
 	{
 		// A dry run: it prints the plan and runs no external command at all.
-		path: "hack/foc-up.sh",
+		path: "hack/demo-up.sh",
 		vars: func(t *testing.T, e env) map[string]string {
 			return map[string]string{"DEMO_DRY_RUN": "1", "DEMO_DIR": t.TempDir()}
 		},
@@ -91,7 +91,7 @@ var scripts = []script{
 		},
 	},
 	{
-		path: "hack/foc-down.sh",
+		path: "hack/demo-down.sh",
 		vars: func(t *testing.T, e env) map[string]string {
 			return map[string]string{"DEMO_DIR": t.TempDir()}
 		},
@@ -108,7 +108,7 @@ func requireContext(t *testing.T, calls []string, needKubectl bool) {
 	for _, c := range calls {
 		if strings.HasPrefix(c, "kubectl ") {
 			n++
-			if !strings.Contains(c, "--context kind-foc-test-1 ") {
+			if !strings.Contains(c, "--context kind-fleetops-test-1 ") {
 				t.Errorf("kubectl call without the explicit context: %q", c)
 			}
 		}
@@ -164,7 +164,7 @@ func newEnv(t *testing.T) env {
 
 func (e env) dedicated(t *testing.T) string {
 	t.Helper()
-	p := filepath.Join(filepath.Dir(e.home), "foc-kubeconfig")
+	p := filepath.Join(filepath.Dir(e.home), "fleetops-kubeconfig")
 	if err := os.WriteFile(p, []byte("apiVersion: v1\nkind: Config\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -229,23 +229,23 @@ func testRefuses(t *testing.T, sc script) {
 	}{
 		{"cluster unset", map[string]string{"KUBECONFIG": dedicated}, []string{"CLUSTER"}, "CLUSTER must match"},
 		{"cluster empty", map[string]string{"CLUSTER": "", "KUBECONFIG": dedicated}, nil, "CLUSTER must match"},
-		{"cluster foc- alone", map[string]string{"CLUSTER": "foc-", "KUBECONFIG": dedicated}, nil, "CLUSTER must match"},
+		{"cluster fleetops- alone", map[string]string{"CLUSTER": "fleetops-", "KUBECONFIG": dedicated}, nil, "CLUSTER must match"},
 		{"cluster without prefix", map[string]string{"CLUSTER": "quickstart", "KUBECONFIG": dedicated}, nil, "CLUSTER must match"},
-		{"cluster prefix later", map[string]string{"CLUSTER": "x-foc-a", "KUBECONFIG": dedicated}, nil, "CLUSTER must match"},
-		{"cluster upper case", map[string]string{"CLUSTER": "foc-A", "KUBECONFIG": dedicated}, nil, "CLUSTER must match"},
+		{"cluster prefix later", map[string]string{"CLUSTER": "x-fleetops-a", "KUBECONFIG": dedicated}, nil, "CLUSTER must match"},
+		{"cluster upper case", map[string]string{"CLUSTER": "fleetops-A", "KUBECONFIG": dedicated}, nil, "CLUSTER must match"},
 		{"cluster underscore", map[string]string{"CLUSTER": "fleetops-a_b", "KUBECONFIG": dedicated}, nil, "CLUSTER must match"},
-		{"cluster space", map[string]string{"CLUSTER": "foc-a b", "KUBECONFIG": dedicated}, nil, "CLUSTER must match"},
-		{"cluster newline", map[string]string{"CLUSTER": "foc-a\nother", "KUBECONFIG": dedicated}, nil, "CLUSTER must match"},
-		{"kubeconfig unset", map[string]string{"CLUSTER": "foc-test"}, []string{"KUBECONFIG"}, "KUBECONFIG must be set"},
-		{"kubeconfig empty", map[string]string{"CLUSTER": "foc-test", "KUBECONFIG": ""}, nil, "KUBECONFIG must be set"},
-		{"kubeconfig only separators", map[string]string{"CLUSTER": "foc-test", "KUBECONFIG": "::"}, nil, "names no file"},
-		{"kubeconfig default path", map[string]string{"CLUSTER": "foc-test", "KUBECONFIG": defaultCfg}, nil, "resolves to ~/.kube/config"},
-		{"kubeconfig tilde", map[string]string{"CLUSTER": "foc-test", "KUBECONFIG": "~/.kube/config"}, nil, "resolves to ~/.kube/config"},
-		{"kubeconfig relative", map[string]string{"CLUSTER": "foc-test", "KUBECONFIG": "home/.kube/config"}, nil, "resolves to ~/.kube/config"},
-		{"kubeconfig dot segments", map[string]string{"CLUSTER": "foc-test", "KUBECONFIG": e.home + "/.kube/../.kube/config"}, nil, "resolves to ~/.kube/config"},
-		{"kubeconfig symlink", map[string]string{"CLUSTER": "foc-test", "KUBECONFIG": link}, nil, "resolves to ~/.kube/config"},
-		{"kubeconfig hard link", map[string]string{"CLUSTER": "foc-test", "KUBECONFIG": hard}, nil, "resolves to ~/.kube/config"},
-		{"kubeconfig list with default", map[string]string{"CLUSTER": "foc-test", "KUBECONFIG": dedicated + ":" + defaultCfg}, nil, "resolves to ~/.kube/config"},
+		{"cluster space", map[string]string{"CLUSTER": "fleetops-a b", "KUBECONFIG": dedicated}, nil, "CLUSTER must match"},
+		{"cluster newline", map[string]string{"CLUSTER": "fleetops-a\nother", "KUBECONFIG": dedicated}, nil, "CLUSTER must match"},
+		{"kubeconfig unset", map[string]string{"CLUSTER": "fleetops-test"}, []string{"KUBECONFIG"}, "KUBECONFIG must be set"},
+		{"kubeconfig empty", map[string]string{"CLUSTER": "fleetops-test", "KUBECONFIG": ""}, nil, "KUBECONFIG must be set"},
+		{"kubeconfig only separators", map[string]string{"CLUSTER": "fleetops-test", "KUBECONFIG": "::"}, nil, "names no file"},
+		{"kubeconfig default path", map[string]string{"CLUSTER": "fleetops-test", "KUBECONFIG": defaultCfg}, nil, "resolves to ~/.kube/config"},
+		{"kubeconfig tilde", map[string]string{"CLUSTER": "fleetops-test", "KUBECONFIG": "~/.kube/config"}, nil, "resolves to ~/.kube/config"},
+		{"kubeconfig relative", map[string]string{"CLUSTER": "fleetops-test", "KUBECONFIG": "home/.kube/config"}, nil, "resolves to ~/.kube/config"},
+		{"kubeconfig dot segments", map[string]string{"CLUSTER": "fleetops-test", "KUBECONFIG": e.home + "/.kube/../.kube/config"}, nil, "resolves to ~/.kube/config"},
+		{"kubeconfig symlink", map[string]string{"CLUSTER": "fleetops-test", "KUBECONFIG": link}, nil, "resolves to ~/.kube/config"},
+		{"kubeconfig hard link", map[string]string{"CLUSTER": "fleetops-test", "KUBECONFIG": hard}, nil, "resolves to ~/.kube/config"},
+		{"kubeconfig list with default", map[string]string{"CLUSTER": "fleetops-test", "KUBECONFIG": dedicated + ":" + defaultCfg}, nil, "resolves to ~/.kube/config"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -271,7 +271,7 @@ func TestGuardRefusesDefaultKubeconfigNotYetCreated(t *testing.T) {
 			if err := os.Remove(filepath.Join(e.home, ".kube", "config")); err != nil {
 				t.Fatal(err)
 			}
-			out, calls, err := e.run(t, sc, map[string]string{"CLUSTER": "foc-test", "KUBECONFIG": filepath.Join(e.home, ".kube", "config")})
+			out, calls, err := e.run(t, sc, map[string]string{"CLUSTER": "fleetops-test", "KUBECONFIG": filepath.Join(e.home, ".kube", "config")})
 			if err == nil || !strings.Contains(out, "resolves to ~/.kube/config") {
 				t.Fatalf("want refusal, got err=%v output:\n%s", err, out)
 			}
@@ -286,7 +286,7 @@ func TestGuardAcceptsDedicatedKubeconfig(t *testing.T) {
 	for _, sc := range scripts {
 		t.Run(filepath.Base(sc.path), func(t *testing.T) {
 			e := newEnv(t)
-			out, calls, err := e.run(t, sc, map[string]string{"CLUSTER": "foc-test-1", "KUBECONFIG": e.dedicated(t)})
+			out, calls, err := e.run(t, sc, map[string]string{"CLUSTER": "fleetops-test-1", "KUBECONFIG": e.dedicated(t)})
 			if err != nil {
 				t.Fatalf("script refused a valid setup: %v\n%s", err, out)
 			}

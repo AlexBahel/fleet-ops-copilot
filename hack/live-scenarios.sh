@@ -14,20 +14,20 @@
 # webhooks, so the copilot refuses every draft there (DENY_DRAFT_GATE_ABSENT,
 # docs/DESIGN.md D22); test/live covers the draft path on an install with webhooks.
 #
-# Required: SWARMADA_DIR, CLUSTER (foc-*), KUBECONFIG, SWARMCTL, OUT (results dir).
+# Required: SWARMADA_DIR, CLUSTER (fleetops-*), KUBECONFIG, SWARMCTL, OUT (results dir).
 # Optional: BACKENDS (default "scripted"), RUNS (default 3), CLAUDE_MODEL, plus the
 # -price-* values as PRICE_INPUT PRICE_OUTPUT PRICE_CACHE_WRITE PRICE_CACHE_READ PRICING_SOURCE PRICING_READ_ON.
 #
-# Refuses to start unless CLUSTER matches ^foc-[a-z0-9-]+$ and KUBECONFIG names a
+# Refuses to start unless CLUSTER matches ^fleetops-[a-z0-9-]+$ and KUBECONFIG names a
 # dedicated file: the Swarmada quickstart runs `kubectl config use-context`, which
 # changes the current context of the file KUBECONFIG names, so KUBECONFIG must be
 # set and no entry in it may resolve to ~/.kube/config.
-# Guard: hack/lib/foc-guard.sh; test: test/scripts/guard_test.go.
+# Guard: hack/lib/guard.sh; test: test/scripts/guard_test.go.
 set -euo pipefail
 
-# shellcheck source=lib/foc-guard.sh
-source "$(dirname "$0")/lib/foc-guard.sh"
-foc_guard live-scenarios.sh
+# shellcheck source=lib/guard.sh
+source "$(dirname "$0")/lib/guard.sh"
+guard_cluster live-scenarios.sh
 : "${SWARMADA_DIR:?}" "${SWARMCTL:?}" "${OUT:?}"
 ctx="kind-$CLUSTER"
 repo="$(cd "$(dirname "$0")/.." && pwd)"

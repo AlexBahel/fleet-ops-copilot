@@ -45,15 +45,15 @@ func TestActivationBanner(t *testing.T) {
 		}
 	})
 	t.Run("fleetops activate with a context", func(t *testing.T) {
-		got := activationBanner("https://127.0.0.1:6443", "warehouse-a", "kind-foc-x", "fleetops activate areq-1 -n warehouse-a")
-		if !strings.Contains(got, "  fleetops activate areq-1 -n warehouse-a --context kind-foc-x\n") {
+		got := activationBanner("https://127.0.0.1:6443", "warehouse-a", "kind-fleetops-x", "fleetops activate areq-1 -n warehouse-a")
+		if !strings.Contains(got, "  fleetops activate areq-1 -n warehouse-a --context kind-fleetops-x\n") {
 			t.Errorf("banner:\n%s", got)
 		}
 	})
 	t.Run("explicit context", func(t *testing.T) {
-		got := activationBanner("https://127.0.0.1:6443", "warehouse-a", "kind-foc-x", instr)
-		want := `  kubectl --context kind-foc-x patch fleettask t1 -n warehouse-a --type merge -p '{"spec":{"draft":false}}'` + "\n"
-		if !strings.Contains(got, want) || !strings.Contains(got, "context:    kind-foc-x\n") {
+		got := activationBanner("https://127.0.0.1:6443", "warehouse-a", "kind-fleetops-x", instr)
+		want := `  kubectl --context kind-fleetops-x patch fleettask t1 -n warehouse-a --type merge -p '{"spec":{"draft":false}}'` + "\n"
+		if !strings.Contains(got, want) || !strings.Contains(got, "context:    kind-fleetops-x\n") {
 			t.Errorf("banner:\n%s", got)
 		}
 	})
@@ -66,8 +66,8 @@ func writeKubeconfig(t *testing.T, user string) string {
 kind: Config
 clusters: [{name: c, cluster: {server: "https://127.0.0.1:6443"}}]
 users: [{name: u, user: ` + user + `}]
-contexts: [{name: kind-foc-test, context: {cluster: c, user: u}}]
-current-context: kind-foc-test
+contexts: [{name: kind-fleetops-test, context: {cluster: c, user: u}}]
+current-context: kind-fleetops-test
 `
 	if err := os.WriteFile(p, []byte(kc), 0o600); err != nil {
 		t.Fatal(err)

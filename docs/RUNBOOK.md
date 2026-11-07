@@ -1,65 +1,65 @@
 # Fleet Ops Copilot — Runbook
 
-**Status: draft.** Each command below follows the chart and the code on main. `make foc-up`
+**Status: draft.** Each command below follows the chart and the code on main. `make demo`
 (section 0, with the trace backend of section 8) has run on one kind cluster (2026-11-05); the
 other sections have not been run as a sequence. Items that depend on parts not built yet (the
 air-gapped profile in the chart) say so.
 
 Conventions: every `kubectl` and `helm` command names its context explicitly. The examples use a
-kind cluster `foc-<name>`, context `kind-foc-<name>`, a kubeconfig file that holds only that
+kind cluster `fleetops-<name>`, context `kind-fleetops-<name>`, a kubeconfig file that holds only that
 cluster (`$KUBECONFIG`), the copilot namespace `fleetops-system`, and the Swarmada namespace
 `warehouse-a`.
 
 ```bash
-export KUBECONFIG=$PWD/local/foc-<name>.kubeconfig   # dedicated file, mode 600
-CTX=kind-foc-<name>
+export KUBECONFIG=$PWD/local/fleetops-<name>.kubeconfig   # dedicated file, mode 600
+CTX=kind-fleetops-<name>
 ```
 
-## 0. Quick start on kind: `make foc-up`
+## 0. Quick start on kind: `make demo`
 
 One command from an empty machine state to a running stack. Needs Docker (running), kind,
 kubectl, helm 3.8+, jq, openssl, curl, make, Go and python3 (Swarmada's live quickstart runs a
 simulated adapter with the first `python3` on `PATH`, which must import `grpc` and
-`google.protobuf`; `make foc-up` checks this before it creates anything and stops with the fix,
+`google.protobuf`; `make demo` checks this before it creates anything and stops with the fix,
 R59, D82). Everything it keeps (kubeconfig, the people's tokens and kubeconfigs, the
-Swarmada copy, logs) is in `$DEMO_DIR`, by default `~/.local/state/fleet-ops-copilot/foc-up`,
+Swarmada copy, logs) is in `$DEMO_DIR`, by default `~/.local/state/fleet-ops-copilot/demo`,
 **outside the repository**; the scripts refuse a directory inside it. It never reads or writes
 `~/.kube/config`:
 
 ```bash
-make foc-up                       # prints the plan's stages and, at the end, the elapsed time
-DEMO_DRY_RUN=1 make foc-up      # prints every command that would change anything, runs none
-DEMO_TRACING=1 make foc-up      # also installs the optional trace backend (section 8)
-make foc-down                     # removes cluster foc-up, its kubeconfig and the people's tokens
+make demo                       # prints the plan's stages and, at the end, the elapsed time
+DEMO_DRY_RUN=1 make demo      # prints every command that would change anything, runs none
+DEMO_TRACING=1 make demo      # also installs the optional trace backend (section 8)
+make demo-down                     # removes cluster fleetops-demo, its kubeconfig and the people's tokens
 ```
 
 What it does, in order (each stage prints its elapsed time; the total is the last line):
 
-1. Creates the people's token file (section 7) and the kind cluster `foc-up` with that file wired
+1. Creates the people's token file (section 7) and the kind cluster `fleetops-demo` with that file wired
    into the API server. Node image `kindest/node:v1.37.0`, pinned by digest.
 2. Checks that sam's, dana's and eve's tokens authenticate as sam, dana and eve. If the cluster
-   already existed without the token configuration this fails at once: run `make foc-down foc-up`.
+   already existed without the token configuration this fails at once: run `make demo-down demo`.
 3. Runs Swarmada's warehouse quickstart (`examples/warehouse-quickstart/run.sh`, scenario
    `healthy-fleet`, `DEMO_SCENARIO` to change it) from a writable copy of the module at the
    commit `go.mod` pins, in `$DEMO_DIR/swarmada`. It builds Swarmada's controller image and
-   leaves a simulated adapter and a port-forward running in the background; `make foc-down`
+   leaves a simulated adapter and a port-forward running in the background; `make demo-down`
    stops them.
 4. Turns on Swarmada's admission webhooks (`config/controlstream-tls`, section 6) and runs
-   `scripts/foc-up-preflight.sh` until it passes (up to 3 minutes). The quickstart stops its
-   adapter when it exits, so `hack/foc-sim-fleet.sh start` keeps the fleet live: RobotClass
+   `scripts/demo-preflight.sh` until it passes (up to 3 minutes). The quickstart stops its
+   adapter when it exits, so `hack/demo-sim-fleet.sh start` keeps the fleet live: RobotClass
    `simbot-v1` (a labelled demo workaround: the quickstart names it but does not ship it), one
    FleetAdapter identity per robot, and one `sim_adapter.py` per robot plus a port-forward in the
    background (PIDs `$DEMO_DIR/sim-fleet/pids`, logs `$DEMO_DIR/logs/sim-adapter-*.log`). It
    waits until every Robot is live (`Idle`, or `InProgress` on the quickstart's pending work). If the Robots go `Offline` later, run
-   `CLUSTER=foc-up KUBECONFIG=$DEMO_DIR/kubeconfig hack/foc-sim-fleet.sh start` again.
+   `CLUSTER=fleetops-demo KUBECONFIG=$DEMO_DIR/kubeconfig hack/demo-sim-fleet.sh start` again.
 5. Builds the copilot image, loads it into the cluster, applies the CRDs and installs the chart
    into `fleetops-system`; binds the people's roles in `warehouse-a`.
 6. Checks health: fleetops-mcp and fleetops-approvals rollouts, fleetops-mcp's `/healthz`, and, if the Secret
    `fleet-ops-copilot-claude` exists, fleetops-agent. Without the Secret fleetops-agent does not start and
    the script says so. To create it from a key file you hold (nothing calls the model):
-   `DEMO_ANTHROPIC_KEY_FILE=key.txt make foc-up`, or section 2.
+   `DEMO_ANTHROPIC_KEY_FILE=key.txt make demo`, or section 2.
 
-Then `make foc-live` runs the live approval paths with requests filed by sam's and dana's own
+Then `make test-live` runs the live approval paths with requests filed by sam's and dana's own
 tokens (verified requesters, section 7). It needs `bin/fleetops` (built by the target).
 
 ## 1. Install
@@ -77,10 +77,10 @@ tokens (verified requesters, section 7). It needs `bin/fleetops` (built by the t
 ### Check the cluster first
 
 ```bash
-KIND_CLUSTER=foc-<name> KUBECONFIG=$KUBECONFIG scripts/foc-up-preflight.sh
+KIND_CLUSTER=fleetops-<name> KUBECONFIG=$KUBECONFIG scripts/demo-preflight.sh
 ```
 
-The preflight refuses unless the context is `kind-foc-*`, the kubeconfig file holds only `foc-*`
+The preflight refuses unless the context is `kind-fleetops-*`, the kubeconfig file holds only `fleetops-*`
 contexts, and Swarmada's webhooks are installed, have a CA bundle, have ready endpoints, and answer
 a server-side dry run of a held draft.
 
@@ -88,7 +88,7 @@ a server-side dry run of a held draft.
 
 ```bash
 make image IMG=fleet-ops-copilot:dev
-kind load docker-image fleet-ops-copilot:dev --name foc-<name>
+kind load docker-image fleet-ops-copilot:dev --name fleetops-<name>
 helm --kube-context $CTX install fleetops charts/fleet-ops-copilot \
   --namespace fleetops-system --create-namespace
 kubectl --context $CTX -n fleetops-system rollout status deploy/fleetops-mcp deploy/fleetops-approvals --timeout=180s
@@ -148,9 +148,9 @@ fleetops chat --context $CTX "put aisle B into maintenance after this wave"
 ```
 
 A kubeconfig user that authenticates with a client certificate (kind's default admin) has no bearer
-token, so its requests are unverified; `fleetops chat` says so. On a `make foc-up` cluster use a
+token, so its requests are unverified; `fleetops chat` says so. On a `make demo` cluster use a
 person's token kubeconfig: `KUBECONFIG=$DEMO_DIR/persons/sam.kubeconfig fleetops chat --context
-sam@foc-up "..."` (section 7). `fleetops chat` sends the token only over https or
+sam@fleetops-demo "..."` (section 7). `fleetops chat` sends the token only over https or
 to a loopback address. fleetops-mcp never stores, logs or traces the token; it keeps a SHA-256 of it for 30
 seconds as a cache key. Between fleetops-agent and fleetops-mcp the token travels in the cluster over plain HTTP.
 
@@ -236,11 +236,11 @@ Until the air-gapped profile is in the chart, it is installed beside the chart w
 in this order:
 
 ```bash
-make load-llama-image KIND_CLUSTER=foc-<name>
-make load-llama-model KIND_CLUSTER=foc-<name> MODEL_DIR=<dir> MODEL_SUMS=<sha256sum file>
-make deploy-airgap    KIND_CLUSTER=foc-<name>
-make verify-egress-baseline KIND_CLUSTER=foc-<name>   # must report open egress
-make verify-egress    KIND_CLUSTER=foc-<name>         # must report every external target blocked
+make load-llama-image KIND_CLUSTER=fleetops-<name>
+make load-llama-model KIND_CLUSTER=fleetops-<name> MODEL_DIR=<dir> MODEL_SUMS=<sha256sum file>
+make deploy-airgap    KIND_CLUSTER=fleetops-<name>
+make verify-egress-baseline KIND_CLUSTER=fleetops-<name>   # must report open egress
+make verify-egress    KIND_CLUSTER=fleetops-<name>         # must report every external target blocked
 ```
 
 `make verify-egress` prints an `at-start` line (not counted), the time the policy came into force
@@ -328,7 +328,7 @@ Check:
 
 ```bash
 kubectl --context $CTX get validatingwebhookconfigurations,mutatingwebhookconfigurations
-KIND_CLUSTER=foc-<name> KUBECONFIG=$KUBECONFIG scripts/foc-up-preflight.sh
+KIND_CLUSTER=fleetops-<name> KUBECONFIG=$KUBECONFIG scripts/demo-preflight.sh
 ```
 
 The preflight requires the `fleettasks` (fail-closed, covering `UPDATE`), `fleetzones` and
@@ -348,20 +348,20 @@ that can only be rejected. Two ways to give people tokens:
 
 ### On kind: a static token file (test only, R43)
 
-`make foc-up` makes the fictional people **sam** (group `supervisors`; `fleetops:approver`,
+`make demo` makes the fictional people **sam** (group `supervisors`; `fleetops:approver`,
 `swarmada:operator`), **dana** (`fleet-ops`; `fleetops:approver`, `swarmada:fleet-manager`) and
 **eve** (`auditors`; `fleetops:approver`), the same as envtest's. `hack/kind-people.sh gen` writes
 `$DEMO_DIR/people/tokens.csv` (mode 600, a new random token per cluster; `$DEMO_DIR` is
-outside the repository, by default `~/.local/state/fleet-ops-copilot/foc-up`, and `kind-people.sh gen`
+outside the repository, by default `~/.local/state/fleet-ops-copilot/demo`, and `kind-people.sh gen`
 refuses a directory inside it, so the tokens cannot be committed by accident), the kind
 configuration mounts it into the node and gives it to the API server (`--token-auth-file`), and
 `hack/kind-people.sh kubeconfig` writes `$DEMO_DIR/persons/<name>.kubeconfig`, context
-`<name>@foc-up`, holding the person's token. The token is never printed or put on a command line.
+`<name>@fleetops-demo`, holding the person's token. The token is never printed or put on a command line.
 
 ```bash
-KUBECONFIG=$DEMO_DIR/persons/sam.kubeconfig kubectl --context sam@foc-up auth whoami
-KUBECONFIG=$DEMO_DIR/persons/sam.kubeconfig bin/fleetops chat --context sam@foc-up "put aisle B into maintenance"
-KUBECONFIG=$DEMO_DIR/persons/dana.kubeconfig bin/fleetops approve <request> -n warehouse-a --context dana@foc-up
+KUBECONFIG=$DEMO_DIR/persons/sam.kubeconfig kubectl --context sam@fleetops-demo auth whoami
+KUBECONFIG=$DEMO_DIR/persons/sam.kubeconfig bin/fleetops chat --context sam@fleetops-demo "put aisle B into maintenance"
+KUBECONFIG=$DEMO_DIR/persons/dana.kubeconfig bin/fleetops approve <request> -n warehouse-a --context dana@fleetops-demo
 ```
 
 This is not an identity system: a static token never expires, cannot be revoked without
@@ -424,7 +424,7 @@ Jaeger beside the air-gapped policy of `config/airgap` (D68). fleetops-mcp/fleet
 opened beside `config/airgap` by `config/airgap/networkpolicy-tracing.yaml`, which
 `make deploy-airgap` applies when `deploy/fleetops-otel-collector` exists (install the chart with the
 backend first), and in the chart only with `networkPolicy.enabled` (D69). Both rules are
-template-verified only, until the next cluster run. The backend ran on a `make foc-up` cluster
+template-verified only, until the next cluster run. The backend ran on a `make demo` cluster
 on 2026-11-05 (`docs/evidence/airgap-2026-11-05/`), before D68 and D69.
 
 ## 9. Requests for work: questions, preview, confirmation, activation
