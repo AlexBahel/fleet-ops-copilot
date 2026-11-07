@@ -67,6 +67,61 @@ The same agent, tools, policy and approval path serve both; only the model backe
   (`DENY_DRAFT_GATE_ABSENT`) on a cluster where it is not. `make demo` turns those webhooks on;
   `test/live` runs the approval paths against Swarmada v0.4 with them served.
 
+## Architecture
+
+![Components: fleetops-agent, fleetops-mcp and fleetops-approvals in namespace fleetops-system, beside Swarmada in one Kubernetes cluster](docs/architecture/components.svg)
+
+The copilot runs in the Kubernetes cluster where Swarmada runs, in the namespace
+`fleetops-system`, as three processes, each with its own ServiceAccount
+(`config/rbac/roles.yaml`, `config/admission/policies.yaml`):
+
+| Process | What it does | What its ServiceAccount may do |
+|---|---|---|
+| `fleetops-agent` | Runs the model loop (Claude through the Claude API; a llama.cpp backend exists, but no manifest sets it), the guided dialogue from the site catalogue, and the web chat. Files a request only after the person confirms its preview. | `get` and `list` ApprovalRequests, for the web UI's requests panel. No write. |
+| `fleetops-mcp` | MCP server: read tools, `check_task`, and the request tools. Verifies the caller's bearer token, runs the policy engine, refuses a request without a confirmed preview. | Read Swarmada objects and webhook configurations; create ApprovalRequests, Events and TokenReviews. No Swarmada write. |
+| `fleetops-approvals` | Checks each decision, re-checks before executing, makes the one approved write, watches activations and outcomes. | Read Swarmada objects, requests and decisions; create held-draft FleetTasks and ZoneMaintenances; create FleetActions as a dry run only; add the estop annotation to a FleetZone and change nothing else on it; write ApprovalRequest status; create Events and SubjectAccessReviews. |
+
+**A question.** The person asks with `fleetops chat`, which sends their own bearer token, or in
+the web chat, which sends none. fleetops-agent gives the model the read tools, `check_task` and
+`propose_task`, and forwards the token on every call to fleetops-mcp. fleetops-mcp verifies the
+token with a TokenReview, reads Swarmada objects and returns them; nothing is written. The system
+prompt tells the model to cite each fact as Kind/name and field.
+
+**A change** is never made by the model:
+
+![Approval flow: a confirmed preview filed as a request, decided by a second person, executed by fleetops-approvals, then activated by a person with fleetops activate](docs/architecture/approval-flow.svg)
+
+1. The person asks for work in plain words. The model reads them into `propose_task`; it is
+   offered no request tool (D74).
+2. fleetops-agent's dialogue engine walks the site catalogue: at most two numbered questions, then
+   a preview with the result of `check_task` (`likely feasible` or `blocked`, from reads only)
+   (D71, D73).
+3. The person replies `1` (confirm) or `2` (confirm, and prepare a follow-up if it fails).
+   fleetops-agent files the stored request with the preview's id; fleetops-mcp verifies the token,
+   refuses a request with no confirmation or a changed preview (`DENY_NOT_CONFIRMED`,
+   `DENY_PREVIEW_MISMATCH`), runs the policy engine and creates an `ApprovalRequest` naming the
+   verified requester.
+4. A different person runs `fleetops approve` (or `fleetops reject`) with their own kubeconfig.
+   That creates an `ApprovalDecision`, which an admission policy binds to the authenticated user and
+   refuses from any ServiceAccount.
+5. fleetops-approvals refuses an unverified requester and self-approval, checks with a
+   SubjectAccessReview that the approver could make the change directly, and re-runs the policy on
+   current state. Before a draft it runs `check_task` again and dry-runs the task through
+   Swarmada's admission (D76). Then it makes one write: a held draft task, a maintenance window or
+   a zone stop. Swarmada's webhooks check that write as they check any client's.
+6. A draft runs only once it is activated, and activation is its own request through steps 1–5.
+   Once that request is approved, a person Swarmada allows to activate runs
+   `fleetops activate <request>` with their own credentials. It refuses a ServiceAccount, checks
+   the fleet again, records an `ApprovalDecision` of type `Activation`, then clears the draft flag.
+   Swarmada's webhook checks that person's `activate` verb. fleetops-approvals records who
+   activated, then the task's outcome (D79, D78).
+
+Every request, decision, execution and activation is written to the audit files and as Events
+(§3.4). The air-gapped profile (`config/airgap`) adds llama-server in `fleetops-system`, with no
+egress at all; the copilot's pods may reach only cluster DNS, the Kubernetes API, and (for
+fleetops-agent) llama-server and fleetops-mcp. Diagram sources:
+[`docs/architecture/`](docs/architecture/).
+
 ## Measured results
 
 These model results are on eval surface v3 (25 scenarios, the model calling the request tools
@@ -144,8 +199,14 @@ defects found in the record runs.
 Requires Docker (running), kind, kubectl, helm 3.8+, jq, openssl, curl, make, Go 1.25+ and
 python3 with the `grpcio` package: Swarmada's quickstart runs a simulated robot adapter in
 Python with the first `python3` on `PATH`. `make demo` checks that interpreter before it creates
-anything and stops with the fix if it cannot import `grpc` and `google.protobuf`. Use a virtual
-environment that has them (`python3 -m venv .venv && . .venv/bin/activate && pip install grpcio protobuf`).
+anything and stops with the fix if it cannot import `grpc` and `google.protobuf`. Put a virtual
+environment that has them first on `PATH`, outside the repository:
+
+```bash
+python3 -m venv ~/fleetops-venv && ~/fleetops-venv/bin/pip install grpcio protobuf
+export PATH="$HOME/fleetops-venv/bin:$PATH"
+```
+
 Full list: [`docs/RUNBOOK.md`](docs/RUNBOOK.md), section 0.
 
 fleetops-agent, the process that talks to the model, starts only when the API key Secret exists.
@@ -153,15 +214,16 @@ Put the key in a file only you can read and pass it to `make demo`, which create
 key never appears on a command line:
 
 ```bash
-(umask 077; pbpaste > ~/fleetops-key.txt)            # copy the key from the Claude Console first
+make build                                             # bin/fleetops, the CLI used below
+(umask 077; pbpaste > ~/fleetops-key.txt)              # copy the key from the Claude Console first
 DEMO_ANTHROPIC_KEY_FILE=~/fleetops-key.txt make demo   # about 2 minutes on a Mac mini with warm image caches
 rm ~/fleetops-key.txt
 ```
 
-`make demo` creates the kind cluster `fleetops-demo`, runs Swarmada's quickstart at the commit `go.mod`
-pins, turns on Swarmada's admission webhooks, keeps the simulated fleet's three robots live (one
-sim adapter per robot, in the background; `make demo-down` stops them), installs the chart into `fleetops-system`, and creates
-three fictional people with test-only tokens: **sam**, **dana** and **eve**. The last line is the
+`make demo` creates the kind cluster `fleetops-demo`, runs Swarmada's quickstart at the commit
+`go.mod` pins, turns on Swarmada's admission webhooks, keeps the simulated fleet's three robots
+live (one sim adapter per robot, in the background; `make demo-down` stops them), builds the image
+and installs the chart into `fleetops-system`, and creates three fictional people with test-only tokens: **sam**, **dana** and **eve**. The last line is the
 total time. Everything it keeps is in `~/.local/state/fleet-ops-copilot/demo` (`$DEMO_DIR`),
 outside the repository; it never reads or writes `~/.kube/config`. Without a key file, plain
 `make demo` starts everything except fleetops-agent.
@@ -190,8 +252,8 @@ P=~/.local/state/fleet-ops-copilot/demo/persons
 KUBECONFIG=$P/sam.kubeconfig bin/fleetops chat --context sam@fleetops-demo "Which robots in warehouse-a are idle, and what is each one's battery?"
 ```
 
-`bin/fleetops` is built by `make demo` (or `make build`). Three kinds of question show what the
-copilot does:
+`bin/fleetops` comes from `make build` (`make demo` builds only the image). Three kinds of question
+show what the copilot does:
 
 | Ask | What happens |
 |---|---|
@@ -257,7 +319,7 @@ air-gapped profile, which needs no API key, see RUNBOOK section 3.
 
 ```bash
 # stop the port-forward in the second terminal with Ctrl-C, then:
-make demo-down                  # removes the cluster fleetops-demo, its kubeconfig and the people's tokens
+make demo-down   # removes the cluster fleetops-demo, its kubeconfig and the people's tokens
 ```
 
 ### Connect to a Swarmada you run yourself
@@ -332,7 +394,7 @@ The audit files are lost with the pods, so copy them first (RUNBOOK section 4).
 ```bash
 DEMO_DRY_RUN=1 make demo   # print every command that would change anything; run none
 DEMO_TRACING=1 make demo   # also install the development trace backend (RUNBOOK section 8)
-make test-live                  # live approval paths on the demo stack, requests filed with sam's own token
+make test-live             # live approval paths on the demo stack, requests filed with sam's own token
 ```
 
 Without a cluster:
