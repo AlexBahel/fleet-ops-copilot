@@ -720,7 +720,9 @@ quickstart itself writes some status by hand (see "Honest notes — what's real 
 - Helm chart `charts/fleet-ops-copilot` with `values-cloud.yaml` and `values-airgap.yaml`.
 - `make foc-up` (`hack/foc-up.sh`, D59): creates the `kind` cluster `foc-up` (name settable, always
   `foc-*`) with the test-only person tokens (D60), runs the Swarmada quickstart from the pinned
-  module, turns its admission webhooks on, installs the chart, checks health and prints the
+  module, turns its admission webhooks on, keeps the simulated fleet live
+  (`hack/foc-sim-fleet.sh`, R73: one sim adapter per robot in the background, RobotClass
+  `simbot-v1` as a labelled demo workaround), installs the chart, checks health and prints the
   elapsed time. `make foc-down` removes that one cluster, its kubeconfig and the tokens; it never
   deletes a cluster it did not name.
 - `docs/RUNBOOK.md`: install, configure, approve, rotate secrets, read the audit, recover.

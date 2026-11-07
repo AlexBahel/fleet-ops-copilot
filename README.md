@@ -158,7 +158,8 @@ rm ~/foc-key.txt
 ```
 
 `make foc-up` creates the kind cluster `foc-up`, runs Swarmada's quickstart at the commit `go.mod`
-pins, turns on Swarmada's admission webhooks, installs the chart into `foc-system`, and creates
+pins, turns on Swarmada's admission webhooks, keeps the simulated fleet's three robots live (one
+sim adapter per robot, in the background; `make foc-down` stops them), installs the chart into `foc-system`, and creates
 three fictional people with test-only tokens: **sam**, **dana** and **eve**. The last line is the
 total time. Everything it keeps is in `~/.local/state/fleet-ops-copilot/foc-up` (`$FOC_UP_DIR`),
 outside the repository; it never reads or writes `~/.kube/config`. Without a key file, plain

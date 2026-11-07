@@ -144,12 +144,17 @@ remove it.
 - **`foc activate` needs the `fleetops:approver` role** (`create approvaldecisions`), which also
   lets the holder approve or reject requests within their Swarmada permissions. A person who may
   only activate uses `kubectl patch`, and the activator is then not recorded (BACKLOG-v4 P3).
-- **A plain `make foc-up` stack cannot file work.** The Swarmada quickstart stops its live sim
-  adapter when it exits, so after foc-up every Robot goes `Offline` and the FleetAdapter
-  `Disconnected`; the filing check (R65) then refuses every draft with `NO_ELIGIBLE_ROBOT`, as
-  Swarmada would hold the work. The FOC-8 live check (2026-11-07) restarted the quickstart's own
-  sim adapter for sim-robot-001 by hand, with the quickstart's arguments, before `make foc-live`
-  (BACKLOG-v4 P4).
+- **foc-up's simulated fleet is three host processes.** The Swarmada quickstart stops its sim
+  adapter when it exits, so foc-up runs `hack/foc-sim-fleet.sh start`: one `sim_adapter.py` per
+  robot and one port-forward, in the background on the host (PIDs in `$FOC_UP_DIR/sim-fleet/pids`,
+  logs in `$FOC_UP_DIR/logs`), with sim-robot-002/003 moved to their own FleetAdapters
+  (`sim-fleet-adapter-2`/`-3`, client certificates from Swarmada's `demo-ab-live` overlay), as the
+  quickstart's all-live path does. If a process dies, the Robots go `Offline` and filing is refused
+  (R65 check); `hack/foc-sim-fleet.sh start` again restarts them. `make foc-down` stops them.
+- **RobotClass `simbot-v1` is a demo workaround.** Swarmada's warehouse quickstart names it on its
+  Robots but does not ship it, and Swarmada's Robot webhook refuses every Robot spec update while it
+  is missing. foc-up creates a minimal one (manufacturer, model, base adapter, the front camera),
+  labelled `fleetops.alexbahel.github.io/demo-workaround: "true"`. It is not a model of real hardware.
 - **`stallsAfterActivationProxy`** in results.json is a proxy: `check_task` re-run on the fixture
   at the end of a run, not an observation of work left Pending by Swarmada.
 - **Fixture changes for v4.** Scenarios that file work set the live captures' FleetAdapter

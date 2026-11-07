@@ -45,7 +45,13 @@ What it does, in order (each stage prints its elapsed time; the total is the las
    leaves a simulated adapter and a port-forward running in the background; `make foc-down`
    stops them.
 4. Turns on Swarmada's admission webhooks (`config/controlstream-tls`, section 6) and runs
-   `scripts/foc-up-preflight.sh` until it passes (up to 3 minutes).
+   `scripts/foc-up-preflight.sh` until it passes (up to 3 minutes). The quickstart stops its
+   adapter when it exits, so `hack/foc-sim-fleet.sh start` keeps the fleet live: RobotClass
+   `simbot-v1` (a labelled demo workaround: the quickstart names it but does not ship it), one
+   FleetAdapter identity per robot, and one `sim_adapter.py` per robot plus a port-forward in the
+   background (PIDs `$FOC_UP_DIR/sim-fleet/pids`, logs `$FOC_UP_DIR/logs/sim-adapter-*.log`). It
+   waits until every Robot is `Idle`. If the Robots go `Offline` later, run
+   `CLUSTER=foc-up KUBECONFIG=$FOC_UP_DIR/kubeconfig hack/foc-sim-fleet.sh start` again.
 5. Builds the copilot image, loads it into the cluster, applies the CRDs and installs the chart
    into `foc-system`; binds the people's roles in `warehouse-a`.
 6. Checks health: foc-mcp and foc-approvals rollouts, foc-mcp's `/healthz`, and, if the Secret
