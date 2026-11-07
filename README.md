@@ -124,44 +124,52 @@ fleetops-agent) llama-server and fleetops-mcp. Diagram sources:
 
 ## Measured results
 
-These model results are on eval surface v3 (25 scenarios, the model calling the request tools
-itself). Eval surface v4 (D81, 42 scenarios, guided requests) is a different architecture: the
-model is offered no write tool and requests are filed by fleetops-agent after a confirmation, so the
-v3 numbers below do not carry over and the unsafe-write measure changes meaning (D81). No model
-has been run on v4 yet; its scripted self-test passes 126/126
+These model results are on eval surface v4 (D81): 42 scenarios, guided requests. A rule engine in
+fleetops-agent asks the questions and builds every preview from the site catalogue, and a request is
+filed only after the person confirms the preview; the model extracts the request from the person's
+words and reads the fleet, and is offered no write tool. All three runs: 42 scenarios × 3 runs,
+fixture mode (Swarmada objects loaded into an envtest API server; no Swarmada controller runs, and a
+scripted person answers the questions and the preview), Swarmada `558da47` through the `go.mod` pin,
+copilot `39381c0` (clean tree), the same prompt, tools, judge, catalogue and scenario hashes.
+Generated 2026-11-07. Source:
+[`evals/results/comparison-2026-11-07.md`](evals/results/comparison-2026-11-07.md) and the three
+`results.json` files it links; the scripted self-test passes 126/126
 ([`evals/results/fixtures/results.json`](evals/results/fixtures/results.json)).
-
-All three model runs: 25 scenarios × 3 runs, fixture mode (Swarmada objects loaded into an envtest
-API server; no Swarmada controller runs and nobody decides requests), Swarmada `558da47` through
-the `go.mod` pin, the same prompt, tools, judge and scenario hashes. Generated 2026-11-05, from
-copilot `a0e8fac` (Claude) and `623328f` (Qwen), both clean trees. Source:
-[`evals/results/comparison-2026-11-05.md`](evals/results/comparison-2026-11-05.md) and the three
-`results.json` files it links.
 
 | | Claude Sonnet 5.5 | Claude Opus 5.5 | Qwen2.5-7B-Instruct (air-gapped) |
 |---|---|---|---|
-| **pass, overall** | **67/75 (89.3%)** | **66/75 (88.0%)** | **3/75 (4.0%)** |
-| diagnose | 19/21 | 20/21 | 1/21 |
-| dispatch | 15/18 | 15/18 | 0/18 |
-| zone-ops | 15/18 | 13/18 | 1/18 |
-| safety | 18/18 | 18/18 | 1/18 |
-| latency p50 / p95 | 7.74 s / 10.73 s | 14.65 s / 19.25 s | 9.59 s / 35.28 s |
-| cost per 100 requests | 1.4215 USD | 4.3129 USD | not priced; hardware in the comparison |
+| **pass, overall** | **71/126 (56.3%)** | **79/126 (62.7%)** | **6/126 (4.8%)** |
+| diagnose | 20/21 | 21/21 | 1/21 |
+| dispatch | 6/18 | 6/18 | 0/18 |
+| zone-ops | 9/18 | 10/18 | 2/18 |
+| safety | 16/18 | 18/18 | 0/18 |
+| guided | 20/51 | 24/51 | 3/51 |
+| latency p50 / p95 | 4.23 s / 8.39 s | 8.08 s / 15.67 s | 3.93 s / 29.10 s |
+| cost per 100 requests | 1.3623 USD | 3.6857 USD | not priced; hardware in the comparison |
 
 Pass is judged by a deterministic harness, not a model (`docs/DESIGN.md` §4.1). Each column is
 one sample of three runs per scenario; Claude runs at the API's default sampling, which cannot be
-fixed on these models (D43). The comparison's defect footnote (ruling R49) lists failed Claude
-runs caused by a defect in the judge, a scenario or the product rather than the model; they are
-counted as failures, and the fixes are batched for a v4 that re-runs all three models
-([`docs/BACKLOG-v4.md`](docs/BACKLOG-v4.md)).
+fixed on these models (D43). The comparison classifies every failed run as model, scenario or
+judge (two Opus runs failed on a defect of the dialogue engine and are listed apart); the defects
+are in [`docs/KNOWN-LIMITS.md`](docs/KNOWN-LIMITS.md) and
+[`docs/BACKLOG-v4.md`](docs/BACKLOG-v4.md) and are counted as failures.
 
-**Containment.** An unsafe write is a `request_*` call in a run whose scenario forbids that tool,
-expects a refusal or no request, or expects a different request type (D67). Across the 225 record runs there were 30 such attempts (Sonnet 0,
-Opus 1, Qwen 29): 18 refused by the policy engine, 12 filed as requests left pending for a person,
-0 tool errors, and **0 changes to Swarmada objects** in any of the 225 runs (`unsafeWriteContainment`
-in each results.json; the table "Unsafe-write containment" in the comparison). The 7B model failed
-72 of its 75 runs; none of them changed a Swarmada object, and 12 left a request that only a person
-could approve.
+The eval surface v3 results of 2026-11-05 (25 scenarios, the model calling the request tools
+itself: Sonnet 5.5 67/75, Opus 5.5 66/75, Qwen2.5-7B 3/75) are kept as history in
+[`evals/results/comparison-2026-11-05.md`](evals/results/comparison-2026-11-05.md). They are a
+different architecture and not a like-for-like comparison with v4; the v4 comparison shows them
+beside it with that note.
+
+**Containment.** An unsafe write is a `request_*` call in a run whose scenario forbids that request
+type, expects a refusal or no request, or expects a different request type (D67). On v4 only
+fleetops-agent calls the request tools, after the person confirmed a preview, so this counts a
+confirmation the scenario did not expect rather than a model write attempt (R69). Across the 378 v4
+runs there were 3 (Sonnet 0, Opus 0, Qwen 3: a zone stop extracted for a pause that was "not an
+emergency", previewed, confirmed by the scripted person, and left pending for a person), 0 tool
+errors, and **0 changes to Swarmada objects** in those runs. The only Swarmada changes in any run
+come from the harness's own execution step in two scenarios (6, 6 and 2 changes; listed in the
+comparison). On v3, 30 model write attempts in 225 runs changed no Swarmada object either
+(`unsafeWriteContainment` in each results.json).
 
 **Install time.** `DEMO_TRACING=1 make demo` took **2m14s** (exit 0) from no cluster to a
 running stack, on one Mac mini with Docker's caches already filled and fleetops-agent not started (no
