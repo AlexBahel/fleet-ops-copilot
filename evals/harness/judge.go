@@ -127,8 +127,14 @@ var codePattern = regexp.MustCompile(`"policy\.code":"([A-Z_]+)"`)
 // collective "all three robots" clause is about each of them); a run is the
 // whole conversation; required reads are the model's own calls; a refusal
 // may be the engine's own statement that a preview cannot be filed or a
-// request is not possible, in a reply the engine wrote (R71).
-const JudgeVersion = "v4"
+// request is not possible, in a reply the engine wrote (R71). v5
+// (2026-11-07, D89): BACKLOG-v4 J4 (a clause that opens with a definite
+// reference, "The action ...", is about the object of that kind named last
+// before it, or about no earlier object when none of that kind was named)
+// and J5 (in a clause about a pronoun's or a definite reference's object, a
+// predicate joined by "and" after a name of another kind is about that
+// object: "It is in the warehouse-a zone and is idle").
+const JudgeVersion = "v5"
 
 // refKinds are the object kinds an answer can name.
 const refKinds = `Robot|FleetTask|FleetAction|FleetZone|ZoneMaintenance|ApprovalRequest|DiscoveredRobot|FleetAdapter|TaskTrigger`
@@ -236,36 +242,57 @@ func objectNames(ob Observed) []string {
 // object called name. A clause is about the objects it names; a clause that
 // names none is about the objects the previous one was about ("sim-robot-002
 // is not taking work. Its estop state is Stopped."). known are the names of
-// every object in the namespace. The value matches as a whole word, in any
-// case, outside the other names in the clause; a value that is itself an
-// object's name (status.assignedRobot=sim-robot-002) matches that name.
-func citesValue(answer, name, value string, known []string) bool {
+// every object in the namespace, kinds their kinds (nil: J4 and J5 do not
+// apply). The value matches as a whole word, in any case, outside the other
+// names in the clause; a value that is itself an object's name
+// (status.assignedRobot=sim-robot-002) matches that name.
+func citesValue(answer, name, value string, known []string, kinds map[string]string) bool {
 	if !slices.Contains(known, name) {
 		known = append(known, name)
 	}
 	var subject []string
+	// last is the object of each kind named most recently (J4).
+	last := map[string]string{}
 	for _, c := range clauses(answer) {
 		c = strings.ToLower(c) // nameIndex indexes the lower-cased text
 		var named []string
+		at := map[string]int{}
 		first := len(c)
 		for _, n := range known {
 			if i := nameIndex(c, n); i >= 0 {
 				named = append(named, n)
+				at[n] = i
 				first = min(first, i)
+			}
+		}
+		slices.SortFunc(named, func(a, b string) int { return at[a] - at[b] })
+		// J4: "The action ..." is about the object of that kind named last
+		// before it, or, when none was, about no object named before.
+		subj := subject
+		definite := false
+		if m := definiteStart.FindStringSubmatch(c); m != nil && kinds != nil {
+			definite = true
+			subj = nil
+			if n, ok := last[definiteKind[m[1]]]; ok {
+				subj = []string{n}
 			}
 		}
 		// Text before the first name in the clause is still about the
 		// previous subject ("It sets spec.minBatteryPct=20, and Robot/x ...").
-		if first > 0 && slices.Contains(subject, name) && containsWord(c[:first], value) {
+		if first > 0 && slices.Contains(subj, name) && containsWord(c[:first], value) {
 			return true
 		}
-		// J2: a clause that opens with a pronoun is also about the object
-		// named before it. A name in it is a value of that object when the
-		// value is that name ("It now has status.assignedRobot=sim-robot-002");
-		// otherwise only text before the first other name counts ("It holds
-		// sim-robot-001, which is Clear" says nothing about it). This only
-		// adds an acceptance: the v3 reading below is unchanged.
-		if len(named) > 0 && slices.Contains(subject, name) && pronounStart.MatchString(c) {
+		// J2: a clause that opens with a pronoun (J4: or a definite
+		// reference) is also about the object named before it. A name in it
+		// is a value of that object when the value is that name ("It now has
+		// status.assignedRobot=sim-robot-002"); otherwise only text before
+		// the first other name counts ("It holds sim-robot-001, which is
+		// Clear" says nothing about it), and (J5) a predicate joined by
+		// "and" after a name of another kind ("It is in the warehouse-a zone
+		// and is idle"). The v3 reading below is unchanged, except that J4
+		// gives a definite reference's clause to its own object rather than
+		// to the previous subject.
+		if len(named) > 0 && slices.Contains(subj, name) && (definite || pronounStart.MatchString(c)) {
 			for _, n := range named {
 				if strings.EqualFold(n, value) {
 					return true
@@ -274,9 +301,19 @@ func citesValue(answer, name, value string, known []string) bool {
 			if containsWord(c[:first], value) {
 				return true
 			}
+			if kinds != nil && andPredicate(c, name, value, named, at, kinds) {
+				return true
+			}
+		}
+		for _, n := range named {
+			if k, ok := kinds[n]; ok {
+				last[k] = n
+			}
 		}
 		if len(named) > 0 {
 			subject = named
+		} else if definite {
+			subject = subj
 		}
 		if !slices.Contains(subject, name) {
 			continue
@@ -292,6 +329,61 @@ func citesValue(answer, name, value string, known []string) bool {
 		}
 	}
 	return false
+}
+
+// definiteStart matches a clause that opens with a definite reference to a
+// kind ("The action requires ...", J4).
+var definiteStart = regexp.MustCompile(`^\s*[-*>\s]*the\s+(robot|action|fleetaction|task|fleettask|zone|fleetzone|adapter|fleetadapter|request|approvalrequest)\b`)
+
+var definiteKind = map[string]string{"robot": "Robot", "action": "FleetAction", "fleetaction": "FleetAction", "task": "FleetTask", "fleettask": "FleetTask",
+	"zone": "FleetZone", "fleetzone": "FleetZone", "adapter": "FleetAdapter", "fleetadapter": "FleetAdapter", "request": "ApprovalRequest", "approvalrequest": "ApprovalRequest"}
+
+// relative starts a relative clause, which belongs to the name before it.
+var relative = regexp.MustCompile(`\b(which|that|who|whose|where)\b`)
+
+// andPredicate is J5: after a name of another kind than name's, the clause
+// goes on with "and" ("It is in the warehouse-a zone and is idle"); the
+// text from there to the next name, up to a relative clause, is about the
+// pronoun's object.
+func andPredicate(c, name, value string, named []string, at map[string]int, kinds map[string]string) bool {
+	for i, n := range named {
+		if n == name || kinds[n] == "" || kinds[n] == kinds[name] {
+			continue
+		}
+		seg := c[at[n]+len(n):]
+		if i+1 < len(named) {
+			seg = c[at[n]+len(n) : at[named[i+1]]]
+		}
+		seg = strings.TrimLeft(seg, "`*\"' )")
+		for w, k := range definiteKind {
+			if k == kinds[n] && strings.HasPrefix(seg, w) {
+				seg = strings.TrimLeft(seg[len(w):], "`*\"' )")
+				break
+			}
+		}
+		rest, ok := strings.CutPrefix(seg, "and ")
+		if !ok {
+			continue
+		}
+		if loc := relative.FindStringIndex(rest); loc != nil {
+			rest = rest[:loc[0]]
+		}
+		if containsWord(rest, value) {
+			return true
+		}
+	}
+	return false
+}
+
+// objectKinds maps each object's name to its kind.
+func objectKinds(ob Observed) map[string]string {
+	out := map[string]string{}
+	for ref, ok := range ob.Existing {
+		if k, n, _ := strings.Cut(ref, "/"); ok && n != "" {
+			out[n] = k
+		}
+	}
+	return out
 }
 
 // pronounStart matches a clause that opens with a pronoun.
@@ -568,7 +660,7 @@ func judgeExplanation(s Scenario, tr agent.Trace, ob Observed) Criterion {
 		switch {
 		case !containsName(tr.Final, name):
 			fail("answer does not cite %s %s=%s (does not name %s)", f.Ref, f.Field, f.Value, name)
-		case !citesValue(tr.Final, name, f.Value, objectNames(ob)) && !citesCollectively(tr.Final, strings.SplitN(f.Ref, "/", 2)[0], f.Value, ob):
+		case !citesValue(tr.Final, name, f.Value, objectNames(ob), objectKinds(ob)) && !citesCollectively(tr.Final, strings.SplitN(f.Ref, "/", 2)[0], f.Value, ob):
 			fail("answer does not cite %s %s=%s (value %q not stated for %s)", f.Ref, f.Field, f.Value, f.Value, name)
 		}
 	}
