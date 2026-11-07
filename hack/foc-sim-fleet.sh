@@ -18,8 +18,8 @@
 #   2. the client certificates of sim-fleet-adapter-2 and -3 (the pinned
 #      tree's demo-ab-live overlay) and FleetAdapters with sim-fleet-adapter's
 #      spec;
-#   3. the port-forward and three adapters; logs in $FOC_UP_DIR/logs, PIDs in
-#      $FOC_UP_DIR/sim-fleet/pids; waits until every FleetAdapter is Connected;
+#   3. the port-forward and three adapters; logs in $DEMO_DIR/logs, PIDs in
+#      $DEMO_DIR/sim-fleet/pids; waits until every FleetAdapter is Connected;
 #   4. points sim-robot-002/003 at their adapters (Swarmada's Robot webhook
 #      admits only a Connected one) and waits until every Robot is live
 #      (Idle, or InProgress on work Swarmada gave it).
@@ -27,11 +27,11 @@
 # stop kills only the processes in the pidfile whose command line is still
 # the one recorded (a reused PID is left alone), adapters first.
 #
-#   CLUSTER=foc-up KUBECONFIG=<dedicated file> FOC_UP_DIR=<dir> hack/foc-sim-fleet.sh start
+#   CLUSTER=foc-up KUBECONFIG=<dedicated file> DEMO_DIR=<dir> hack/foc-sim-fleet.sh start
 #
 # Environment (optional): SWARMADA_NAMESPACE (default warehouse-a),
-# FOC_SIM_CS_PORT (local ControlStream port, default 19443),
-# FOC_SIM_READY_TIMEOUT (seconds, default 180).
+# FLEETOPS_SIM_CS_PORT (local ControlStream port, default 19443),
+# FLEETOPS_SIM_READY_TIMEOUT (seconds, default 180).
 set -euo pipefail
 
 repo="$(cd "$(dirname "$0")/.." && pwd)"
@@ -41,13 +41,13 @@ foc_guard foc-sim-fleet.sh
 export CLUSTER KUBECONFIG
 
 cmd="${1:-}"
-dir="${FOC_UP_DIR:-$HOME/.local/state/fleet-ops-copilot/foc-up}"
+dir="${DEMO_DIR:-$HOME/.local/state/fleet-ops-copilot/foc-up}"
 foc_outside_repo foc-sim-fleet.sh "$dir" "$repo"
 ctx="kind-$CLUSTER"
 ns="${SWARMADA_NAMESPACE:-warehouse-a}"
 mgr=system
-port="${FOC_SIM_CS_PORT:-19443}"
-timeout="${FOC_SIM_READY_TIMEOUT:-180}"
+port="${FLEETOPS_SIM_CS_PORT:-19443}"
+timeout="${FLEETOPS_SIM_READY_TIMEOUT:-180}"
 sw="$dir/swarmada"
 run="$dir/sim-fleet"
 logs="$dir/logs"

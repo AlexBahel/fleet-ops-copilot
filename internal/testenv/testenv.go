@@ -130,9 +130,9 @@ type Env struct {
 
 // SwarmadaDirEnv overrides where the Swarmada module (its config/crd/bases
 // and config/rbac) is read from.
-const SwarmadaDirEnv = "FOC_SWARMADA_DIR"
+const SwarmadaDirEnv = "FLEETOPS_SWARMADA_DIR"
 
-// SwarmadaDir returns the Swarmada module directory: $FOC_SWARMADA_DIR if
+// SwarmadaDir returns the Swarmada module directory: $FLEETOPS_SWARMADA_DIR if
 // set, else `go list -m -f '{{.Dir}}' github.com/swarmada/swarmada` (the
 // go.mod pin, or a local go.work that overrides it). No path is
 // stored in the repository.

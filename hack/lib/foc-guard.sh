@@ -51,7 +51,7 @@ foc_outside_repo() {
   real_d="$(cd "$probe" && pwd -P)$rest"
   real_repo="$(cd "$repo" && pwd -P)"
   if [[ "$real_d" == "$real_repo" || "$real_d" == "$real_repo"/* ]]; then
-    echo "$me: refused: FOC_UP_DIR '$real_d' is inside the repository '$real_repo'; it holds bearer tokens, use a directory outside it (default $HOME/.local/state/fleet-ops-copilot/foc-up)" >&2
+    echo "$me: refused: DEMO_DIR '$real_d' is inside the repository '$real_repo'; it holds bearer tokens, use a directory outside it (default $HOME/.local/state/fleet-ops-copilot/foc-up)" >&2
     exit 1
   fi
   mkdir -p "$d"

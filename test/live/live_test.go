@@ -24,14 +24,14 @@ limitations under the License.
 // Required environment (hack/live-approval-path.sh sets it):
 //
 //	KUBECONFIG                    kubeconfig holding both contexts below
-//	FOC_LIVE_ADMIN_CONTEXT        cluster-admin context (setup reads, tokens, kubectl exec)
-//	FOC_LIVE_APPROVER_CONTEXT     context of a person who authenticates with a bearer token (dana) and holds fleetops:approver and swarmada:fleet-manager
-//	FOC_LIVE_TOKENS_FILE          the people's static token file (hack/kind-people.sh gen): requests are filed with the
+//	FLEETOPS_LIVE_ADMIN_CONTEXT        cluster-admin context (setup reads, tokens, kubectl exec)
+//	FLEETOPS_LIVE_APPROVER_CONTEXT     context of a person who authenticates with a bearer token (dana) and holds fleetops:approver and swarmada:fleet-manager
+//	FLEETOPS_LIVE_TOKENS_FILE          the people's static token file (hack/kind-people.sh gen): requests are filed with the
 //	                              requester's own bearer token, so the requester is verified (D57, R43)
-//	FOC_LIVE_MCP_URL              fleetops-mcp streamable HTTP endpoint, e.g. http://127.0.0.1:18080/mcp
-//	FOC_LIVE_FOC                  path to the fleetops binary
-//	FOC_LIVE_PHASE                "no-webhooks" (Swarmada serves no admission webhooks) or "webhooks"
-//	FOC_LIVE_EVIDENCE_DIR         optional; the executor's audit file is copied there
+//	FLEETOPS_LIVE_MCP_URL              fleetops-mcp streamable HTTP endpoint, e.g. http://127.0.0.1:18080/mcp
+//	FLEETOPS_LIVE_FLEETOPS                  path to the fleetops binary
+//	FLEETOPS_LIVE_PHASE                "no-webhooks" (Swarmada serves no admission webhooks) or "webhooks"
+//	FLEETOPS_LIVE_EVIDENCE_DIR         optional; the executor's audit file is copied there
 package live
 
 import (
@@ -116,17 +116,17 @@ func mustEnv(t *testing.T, k string) string {
 
 func setup(t *testing.T, phase string) *env {
 	t.Helper()
-	if os.Getenv("FOC_LIVE_PHASE") != phase {
-		t.Skipf("FOC_LIVE_PHASE is not %q", phase)
+	if os.Getenv("FLEETOPS_LIVE_PHASE") != phase {
+		t.Skipf("FLEETOPS_LIVE_PHASE is not %q", phase)
 	}
 	e := &env{
-		adminCtx: mustEnv(t, "FOC_LIVE_ADMIN_CONTEXT"), approverCtx: mustEnv(t, "FOC_LIVE_APPROVER_CONTEXT"),
-		mcpURL: mustEnv(t, "FOC_LIVE_MCP_URL"), fleetopsBin: mustEnv(t, "FOC_LIVE_FOC"), evidence: os.Getenv("FOC_LIVE_EVIDENCE_DIR"),
+		adminCtx: mustEnv(t, "FLEETOPS_LIVE_ADMIN_CONTEXT"), approverCtx: mustEnv(t, "FLEETOPS_LIVE_APPROVER_CONTEXT"),
+		mcpURL: mustEnv(t, "FLEETOPS_LIVE_MCP_URL"), fleetopsBin: mustEnv(t, "FLEETOPS_LIVE_FLEETOPS"), evidence: os.Getenv("FLEETOPS_LIVE_EVIDENCE_DIR"),
 		session:  fmt.Sprintf("live-%d", time.Now().Unix()),
 		sessions: map[string]*mcp.ClientSession{},
 	}
 	var err error
-	if e.tokens, err = readTokens(mustEnv(t, "FOC_LIVE_TOKENS_FILE")); err != nil {
+	if e.tokens, err = readTokens(mustEnv(t, "FLEETOPS_LIVE_TOKENS_FILE")); err != nil {
 		t.Fatal(err)
 	}
 	if e.adminCfg, err = config.GetConfigWithContext(e.adminCtx); err != nil {
@@ -167,7 +167,7 @@ func (e *env) mcpSession(t *testing.T, person string) *mcp.ClientSession {
 	token := ""
 	if person != "" {
 		if token = e.tokens[person]; token == "" {
-			t.Fatalf("no token for %q in FOC_LIVE_TOKENS_FILE", person)
+			t.Fatalf("no token for %q in FLEETOPS_LIVE_TOKENS_FILE", person)
 		}
 	}
 	cs, err := mcp.NewClient(&mcp.Implementation{Name: "foc-live-test", Version: "0"}, nil).
@@ -817,11 +817,11 @@ func TestLiveApprovalPaths(t *testing.T) {
 
 // TestLiveSwarmadaAuditActor checks that Swarmada's own safety audit log
 // attributes every zone stop the executor performed to the executor's
-// ServiceAccount, with the approved reason. FOC_LIVE_SWARMADA_AUDIT_FILE is a
+// ServiceAccount, with the approved reason. FLEETOPS_LIVE_SWARMADA_AUDIT_FILE is a
 // copy of the manager's audit log (hack/live-approval-path.sh fetches it after
 // TestLiveApprovalPaths).
 func TestLiveSwarmadaAuditActor(t *testing.T) {
-	path := mustEnv(t, "FOC_LIVE_SWARMADA_AUDIT_FILE")
+	path := mustEnv(t, "FLEETOPS_LIVE_SWARMADA_AUDIT_FILE")
 	e := setup(t, "webhooks")
 	b, err := os.ReadFile(path)
 	if err != nil {

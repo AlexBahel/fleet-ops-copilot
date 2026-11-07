@@ -146,8 +146,8 @@ remove it.
   only activate uses `kubectl patch`, and the activator is then not recorded (BACKLOG-v4 P3).
 - **foc-up's simulated fleet is three host processes.** The Swarmada quickstart stops its sim
   adapter when it exits, so foc-up runs `hack/foc-sim-fleet.sh start`: one `sim_adapter.py` per
-  robot and one port-forward, in the background on the host (PIDs in `$FOC_UP_DIR/sim-fleet/pids`,
-  logs in `$FOC_UP_DIR/logs`), with sim-robot-002/003 moved to their own FleetAdapters
+  robot and one port-forward, in the background on the host (PIDs in `$DEMO_DIR/sim-fleet/pids`,
+  logs in `$DEMO_DIR/logs`), with sim-robot-002/003 moved to their own FleetAdapters
   (`sim-fleet-adapter-2`/`-3`, client certificates from Swarmada's `demo-ab-live` overlay), as the
   quickstart's all-live path does. If a process dies, the Robots go `Offline` and filing is refused
   (R65 check); `hack/foc-sim-fleet.sh start` again restarts them. `make foc-down` stops them.
@@ -219,7 +219,7 @@ remove it.
   `make foc-up`, D60); in production, OIDC.
 - **The kind person tokens are not an identity system (D60).** A static token file has no expiry
   and no rotation, and a change needs an API server restart. Anyone who can read
-  `$FOC_UP_DIR/people/tokens.csv` (mode 600) or the node's `/etc/foc-people` can act as sam, dana
+  `$DEMO_DIR/people/tokens.csv` (mode 600) or the node's `/etc/foc-people` can act as sam, dana
   or eve on that cluster. It exists for fictional people on a local cluster, and no other.
 - **Requester tokens (D57).** The token reaches `fleetops-mcp` through `fleetops-agent` over plain HTTP
   inside the cluster, and both processes briefly hold a credential that is valid against the API

@@ -107,7 +107,7 @@ in each results.json; the table "Unsafe-write containment" in the comparison). T
 72 of its 75 runs; none of them changed a Swarmada object, and 12 left a request that only a person
 could approve.
 
-**Install time.** `FOC_UP_TRACING=1 make foc-up` took **2m14s** (exit 0) from no cluster to a
+**Install time.** `DEMO_TRACING=1 make foc-up` took **2m14s** (exit 0) from no cluster to a
 running stack, on one Mac mini with Docker's caches already filled and fleetops-agent not started (no
 API key Secret); a second run took 2m20s. A cold machine has not been timed. Conditions and per-stage
 times: [`docs/evidence/foc-up-2026-11-05/`](docs/evidence/foc-up-2026-11-05/README.md).
@@ -153,7 +153,7 @@ key never appears on a command line:
 
 ```bash
 (umask 077; pbpaste > ~/foc-key.txt)            # copy the key from the Claude Console first
-FOC_UP_ANTHROPIC_KEY_FILE=~/foc-key.txt make foc-up   # about 2 minutes on a Mac mini with warm image caches
+DEMO_ANTHROPIC_KEY_FILE=~/foc-key.txt make foc-up   # about 2 minutes on a Mac mini with warm image caches
 rm ~/foc-key.txt
 ```
 
@@ -161,7 +161,7 @@ rm ~/foc-key.txt
 pins, turns on Swarmada's admission webhooks, keeps the simulated fleet's three robots live (one
 sim adapter per robot, in the background; `make foc-down` stops them), installs the chart into `fleetops-system`, and creates
 three fictional people with test-only tokens: **sam**, **dana** and **eve**. The last line is the
-total time. Everything it keeps is in `~/.local/state/fleet-ops-copilot/foc-up` (`$FOC_UP_DIR`),
+total time. Everything it keeps is in `~/.local/state/fleet-ops-copilot/foc-up` (`$DEMO_DIR`),
 outside the repository; it never reads or writes `~/.kube/config`. Without a key file, plain
 `make foc-up` starts everything except fleetops-agent.
 
@@ -329,8 +329,8 @@ The audit files are lost with the pods, so copy them first (RUNBOOK section 4).
 ### Other commands
 
 ```bash
-FOC_UP_DRY_RUN=1 make foc-up   # print every command that would change anything; run none
-FOC_UP_TRACING=1 make foc-up   # also install the development trace backend (RUNBOOK section 8)
+DEMO_DRY_RUN=1 make foc-up   # print every command that would change anything; run none
+DEMO_TRACING=1 make foc-up   # also install the development trace backend (RUNBOOK section 8)
 make foc-live                  # live approval paths on the foc-up stack, requests filed with sam's own token
 ```
 

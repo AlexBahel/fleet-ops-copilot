@@ -26,7 +26,7 @@ limitations under the License.
 // environment) with -model and -effort; it is a measurement, so failed runs
 // are recorded, not fatal. With the -price-* flags it adds the cost.
 // -backend llamacpp calls llama-server at -llama-url (default
-// $FOC_LLAMACPP_URL); also a measurement, with no dollar cost. It records
+// $FLEETOPS_LLAMACPP_URL); also a measurement, with no dollar cost. It records
 // llama-server's GET /props (context size, slots, build) in backendSettings,
 // and with -llama-context the Deployment's arguments and resources, the
 // threads the server logged, and the node's capacity (ruling R41).

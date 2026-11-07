@@ -46,13 +46,13 @@ func run(t *testing.T, dir string, name string, args ...string) (string, error) 
 
 func TestBinariesRunAsNonRootWhateverTheUmask(t *testing.T) {
 	if _, err := exec.LookPath("docker"); err != nil {
-		if os.Getenv("FOC_IMAGE_TEST_REQUIRED") == "1" {
-			t.Fatal("docker is required (FOC_IMAGE_TEST_REQUIRED=1)")
+		if os.Getenv("FLEETOPS_IMAGE_TEST_REQUIRED") == "1" {
+			t.Fatal("docker is required (FLEETOPS_IMAGE_TEST_REQUIRED=1)")
 		}
 		t.Skip("docker not found")
 	}
 	if out, err := run(t, ".", "docker", "info"); err != nil {
-		if os.Getenv("FOC_IMAGE_TEST_REQUIRED") == "1" {
+		if os.Getenv("FLEETOPS_IMAGE_TEST_REQUIRED") == "1" {
 			t.Fatalf("docker daemon: %v\n%s", err, out)
 		}
 		t.Skip("docker daemon not reachable")

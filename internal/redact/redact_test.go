@@ -23,8 +23,8 @@ import (
 
 func TestRedactsEnvValuesAndPatterns(t *testing.T) {
 	t.Setenv("ANTHROPIC_API_KEY", "test-value-not-a-real-key-1234")
-	t.Setenv("FOC_EXTRA_SECRET", "another-secret-value")
-	r := FromEnv("FOC_EXTRA_SECRET")
+	t.Setenv("FLEETOPS_EXTRA_SECRET", "another-secret-value")
+	r := FromEnv("FLEETOPS_EXTRA_SECRET")
 	in := "key=test-value-not-a-real-key-1234 extra=another-secret-value " +
 		"auth=Bearer abc.def-ghi jwt=eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4eXoifQ.c2lnbmF0dXJl " +
 		"anth=sk-ant-api03-ABCDEFGHIJKLMNOP"

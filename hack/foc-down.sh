@@ -17,11 +17,11 @@ repo="$(cd "$(dirname "$0")/.." && pwd)"
 source "$repo/hack/lib/foc-guard.sh"
 foc_guard foc-down.sh
 export CLUSTER KUBECONFIG
-dir="${FOC_UP_DIR:-$HOME/.local/state/fleet-ops-copilot/foc-up}"
+dir="${DEMO_DIR:-$HOME/.local/state/fleet-ops-copilot/foc-up}"
 foc_outside_repo foc-down.sh "$dir" "$repo"
 
 # R73: the sim fleet's adapters and port-forward first.
-FOC_UP_DIR="$dir" "$repo/hack/foc-sim-fleet.sh" stop
+DEMO_DIR="$dir" "$repo/hack/foc-sim-fleet.sh" stop
 if [[ -f "$dir/swarmada/examples/warehouse-quickstart/run.sh" ]]; then
   (cd "$dir/swarmada" && QUICKSTART_CLUSTER="$CLUSTER" bash examples/warehouse-quickstart/run.sh --clean)
 fi

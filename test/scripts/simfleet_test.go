@@ -68,7 +68,7 @@ sleep 300 & wait
 	if err := os.WriteFile(filepath.Join(work, "swarmada", "adapters", "simulation", "sim_adapter.py"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	vars := map[string]string{"CLUSTER": "foc-test-1", "KUBECONFIG": e.dedicated(t), "FOC_UP_DIR": work, "FOC_SIM_READY_TIMEOUT": "3"}
+	vars := map[string]string{"CLUSTER": "foc-test-1", "KUBECONFIG": e.dedicated(t), "DEMO_DIR": work, "FLEETOPS_SIM_READY_TIMEOUT": "3"}
 	return e, work, vars
 }
 
@@ -109,7 +109,7 @@ func waitDead(pid int) bool {
 }
 
 // R73: start keeps one adapter per robot and one port-forward running in the
-// background, records their PIDs and logs under FOC_UP_DIR, creates the
+// background, records their PIDs and logs under DEMO_DIR, creates the
 // labelled RobotClass and the two extra FleetAdapters, and stop ends exactly
 // those processes.
 func TestSimFleetStartStop(t *testing.T) {

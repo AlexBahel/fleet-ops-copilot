@@ -70,13 +70,13 @@ func TestBackendFactory(t *testing.T) {
 	}
 
 	t.Setenv("ANTHROPIC_API_KEY", "test-value-not-a-real-key-1234")
-	t.Setenv("FOC_CLAUDE_MODEL", "claude-opus-5-5")
+	t.Setenv("FLEETOPS_CLAUDE_MODEL", "claude-opus-5-5")
 	_, name, err := backendFactory(config{backend: "claude", effort: "medium"})
 	if err != nil || name != "claude:claude-opus-5-5" {
 		t.Fatalf("%q %v", name, err)
 	}
 	if _, name, _ := backendFactory(config{backend: "claude", model: "claude-sonnet-5-5"}); name != "claude:claude-sonnet-5-5" {
-		t.Fatalf("-model does not override FOC_CLAUDE_MODEL: %q", name)
+		t.Fatalf("-model does not override FLEETOPS_CLAUDE_MODEL: %q", name)
 	}
 	_, name, err = backendFactory(config{backend: "llamacpp", llamaURL: "http://llama-server:8080"})
 	if err != nil || name != "llamacpp:"+llm.DefaultLlamaCppModel {

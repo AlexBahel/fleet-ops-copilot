@@ -4,7 +4,7 @@ Manifests for running the copilot's language model inside the cluster
 (`docs/DESIGN.md` §2, §3.5, §3.7). The model is Qwen2.5-7B-Instruct (GGUF,
 Q4_K_M, two shards) served by `llama-server`. The agent calls it through
 `internal/llm/llamacpp.go`, which uses the OpenAI-compatible
-`/v1/chat/completions` endpoint; the base URL comes from `FOC_LLAMACPP_URL`.
+`/v1/chat/completions` endpoint; the base URL comes from `FLEETOPS_LLAMACPP_URL`.
 No credential is involved.
 
 **Status:** the manifests are checked against the Kubernetes schemas with

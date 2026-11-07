@@ -93,25 +93,25 @@ test-live: build ## Approval paths against a live cluster (hack/live-approval-pa
 # ---- foc-up: an empty machine to a running stack on kind --------------------
 # Needs Docker, kind, kubectl, helm, jq, openssl, python3 (for Swarmada's live
 # quickstart). Every command names the dedicated kubeconfig below and the
-# context kind-$(FOC_CLUSTER); ~/.kube/config is never read or written
-# (hack/lib/foc-guard.sh). FOC_UP_* variables (hack/foc-up.sh header) pass through
-# from the environment: FOC_UP_DRY_RUN=1, FOC_UP_TRACING=1, FOC_UP_ANTHROPIC_KEY_FILE.
-FOC_CLUSTER ?= foc-up
+# context kind-$(FLEETOPS_CLUSTER); ~/.kube/config is never read or written
+# (hack/lib/foc-guard.sh). DEMO_* variables (hack/foc-up.sh header) pass through
+# from the environment: DEMO_DRY_RUN=1, DEMO_TRACING=1, DEMO_ANTHROPIC_KEY_FILE.
+FLEETOPS_CLUSTER ?= foc-up
 # Outside the repository on purpose: it holds the people's bearer tokens (the scripts refuse a directory inside it).
-FOC_UP_DIR ?= $(HOME)/.local/state/fleet-ops-copilot/foc-up
-FOC_KUBECONFIG ?= $(FOC_UP_DIR)/kubeconfig
+DEMO_DIR ?= $(HOME)/.local/state/fleet-ops-copilot/foc-up
+FLEETOPS_KUBECONFIG ?= $(DEMO_DIR)/kubeconfig
 # Compared with the base revision: BASE=<revision> (default: merge base with origin/main).
 BASE ?=
 
-foc-up: ## kind cluster foc-up with person tokens, Swarmada quickstart at the go.mod pin, its webhooks, the chart, health checks; prints the elapsed time (FOC_UP_DRY_RUN=1 prints the plan)
-	CLUSTER=$(FOC_CLUSTER) KUBECONFIG=$(FOC_KUBECONFIG) FOC_UP_DIR=$(FOC_UP_DIR) hack/foc-up.sh
+foc-up: ## kind cluster foc-up with person tokens, Swarmada quickstart at the go.mod pin, its webhooks, the chart, health checks; prints the elapsed time (DEMO_DRY_RUN=1 prints the plan)
+	CLUSTER=$(FLEETOPS_CLUSTER) KUBECONFIG=$(FLEETOPS_KUBECONFIG) DEMO_DIR=$(DEMO_DIR) hack/foc-up.sh
 
 foc-down: ## Remove the foc-up cluster, its kubeconfig and the people's tokens
-	CLUSTER=$(FOC_CLUSTER) KUBECONFIG=$(FOC_KUBECONFIG) FOC_UP_DIR=$(FOC_UP_DIR) hack/foc-down.sh
+	CLUSTER=$(FLEETOPS_CLUSTER) KUBECONFIG=$(FLEETOPS_KUBECONFIG) DEMO_DIR=$(DEMO_DIR) hack/foc-down.sh
 
 foc-live: build ## Live approval paths on the foc-up stack, requests filed by sam's verified token (phase webhooks)
-	CLUSTER=$(FOC_CLUSTER) KUBECONFIG=$(FOC_KUBECONFIG) PHASE=webhooks WORK=$(FOC_UP_DIR)/live \
-		TOKENS_FILE=$(FOC_UP_DIR)/people/tokens.csv EVIDENCE_DIR=$(FOC_UP_DIR)/live hack/live-approval-path.sh
+	CLUSTER=$(FLEETOPS_CLUSTER) KUBECONFIG=$(FLEETOPS_KUBECONFIG) PHASE=webhooks WORK=$(DEMO_DIR)/live \
+		TOKENS_FILE=$(DEMO_DIR)/people/tokens.csv EVIDENCE_DIR=$(DEMO_DIR)/live hack/live-approval-path.sh
 
 baseline-lowered: ## Print a warning for every category evals/baseline.json lowers against BASE (what CI annotates)
 	$(GO) run ./scripts/baseline-lowered $(if $(BASE),-base $(BASE))

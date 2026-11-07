@@ -37,15 +37,15 @@ const (
 	// EnvLlamaCppURL names the environment variable that holds the server base
 	// URL, for example http://llama-server.fleetops-system.svc:8080. No credential
 	// is involved.
-	EnvLlamaCppURL = "FOC_LLAMACPP_URL"
+	EnvLlamaCppURL = "FLEETOPS_LLAMACPP_URL"
 	// EnvLlamaCppTemperature overrides DefaultLlamaCppTemperature.
-	EnvLlamaCppTemperature = "FOC_LLAMACPP_TEMPERATURE"
+	EnvLlamaCppTemperature = "FLEETOPS_LLAMACPP_TEMPERATURE"
 	// EnvLlamaCppTopP, EnvLlamaCppTopK and EnvLlamaCppRepeatPenalty set
 	// top_p, top_k and repeat_penalty. Unset, the field is not sent and
 	// llama-server uses its own default.
-	EnvLlamaCppTopP          = "FOC_LLAMACPP_TOP_P"
-	EnvLlamaCppTopK          = "FOC_LLAMACPP_TOP_K"
-	EnvLlamaCppRepeatPenalty = "FOC_LLAMACPP_REPEAT_PENALTY"
+	EnvLlamaCppTopP          = "FLEETOPS_LLAMACPP_TOP_P"
+	EnvLlamaCppTopK          = "FLEETOPS_LLAMACPP_TOP_K"
+	EnvLlamaCppRepeatPenalty = "FLEETOPS_LLAMACPP_REPEAT_PENALTY"
 
 	// DefaultLlamaCppModel only labels results: llama-server serves the one model
 	// it was started with and ignores the request's model field.
@@ -151,10 +151,10 @@ func (t *LlamaTimings) add(t2 LlamaTimings) {
 }
 
 // NewLlamaCpp builds the backend. An empty baseURL is read from
-// FOC_LLAMACPP_URL; an empty model becomes DefaultLlamaCppModel. The
-// temperature comes from FOC_LLAMACPP_TEMPERATURE when set, and top_p, top_k
-// and repeat_penalty from FOC_LLAMACPP_TOP_P, FOC_LLAMACPP_TOP_K and
-// FOC_LLAMACPP_REPEAT_PENALTY.
+// FLEETOPS_LLAMACPP_URL; an empty model becomes DefaultLlamaCppModel. The
+// temperature comes from FLEETOPS_LLAMACPP_TEMPERATURE when set, and top_p, top_k
+// and repeat_penalty from FLEETOPS_LLAMACPP_TOP_P, FLEETOPS_LLAMACPP_TOP_K and
+// FLEETOPS_LLAMACPP_REPEAT_PENALTY.
 func NewLlamaCpp(baseURL, model string) (*LlamaCpp, error) {
 	if baseURL == "" {
 		baseURL = os.Getenv(EnvLlamaCppURL)

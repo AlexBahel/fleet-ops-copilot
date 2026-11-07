@@ -29,7 +29,7 @@ import (
 const Mask = "[REDACTED]"
 
 // DefaultSecretEnv names environment variables whose values are always masked.
-var DefaultSecretEnv = []string{"ANTHROPIC_API_KEY", "FOC_LLM_API_KEY", "OTEL_EXPORTER_OTLP_HEADERS"}
+var DefaultSecretEnv = []string{"ANTHROPIC_API_KEY", "FLEETOPS_LLM_API_KEY", "OTEL_EXPORTER_OTLP_HEADERS"}
 
 var patterns = []*regexp.Regexp{
 	regexp.MustCompile(`sk-ant-[A-Za-z0-9_\-]{8,}`),                                  // Anthropic API keys

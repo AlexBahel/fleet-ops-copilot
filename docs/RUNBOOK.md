@@ -22,14 +22,14 @@ kubectl, helm 3.8+, jq, openssl, curl, make, Go and python3 (Swarmada's live qui
 simulated adapter with the first `python3` on `PATH`, which must import `grpc` and
 `google.protobuf`; `make foc-up` checks this before it creates anything and stops with the fix,
 R59, D82). Everything it keeps (kubeconfig, the people's tokens and kubeconfigs, the
-Swarmada copy, logs) is in `$FOC_UP_DIR`, by default `~/.local/state/fleet-ops-copilot/foc-up`,
+Swarmada copy, logs) is in `$DEMO_DIR`, by default `~/.local/state/fleet-ops-copilot/foc-up`,
 **outside the repository**; the scripts refuse a directory inside it. It never reads or writes
 `~/.kube/config`:
 
 ```bash
 make foc-up                       # prints the plan's stages and, at the end, the elapsed time
-FOC_UP_DRY_RUN=1 make foc-up      # prints every command that would change anything, runs none
-FOC_UP_TRACING=1 make foc-up      # also installs the optional trace backend (section 8)
+DEMO_DRY_RUN=1 make foc-up      # prints every command that would change anything, runs none
+DEMO_TRACING=1 make foc-up      # also installs the optional trace backend (section 8)
 make foc-down                     # removes cluster foc-up, its kubeconfig and the people's tokens
 ```
 
@@ -40,8 +40,8 @@ What it does, in order (each stage prints its elapsed time; the total is the las
 2. Checks that sam's, dana's and eve's tokens authenticate as sam, dana and eve. If the cluster
    already existed without the token configuration this fails at once: run `make foc-down foc-up`.
 3. Runs Swarmada's warehouse quickstart (`examples/warehouse-quickstart/run.sh`, scenario
-   `healthy-fleet`, `FOC_UP_SCENARIO` to change it) from a writable copy of the module at the
-   commit `go.mod` pins, in `$FOC_UP_DIR/swarmada`. It builds Swarmada's controller image and
+   `healthy-fleet`, `DEMO_SCENARIO` to change it) from a writable copy of the module at the
+   commit `go.mod` pins, in `$DEMO_DIR/swarmada`. It builds Swarmada's controller image and
    leaves a simulated adapter and a port-forward running in the background; `make foc-down`
    stops them.
 4. Turns on Swarmada's admission webhooks (`config/controlstream-tls`, section 6) and runs
@@ -49,15 +49,15 @@ What it does, in order (each stage prints its elapsed time; the total is the las
    adapter when it exits, so `hack/foc-sim-fleet.sh start` keeps the fleet live: RobotClass
    `simbot-v1` (a labelled demo workaround: the quickstart names it but does not ship it), one
    FleetAdapter identity per robot, and one `sim_adapter.py` per robot plus a port-forward in the
-   background (PIDs `$FOC_UP_DIR/sim-fleet/pids`, logs `$FOC_UP_DIR/logs/sim-adapter-*.log`). It
+   background (PIDs `$DEMO_DIR/sim-fleet/pids`, logs `$DEMO_DIR/logs/sim-adapter-*.log`). It
    waits until every Robot is live (`Idle`, or `InProgress` on the quickstart's pending work). If the Robots go `Offline` later, run
-   `CLUSTER=foc-up KUBECONFIG=$FOC_UP_DIR/kubeconfig hack/foc-sim-fleet.sh start` again.
+   `CLUSTER=foc-up KUBECONFIG=$DEMO_DIR/kubeconfig hack/foc-sim-fleet.sh start` again.
 5. Builds the copilot image, loads it into the cluster, applies the CRDs and installs the chart
    into `fleetops-system`; binds the people's roles in `warehouse-a`.
 6. Checks health: fleetops-mcp and fleetops-approvals rollouts, fleetops-mcp's `/healthz`, and, if the Secret
    `fleet-ops-copilot-claude` exists, fleetops-agent. Without the Secret fleetops-agent does not start and
    the script says so. To create it from a key file you hold (nothing calls the model):
-   `FOC_UP_ANTHROPIC_KEY_FILE=key.txt make foc-up`, or section 2.
+   `DEMO_ANTHROPIC_KEY_FILE=key.txt make foc-up`, or section 2.
 
 Then `make foc-live` runs the live approval paths with requests filed by sam's and dana's own
 tokens (verified requesters, section 7). It needs `bin/fleetops` (built by the target).
@@ -149,7 +149,7 @@ fleetops chat --context $CTX "put aisle B into maintenance after this wave"
 
 A kubeconfig user that authenticates with a client certificate (kind's default admin) has no bearer
 token, so its requests are unverified; `fleetops chat` says so. On a `make foc-up` cluster use a
-person's token kubeconfig: `KUBECONFIG=$FOC_UP_DIR/persons/sam.kubeconfig fleetops chat --context
+person's token kubeconfig: `KUBECONFIG=$DEMO_DIR/persons/sam.kubeconfig fleetops chat --context
 sam@foc-up "..."` (section 7). `fleetops chat` sends the token only over https or
 to a loopback address. fleetops-mcp never stores, logs or traces the token; it keeps a SHA-256 of it for 30
 seconds as a cache key. Between fleetops-agent and fleetops-mcp the token travels in the cluster over plain HTTP.
@@ -351,17 +351,17 @@ that can only be rejected. Two ways to give people tokens:
 `make foc-up` makes the fictional people **sam** (group `supervisors`; `fleetops:approver`,
 `swarmada:operator`), **dana** (`fleet-ops`; `fleetops:approver`, `swarmada:fleet-manager`) and
 **eve** (`auditors`; `fleetops:approver`), the same as envtest's. `hack/kind-people.sh gen` writes
-`$FOC_UP_DIR/people/tokens.csv` (mode 600, a new random token per cluster; `$FOC_UP_DIR` is
+`$DEMO_DIR/people/tokens.csv` (mode 600, a new random token per cluster; `$DEMO_DIR` is
 outside the repository, by default `~/.local/state/fleet-ops-copilot/foc-up`, and `kind-people.sh gen`
 refuses a directory inside it, so the tokens cannot be committed by accident), the kind
 configuration mounts it into the node and gives it to the API server (`--token-auth-file`), and
-`hack/kind-people.sh kubeconfig` writes `$FOC_UP_DIR/persons/<name>.kubeconfig`, context
+`hack/kind-people.sh kubeconfig` writes `$DEMO_DIR/persons/<name>.kubeconfig`, context
 `<name>@foc-up`, holding the person's token. The token is never printed or put on a command line.
 
 ```bash
-KUBECONFIG=$FOC_UP_DIR/persons/sam.kubeconfig kubectl --context sam@foc-up auth whoami
-KUBECONFIG=$FOC_UP_DIR/persons/sam.kubeconfig bin/fleetops chat --context sam@foc-up "put aisle B into maintenance"
-KUBECONFIG=$FOC_UP_DIR/persons/dana.kubeconfig bin/fleetops approve <request> -n warehouse-a --context dana@foc-up
+KUBECONFIG=$DEMO_DIR/persons/sam.kubeconfig kubectl --context sam@foc-up auth whoami
+KUBECONFIG=$DEMO_DIR/persons/sam.kubeconfig bin/fleetops chat --context sam@foc-up "put aisle B into maintenance"
+KUBECONFIG=$DEMO_DIR/persons/dana.kubeconfig bin/fleetops approve <request> -n warehouse-a --context dana@foc-up
 ```
 
 This is not an identity system: a static token never expires, cannot be revoked without

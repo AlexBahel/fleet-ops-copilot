@@ -38,9 +38,9 @@ pf=$!
 trap 'kill $pf 2>/dev/null || true' EXIT
 for _ in $(seq 30); do curl -sf http://127.0.0.1:18080/healthz >/dev/null && break; sleep 1; done
 export KUBECONFIG="$KUBECONFIG:$pk"
-export FOC_LIVE_ADMIN_CONTEXT="$ctx" FOC_LIVE_APPROVER_CONTEXT="$approver@$CLUSTER" FOC_LIVE_TOKENS_FILE="$TOKENS_FILE" \
-  FOC_LIVE_MCP_URL=http://127.0.0.1:18080/mcp FOC_LIVE_FOC="$repo/bin/fleetops" FOC_LIVE_PHASE="$PHASE" \
-  FOC_LIVE_EVIDENCE_DIR="${EVIDENCE_DIR:-}"
+export FLEETOPS_LIVE_ADMIN_CONTEXT="$ctx" FLEETOPS_LIVE_APPROVER_CONTEXT="$approver@$CLUSTER" FLEETOPS_LIVE_TOKENS_FILE="$TOKENS_FILE" \
+  FLEETOPS_LIVE_MCP_URL=http://127.0.0.1:18080/mcp FLEETOPS_LIVE_FLEETOPS="$repo/bin/fleetops" FLEETOPS_LIVE_PHASE="$PHASE" \
+  FLEETOPS_LIVE_EVIDENCE_DIR="${EVIDENCE_DIR:-}"
 cd "$repo"
 rc=0
 make test-live || rc=$?
@@ -55,6 +55,6 @@ if [[ "$PHASE" == webhooks ]]; then
   done
   audit="${EVIDENCE_DIR:-$WORK}/swarmada-safety-audit.jsonl"
   kubectl --context "$ctx" -n system exec "$pod" -c "$probe" -- cat /audit/audit.jsonl >"$audit"
-  FOC_LIVE_SWARMADA_AUDIT_FILE="$audit" go test -tags live -count=1 -v -run TestLiveSwarmadaAuditActor ./test/live/... || rc=$?
+  FLEETOPS_LIVE_SWARMADA_AUDIT_FILE="$audit" go test -tags live -count=1 -v -run TestLiveSwarmadaAuditActor ./test/live/... || rc=$?
 fi
 exit $rc

@@ -82,7 +82,7 @@ var scripts = []script{
 		// A dry run: it prints the plan and runs no external command at all.
 		path: "hack/foc-up.sh",
 		vars: func(t *testing.T, e env) map[string]string {
-			return map[string]string{"FOC_UP_DRY_RUN": "1", "FOC_UP_DIR": t.TempDir()}
+			return map[string]string{"DEMO_DRY_RUN": "1", "DEMO_DIR": t.TempDir()}
 		},
 		accept: func(t *testing.T, calls []string) {
 			if len(calls) != 0 {
@@ -93,7 +93,7 @@ var scripts = []script{
 	{
 		path: "hack/foc-down.sh",
 		vars: func(t *testing.T, e env) map[string]string {
-			return map[string]string{"FOC_UP_DIR": t.TempDir()}
+			return map[string]string{"DEMO_DIR": t.TempDir()}
 		},
 		accept: func(t *testing.T, calls []string) {
 			// No cluster of that name and no Swarmada copy: nothing to remove.

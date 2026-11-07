@@ -47,7 +47,7 @@ comes from an existing Secret; the chart never holds its value.
     secretKeyRef:
       name: {{ .Values.llm.cloud.apiKeySecretRef.name }}
       key: {{ .Values.llm.cloud.apiKeySecretRef.key }}
-- name: FOC_CLAUDE_MODEL
+- name: FLEETOPS_CLAUDE_MODEL
   value: {{ .Values.llm.cloud.model | quote }}
 {{- end -}}
 

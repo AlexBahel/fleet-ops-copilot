@@ -319,7 +319,7 @@ func TestKindConfigTemplate(t *testing.T) {
 	}
 }
 
-// make foc-up with FOC_UP_DRY_RUN=1 prints the plan: the steps in order, the
+// make foc-up with DEMO_DRY_RUN=1 prints the plan: the steps in order, the
 // kubeconfig and context on every kubectl and helm line, Swarmada's webhook
 // overlay, the chart, and creates the token file and kind configuration.
 func TestFocUpDryRunPlan(t *testing.T) {
@@ -327,7 +327,7 @@ func TestFocUpDryRunPlan(t *testing.T) {
 	work := t.TempDir()
 	kc := e.dedicated(t)
 	out, err := e.runScript(t, "hack/foc-up.sh", map[string]string{
-		"CLUSTER": "foc-test-1", "KUBECONFIG": kc, "FOC_UP_DIR": work, "FOC_UP_DRY_RUN": "1", "FOC_UP_TRACING": "1",
+		"CLUSTER": "foc-test-1", "KUBECONFIG": kc, "DEMO_DIR": work, "DEMO_DRY_RUN": "1", "DEMO_TRACING": "1",
 	})
 	if err != nil {
 		t.Fatalf("dry run failed: %v\n%s", err, out)
@@ -386,7 +386,7 @@ func TestTokenDirectoryMustBeOutsideRepo(t *testing.T) {
 	t.Cleanup(func() { _ = os.RemoveAll(inside) })
 	e := newEnv(t)
 	kc := e.dedicated(t)
-	vars := map[string]string{"CLUSTER": "foc-test-1", "KUBECONFIG": kc, "FOC_UP_DIR": inside, "FOC_UP_DRY_RUN": "1"}
+	vars := map[string]string{"CLUSTER": "foc-test-1", "KUBECONFIG": kc, "DEMO_DIR": inside, "DEMO_DRY_RUN": "1"}
 	for _, c := range []struct {
 		name, script string
 		args         []string
@@ -418,14 +418,14 @@ func TestTokenDirectoryMustBeOutsideRepo(t *testing.T) {
 		t.Error("a refused run still created a directory inside the repository")
 	}
 	if _, err := os.Stat(inside); err == nil {
-		t.Error("a refused run still created FOC_UP_DIR inside the repository")
+		t.Error("a refused run still created DEMO_DIR inside the repository")
 	}
 }
 
-// Without FOC_UP_DIR the default is outside the repository.
+// Without DEMO_DIR the default is outside the repository.
 func TestFocUpDefaultDirectoryIsOutsideRepo(t *testing.T) {
 	e := newEnv(t)
-	out, err := e.runScript(t, "hack/foc-up.sh", map[string]string{"CLUSTER": "foc-test-1", "KUBECONFIG": e.dedicated(t), "FOC_UP_DRY_RUN": "1"})
+	out, err := e.runScript(t, "hack/foc-up.sh", map[string]string{"CLUSTER": "foc-test-1", "KUBECONFIG": e.dedicated(t), "DEMO_DRY_RUN": "1"})
 	if err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}
@@ -449,7 +449,7 @@ func TestFocUpStopsWhenQuickstartPythonLacksGrpc(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(e.stubs, "python3"), []byte(py), 0o700); err != nil { //nolint:gosec // G306: executable stub in t.TempDir()
 		t.Fatal(err)
 	}
-	out, err := e.runScript(t, "hack/foc-up.sh", map[string]string{"CLUSTER": "foc-test-1", "KUBECONFIG": e.dedicated(t), "FOC_UP_DIR": t.TempDir()})
+	out, err := e.runScript(t, "hack/foc-up.sh", map[string]string{"CLUSTER": "foc-test-1", "KUBECONFIG": e.dedicated(t), "DEMO_DIR": t.TempDir()})
 	if err == nil || !strings.Contains(out, "cannot import grpc and google.protobuf") || !strings.Contains(out, "pip install grpcio protobuf") {
 		t.Fatalf("want a stop naming the missing packages, got err=%v\n%s", err, out)
 	}

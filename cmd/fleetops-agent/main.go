@@ -24,8 +24,8 @@ limitations under the License.
 // resources, and it cannot decide a request. The page shows the command a
 // person runs to decide one.
 //
-//	fleetops-agent -backend claude   (ANTHROPIC_API_KEY; model from -model or FOC_CLAUDE_MODEL)
-//	fleetops-agent -backend llamacpp (-llama-url or FOC_LLAMACPP_URL)
+//	fleetops-agent -backend claude   (ANTHROPIC_API_KEY; model from -model or FLEETOPS_CLAUDE_MODEL)
+//	fleetops-agent -backend llamacpp (-llama-url or FLEETOPS_LLAMACPP_URL)
 //	fleetops-agent -backend scripted -script steps.json   (fixed turns, for demos and tests)
 package main
 
@@ -75,7 +75,7 @@ func parseFlags(args []string) (config, error) {
 	fs.StringVar(&c.listen, "listen", ":8090", "HTTP address for the web UI, /healthz and /readyz")
 	fs.StringVar(&c.mcpURL, "mcp-url", "http://fleetops-mcp:8080/mcp", "fleetops-mcp streamable HTTP endpoint")
 	fs.StringVar(&c.backend, "backend", "claude", "model backend: claude, llamacpp or scripted")
-	fs.StringVar(&c.model, "model", "", "claude: model id (default $FOC_CLAUDE_MODEL, else "+llm.DefaultClaudeModel+"); llamacpp: label of the served model (default "+llm.DefaultLlamaCppModel+")")
+	fs.StringVar(&c.model, "model", "", "claude: model id (default $FLEETOPS_CLAUDE_MODEL, else "+llm.DefaultClaudeModel+"); llamacpp: label of the served model (default "+llm.DefaultLlamaCppModel+")")
 	fs.StringVar(&c.effort, "effort", llm.DefaultClaudeEffort, "claude: output_config.effort")
 	fs.StringVar(&c.llamaURL, "llama-url", "", "llamacpp: llama-server base URL (default $"+llm.EnvLlamaCppURL+")")
 	fs.StringVar(&c.script, "script", "", "scripted: JSON file {\"steps\":[{\"calls\":[{\"name\":..,\"args\":{..}}]},{\"final\":..}]}, replayed from the start for every conversation")
@@ -116,7 +116,7 @@ func backendFactory(c config) (func() (llm.Backend, error), string, error) {
 	case "claude":
 		model := c.model
 		if model == "" {
-			model = os.Getenv("FOC_CLAUDE_MODEL")
+			model = os.Getenv("FLEETOPS_CLAUDE_MODEL")
 		}
 		b, err := llm.NewClaude(model, c.effort)
 		if err != nil {

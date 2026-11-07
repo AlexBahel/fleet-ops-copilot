@@ -78,7 +78,7 @@ jobs:
       - name: Image binaries run as the non-root user
         run: make test-image
         env:
-          FOC_IMAGE_TEST_REQUIRED: "1"
+          FLEETOPS_IMAGE_TEST_REQUIRED: "1"
       - uses: actions/upload-artifact@v7
         if: always()
         with:

@@ -28,16 +28,16 @@
 # kubeconfig and the context kind-$CLUSTER.
 #
 # Environment (all optional):
-#   FOC_UP_DIR               working directory (default ~/.local/state/fleet-ops-copilot/foc-up, outside the repository: it holds tokens): people/ (tokens), persons/ (kubeconfigs),
+#   DEMO_DIR               working directory (default ~/.local/state/fleet-ops-copilot/foc-up, outside the repository: it holds tokens): people/ (tokens), persons/ (kubeconfigs),
 #                            swarmada/ (writable copy of the pinned module), logs/, last-run.txt
-#   FOC_UP_SCENARIO          Swarmada quickstart scenario (default healthy-fleet)
-#   FOC_UP_NODE_IMAGE        kind node image (default: kind v0.33.0's own default, pinned by digest)
-#   FOC_UP_IMAGE             copilot image (default fleet-ops-copilot:dev)
-#   FOC_UP_TRACING=1         install the chart's optional Collector + Jaeger and export traces to it
-#   FOC_UP_ANTHROPIC_KEY_FILE  file holding the Claude API key: becomes Secret fleet-ops-copilot-claude (not read otherwise;
+#   DEMO_SCENARIO          Swarmada quickstart scenario (default healthy-fleet)
+#   DEMO_NODE_IMAGE        kind node image (default: kind v0.33.0's own default, pinned by digest)
+#   DEMO_IMAGE             copilot image (default fleet-ops-copilot:dev)
+#   DEMO_TRACING=1         install the chart's optional Collector + Jaeger and export traces to it
+#   DEMO_ANTHROPIC_KEY_FILE  file holding the Claude API key: becomes Secret fleet-ops-copilot-claude (not read otherwise;
 #                            without it fleetops-agent does not start, and this script says so; nothing calls the API)
-#   FOC_UP_DRY_RUN=1         print every command that would change anything, run none of them. Reads nothing
-#                            from a cluster. Still creates FOC_UP_DIR with the tokens and the rendered kind
+#   DEMO_DRY_RUN=1         print every command that would change anything, run none of them. Reads nothing
+#                            from a cluster. Still creates DEMO_DIR with the tokens and the rendered kind
 #                            configuration, and reports missing tools instead of stopping.
 #
 # Not run on a cluster when this was written (docs/KNOWN-LIMITS.md).
@@ -49,12 +49,12 @@ source "$repo/hack/lib/foc-guard.sh"
 foc_guard foc-up.sh
 export CLUSTER KUBECONFIG
 
-DRY="${FOC_UP_DRY_RUN:-0}"
-dir="${FOC_UP_DIR:-$HOME/.local/state/fleet-ops-copilot/foc-up}"
-scenario="${FOC_UP_SCENARIO:-healthy-fleet}"
+DRY="${DEMO_DRY_RUN:-0}"
+dir="${DEMO_DIR:-$HOME/.local/state/fleet-ops-copilot/foc-up}"
+scenario="${DEMO_SCENARIO:-healthy-fleet}"
 # The default node image of kind v0.33.0 (pkg/apis/config/defaults/image.go).
-node_image="${FOC_UP_NODE_IMAGE:-kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5}"
-img="${FOC_UP_IMAGE:-fleet-ops-copilot:dev}"
+node_image="${DEMO_NODE_IMAGE:-kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5}"
+img="${DEMO_IMAGE:-fleet-ops-copilot:dev}"
 ctx="kind-$CLUSTER"
 ns=fleetops-system
 swarm_ns="${SWARMADA_NAMESPACE:-warehouse-a}"
@@ -80,7 +80,7 @@ fail() { echo "foc-up: $*" >&2; exit 1; }
 # shellcheck disable=SC2154 # rc is assigned inside the single-quoted trap body
 trap 'rc=$?; [[ $rc -eq 0 ]] || echo "foc-up: FAILED${stage_name:+ in stage \"$stage_name\"} after $(fmt $((SECONDS - started))) (exit $rc). Logs: $dir/logs. Start over with: make foc-down foc-up" >&2' EXIT
 
-# x runs a command that changes something; with FOC_UP_DRY_RUN it only prints it.
+# x runs a command that changes something; with DEMO_DRY_RUN it only prints it.
 x() {
   if [[ "$DRY" == 1 ]]; then
     case "$1" in
@@ -218,7 +218,7 @@ fi
 
 # R73: the quickstart stopped its sim adapter on exit; keep all three robots live.
 stage "Swarmada sim fleet: three live adapters"
-x env FOC_UP_DIR="$dir" SWARMADA_NAMESPACE="$swarm_ns" "$repo/hack/foc-sim-fleet.sh" start
+x env DEMO_DIR="$dir" SWARMADA_NAMESPACE="$swarm_ns" "$repo/hack/foc-sim-fleet.sh" start
 
 # ---- 4. image, chart -------------------------------------------------------------
 stage "image $img"
@@ -226,18 +226,18 @@ x make -C "$repo" image IMG="$img"
 x kind load docker-image "$img" --name "$CLUSTER"
 
 stage "Helm chart"
-if [[ -n "${FOC_UP_ANTHROPIC_KEY_FILE:-}" ]]; then
-  [[ "$DRY" == 1 || -s "$FOC_UP_ANTHROPIC_KEY_FILE" ]] || fail "FOC_UP_ANTHROPIC_KEY_FILE=$FOC_UP_ANTHROPIC_KEY_FILE is not a file"
+if [[ -n "${DEMO_ANTHROPIC_KEY_FILE:-}" ]]; then
+  [[ "$DRY" == 1 || -s "$DEMO_ANTHROPIC_KEY_FILE" ]] || fail "DEMO_ANTHROPIC_KEY_FILE=$DEMO_ANTHROPIC_KEY_FILE is not a file"
   if [[ "$DRY" == 1 ]]; then
     echo "  [dry-run] kubectl create secret generic fleet-ops-copilot-claude --from-file=ANTHROPIC_API_KEY=<file> -n $ns (applied)"
   else
     k create namespace "$ns" --dry-run=client -o yaml | k apply -f - >/dev/null
-    k -n "$ns" create secret generic fleet-ops-copilot-claude --from-file=ANTHROPIC_API_KEY="$FOC_UP_ANTHROPIC_KEY_FILE" \
+    k -n "$ns" create secret generic fleet-ops-copilot-claude --from-file=ANTHROPIC_API_KEY="$DEMO_ANTHROPIC_KEY_FILE" \
       --dry-run=client -o yaml | k apply -f - >/dev/null
   fi
 fi
 tracing_args=()
-if [[ "${FOC_UP_TRACING:-0}" == 1 ]]; then tracing_args=(--set tracing.backend.enabled=true); fi
+if [[ "${DEMO_TRACING:-0}" == 1 ]]; then tracing_args=(--set tracing.backend.enabled=true); fi
 # CRDs first: Helm does not upgrade them, and a re-run should.
 x k apply --server-side --force-conflicts -f "$repo/charts/fleet-ops-copilot/crds/"
 x h upgrade --install fleetops "$repo/charts/fleet-ops-copilot" --namespace "$ns" --create-namespace \
@@ -252,7 +252,7 @@ stage "health checks"
 x k -n "$ns" rollout status deploy/fleetops-mcp deploy/fleetops-approvals --timeout=180s
 if [[ "$DRY" == 1 ]]; then
   echo "  [dry-run] fleetops-mcp /healthz through the Service proxy; fleetops-agent rollout if Secret fleet-ops-copilot-claude exists;"
-  echo "  [dry-run] tracing backend rollouts if FOC_UP_TRACING=1"
+  echo "  [dry-run] tracing backend rollouts if DEMO_TRACING=1"
 else
   k get --raw "/api/v1/namespaces/$ns/services/fleetops-mcp:mcp/proxy/healthz" >/dev/null \
     || fail "fleetops-mcp /healthz did not answer through the Service proxy"
@@ -261,9 +261,9 @@ else
     k -n "$ns" rollout status deploy/fleetops-agent --timeout=180s
   else
     echo "  fleetops-agent not waited for: Secret fleet-ops-copilot-claude (key ANTHROPIC_API_KEY) does not exist in $ns,"
-    echo "  so the pod stays in CreateContainerConfigError. Create it (docs/RUNBOOK.md section 2) or rerun with FOC_UP_ANTHROPIC_KEY_FILE."
+    echo "  so the pod stays in CreateContainerConfigError. Create it (docs/RUNBOOK.md section 2) or rerun with DEMO_ANTHROPIC_KEY_FILE."
   fi
-  if [[ "${FOC_UP_TRACING:-0}" == 1 ]]; then
+  if [[ "${DEMO_TRACING:-0}" == 1 ]]; then
     k -n "$ns" rollout status deploy/fleetops-otel-collector deploy/fleetops-jaeger --timeout=180s
   fi
 fi
@@ -292,7 +292,7 @@ cat <<EOT
                             KUBECONFIG=$dir/persons/sam.kubeconfig bin/fleetops chat --context sam@$CLUSTER "..."
   verified-requester live run:  make foc-live
 EOT
-if [[ "${FOC_UP_TRACING:-0}" == 1 ]]; then
+if [[ "${DEMO_TRACING:-0}" == 1 ]]; then
   echo "  traces:  kubectl --context $ctx -n $ns port-forward svc/fleetops-jaeger 16686:16686   (http://127.0.0.1:16686/)"
 fi
 echo "  sim fleet (3 adapters, background): PIDs $dir/sim-fleet/pids, logs $dir/logs/sim-adapter-*.log"
