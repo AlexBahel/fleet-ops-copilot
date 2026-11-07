@@ -1,7 +1,7 @@
 # Site catalogue for the fictional Example Distribution Co. warehouse A
 # (docs/DESIGN.md §2, §3.10.1, D70). It lists the kinds of work a person can
 # ask for here, how each maps to Swarmada v0.4, and the questions that lead to
-# each. Classes come from docs/design/foc8-inventory.md §4. Part of the eval
+# each. Classes come from docs/design/guided-request-inventory.md §4. Part of the eval
 # surface: results and requests record this file's SHA-256.
 apiVersion: fleetops.alexbahel.github.io/v1alpha1
 kind: SiteCatalogue

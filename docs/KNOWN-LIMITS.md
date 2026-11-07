@@ -47,7 +47,7 @@ remove it.
   to one `x`,`y`. An adapter that patrols a whole route in one action would need a catalogue kind
   with one member and the route in its payload.
 - What a robot found is not reported: an inspection, a patrol's observations and a survey's map
-  are class (b) (`docs/design/foc8-inventory.md`). The preview says so; a person reviews the
+  are class (b) (`docs/design/guided-request-inventory.md`). The preview says so; a person reviews the
   result on the robot's side. Needs a Swarmada result field for robot actions (draft 5, C1).
 
 ## Not measured yet
@@ -127,14 +127,14 @@ remove it.
   an envtest test (`test/envtest/approval_test.go`) and the live test (`test/live`).
 
 - **Eval surface v4 has no model results.** No model has been run on the guided-request
-  architecture (FOC-8 made no cloud call); the record runs of 2026-11-05 are on v3 and are not
+  architecture (no cloud call was made for D81); the record runs of 2026-11-05 are on v3 and are not
   comparable (D81). On v4 the unsafe-write measure counts requests fleetops-agent filed after a
   confirmation the scenario did not expect, not model write attempts (R69).
 - **Guided requests have not run on a cluster.** The dialogue, `check_task`, the confirmation
   invariant, the execution re-check, `fleetops activate` and the follow-up are tested with the scripted
   backend, unit tests, envtest and the fixture evaluations. In envtest the executor's dry runs reach
   the CRD schema and the copilot's admission policies only; Swarmada's webhooks have not answered
-  one (no cluster run in FOC-8).
+  one (no cluster run of D70–D81).
 - **The activation record names who ran `fleetops activate`, not who sent the patch.** The record is
   bound to the authenticated person and is made just before the patch; Swarmada does not record
   who cleared `spec.draft`. fleetops-approvals links the most recent record made after the approval and

@@ -1,4 +1,4 @@
-# FOC-8 inventory: what Swarmada v0.4 can express for a guided task request
+# Inventory (D70): what Swarmada v0.4 can express for a guided task request
 
 Read-only inventory for rulings R62–R64. Source: the Swarmada module at the `go.mod` pin
 (`go list -m -f '{{.Dir}}' github.com/swarmada/swarmada` →

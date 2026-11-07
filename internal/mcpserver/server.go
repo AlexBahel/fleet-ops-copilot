@@ -51,7 +51,7 @@ const (
 )
 
 // Version is reported to MCP clients.
-const Version = "0.0.1-foc0"
+const Version = "0.0.1"
 
 // ReadTools and RequestTools list the tool names, in registration order.
 var (
@@ -138,7 +138,7 @@ func boolp(b bool) *bool { return &b }
 // parameter is omitted and says that other namespaces are refused (requests
 // by policy, DENY_NAMESPACE; reads by the API server, since fleetops-mcp holds no
 // permission there). A model that does not know the namespace otherwise
-// guesses one (FOC-2r pilot: "default").
+// guesses one (the D66 pilot: "default").
 func NamespaceDescription(svc *tools.Service) string {
 	var allowed []string
 	if svc.Engine != nil && svc.Engine.P != nil {

@@ -69,7 +69,7 @@ The same agent, tools, policy and approval path serve both; only the model backe
 ## Measured results
 
 These model results are on eval surface v3 (25 scenarios, the model calling the request tools
-itself). Eval surface v4 (FOC-8, 42 scenarios, guided requests) is a different architecture: the
+itself). Eval surface v4 (D81, 42 scenarios, guided requests) is a different architecture: the
 model is offered no write tool and requests are filed by fleetops-agent after a confirmation, so the
 v3 numbers below do not carry over and the unsafe-write measure changes meaning (D81). No model
 has been run on v4 yet; its scripted self-test passes 126/126

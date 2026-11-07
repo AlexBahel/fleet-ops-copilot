@@ -19,7 +19,7 @@ status:
   robotCount: 3
   estopStatus: Clear
 ---
-# robotClass and currentZone added 2026-11-06 (FOC-8): the robots' class is
+# robotClass and currentZone added 2026-11-06 (D81): the robots' class is
 # the one their adapter serves (servesRobotClasses: simbot-v1) and every
 # robot reports the zone it stands in, as the live captures show. Without
 # them Swarmada's candidate filters 9 and 2 would give these robots no work,

@@ -430,7 +430,7 @@ on 2026-11-05 (`docs/evidence/airgap-2026-11-05/`), before D68 and D69.
 ## 9. Requests for work: questions, preview, confirmation, activation
 
 Not run on a cluster yet: tested with the scripted backend, envtest and the fixture evaluations
-(FOC-8).
+(D70–D81).
 
 Work is asked for in a conversation (docs/DESIGN.md §3.10). The copilot asks at most two short
 questions, shows a preview, and files an `ApprovalRequest` only after the person replies `1`

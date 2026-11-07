@@ -42,7 +42,7 @@ import (
 // and the tool descriptions it is offered. Evaluation results record it with
 // the prompt's SHA-256 and the tool list's (docs/DESIGN.md D46, D66, D81).
 // v2 (2026-11-04) added three sentences (P1-P3). v3 (2026-11-05, R46)
-// described every namespace parameter. v4 (2026-11-06, FOC-8, R62-R69): the
+// described every namespace parameter. v4 (2026-11-06, D81, R62-R69): the
 // model reads a request through propose_task and is offered no write tool;
 // the copilot asks, previews and files after the person's confirmation.
 const SystemPromptVersion = "v4"

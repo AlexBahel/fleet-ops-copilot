@@ -10,7 +10,7 @@ new eval surface, and results from different surfaces are not comparable (see th
 note in `docs/KNOWN-LIMITS.md`). So one change here is not made alone: batch the items, then run
 Sonnet 5.5, Opus 5.5 and the air-gapped Qwen2.5-7B again.
 
-**Batched into FOC-8 (ruling R68, 2026-11-06).** J1–J3, S1 and P1 are made together with the
+**Batched into D81 (ruling R68, 2026-11-06).** J1–J3, S1 and P1 are made together with the
 guided-request change (`docs/DESIGN.md` §3.10, §4.4, D81), which changes the prompt, the tools, the
 judge and the scenarios anyway. Status of each is in its row. What remains of v4 is the model runs:
 Sonnet 5.5, Opus 5.5 and the air-gapped Qwen2.5-7B on eval surface v4 (42 scenarios), which is a
@@ -21,12 +21,12 @@ old one.
 
 | # | Defect | Seen in | Direction |
 |---|---|---|---|
-| J1 | A kind word before a hyphenated word is read as an object that does not exist | Sonnet 5.5 diagnose-01 run 1 ("Robot/e-stop"); Opus 5.5 diagnose-07 run 2 ("Robot/emergency-stop") | Done in judge v4 (FOC-8): a hyphenated common word after a kind word in the spaced form is not an object; `TestJ1HyphenatedCommonWords` uses the recorded texts and still fails invented names |
-| J2 | A pronoun clause with an object name as its value is not accepted | Sonnet 5.5 diagnose-02 run 3: "It now has `status.assignedRobot`=sim-robot-002" | Done in judge v4 (FOC-8), additive only: `TestJ2PronounClause` |
-| J3 | A collective statement is not attributed to each object (R47) | diagnose-07 run 3: "All three robots have their front camera active"; the run passed every other criterion | Done in judge v4 (FOC-8) when the count matches the objects of that kind: `TestJ3CollectiveClause` |
+| J1 | A kind word before a hyphenated word is read as an object that does not exist | Sonnet 5.5 diagnose-01 run 1 ("Robot/e-stop"); Opus 5.5 diagnose-07 run 2 ("Robot/emergency-stop") | Done in judge v4 (D81): a hyphenated common word after a kind word in the spaced form is not an object; `TestJ1HyphenatedCommonWords` uses the recorded texts and still fails invented names |
+| J2 | A pronoun clause with an object name as its value is not accepted | Sonnet 5.5 diagnose-02 run 3: "It now has `status.assignedRobot`=sim-robot-002" | Done in judge v4 (D81), additive only: `TestJ2PronounClause` |
+| J3 | A collective statement is not attributed to each object (R47) | diagnose-07 run 3: "All three robots have their front camera active"; the run passed every other criterion | Done in judge v4 (D81) when the count matches the objects of that kind: `TestJ3CollectiveClause` |
 
 Each fix needs a judge test that fails on the old judge, and a check that no run in the three
-recorded results changes verdict in the wrong direction. FOC-8: each test uses the recorded text
+recorded results changes verdict in the wrong direction. D81: each test uses the recorded text
 that the v3 judge failed. All three fixes only add ways to accept a citation (J1 removes a
 reference, J2 and J3 add a reading), so no run v3 passed can fail on them. R71 measured it: the
 225 recorded runs, replayed offline on the v3 tree (every recorded v3 verdict reproduced) and
@@ -38,16 +38,16 @@ diagnose-07 runs 1–3); none from pass to fail (`docs/DESIGN.md` §4.4).
 
 | # | Defect | Seen in | Fix |
 |---|---|---|---|
-| S1 | zone-06 `scheduledStart` (`2026-11-03T18:00:00Z`) is before the timestamps in the `live/zone-estop` fixture | Opus 5.5 runs 1 to 3 (reported as the scenario class). Sonnet 5.5 passed it | Done (FOC-8): `2026-11-04T18:00:00Z` in the prompt, script and expected fields; fixture runs use a fixed clock before it |
+| S1 | zone-06 `scheduledStart` (`2026-11-03T18:00:00Z`) is before the timestamps in the `live/zone-estop` fixture | Opus 5.5 runs 1 to 3 (reported as the scenario class). Sonnet 5.5 passed it | Done (D81): `2026-11-04T18:00:00Z` in the prompt, script and expected fields; fixture runs use a fixed clock before it |
 
 ## Product
 
 | # | Gap | Seen in | Fix |
 |---|---|---|---|
-| P1 | `request_draft_task` has no waypoint field: an action's name, type, zone, priority, required capabilities, preferred robot and dependencies, and no payload (`internal/tools/requests.go`) | dispatch-04, Sonnet 5.5 and Opus 5.5, runs 1 to 3 | Done (FOC-8): `location` on the request, written into the payload (D77); dispatch-04 checks the waypoint on the request |
-| P2 | Conversations are kept in fleetops-agent's memory: lost on restart, one replica only | FOC-8 (D75) | Durable, owner-bound conversation state shared by replicas (for example a copilot-owned resource holding only the dialogue state, with the same bounds and TTL), so fleetops-agent can run more than one replica (R69) |
-| P4 | The demo stack left the fleet offline: the quickstart stops its sim adapter on exit, so nothing can be filed (R65 check) | FOC-8 live check, 2026-11-07 | Done (R73): `hack/demo-sim-fleet.sh`, all three robots; make demo starts the quickstart's sim adapter for sim-robot-001 (its port-forward and `adapters/simulation/sim_adapter.py` with the quickstart's arguments) as a host process with a pidfile under `DEMO_DIR`; make demo-down stops it; make test-live checks a robot is Idle first |
-| P3 | `fleetops activate` needs `fleetops:approver` to create its Activation record, which also grants deciding requests | FOC-8 (R71, R72) | A narrow `fleetops:activator` ClusterRole: `create` on `approvaldecisions` limited by admission to `type: Activation` (the `fleetops-decisions` policy checking the caller's role, or a separate `approvaldecisions/activation` subresource-style verb via `authorizer` in CEL), `get` on `approvalrequests`; no Verdict decisions (R72) |
+| P1 | `request_draft_task` has no waypoint field: an action's name, type, zone, priority, required capabilities, preferred robot and dependencies, and no payload (`internal/tools/requests.go`) | dispatch-04, Sonnet 5.5 and Opus 5.5, runs 1 to 3 | Done (D77): `location` on the request, written into the payload (D77); dispatch-04 checks the waypoint on the request |
+| P2 | Conversations are kept in fleetops-agent's memory: lost on restart, one replica only | D75 | Durable, owner-bound conversation state shared by replicas (for example a copilot-owned resource holding only the dialogue state, with the same bounds and TTL), so fleetops-agent can run more than one replica (R69) |
+| P4 | The demo stack left the fleet offline: the quickstart stops its sim adapter on exit, so nothing can be filed (R65 check) | Live check of D70–D81, 2026-11-07 | Done (R73): `hack/demo-sim-fleet.sh`, all three robots; make demo starts the quickstart's sim adapter for sim-robot-001 (its port-forward and `adapters/simulation/sim_adapter.py` with the quickstart's arguments) as a host process with a pidfile under `DEMO_DIR`; make demo-down stops it; make test-live checks a robot is Idle first |
+| P3 | `fleetops activate` needs `fleetops:approver` to create its Activation record, which also grants deciding requests | D79 (R71, R72) | A narrow `fleetops:activator` ClusterRole: `create` on `approvaldecisions` limited by admission to `type: Activation` (the `fleetops-decisions` policy checking the caller's role, or a separate `approvaldecisions/activation` subresource-style verb via `authorizer` in CEL), `get` on `approvalrequests`; no Verdict decisions (R72) |
 
 ## Not yet examined
 
@@ -57,7 +57,7 @@ diagnose-07 runs 1–3); none from pass to fail (`docs/DESIGN.md` §4.4).
 
 ## Proposed for Swarmada draft 5
 
-Gaps found by the FOC-8 inventory (`docs/design/foc8-inventory.md` §4, class (c)). They are
+Gaps found by the guided-request inventory (`docs/design/guided-request-inventory.md` §4, class (c)). They are
 proposals to Swarmada, not copilot work; the copilot lists them in its catalogue as
 `notYetPossible` and files nothing that needs one.
 
