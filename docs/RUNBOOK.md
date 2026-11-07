@@ -50,7 +50,7 @@ What it does, in order (each stage prints its elapsed time; the total is the las
    `simbot-v1` (a labelled demo workaround: the quickstart names it but does not ship it), one
    FleetAdapter identity per robot, and one `sim_adapter.py` per robot plus a port-forward in the
    background (PIDs `$FOC_UP_DIR/sim-fleet/pids`, logs `$FOC_UP_DIR/logs/sim-adapter-*.log`). It
-   waits until every Robot is `Idle`. If the Robots go `Offline` later, run
+   waits until every Robot is live (`Idle`, or `InProgress` on the quickstart's pending work). If the Robots go `Offline` later, run
    `CLUSTER=foc-up KUBECONFIG=$FOC_UP_DIR/kubeconfig hack/foc-sim-fleet.sh start` again.
 5. Builds the copilot image, loads it into the cluster, applies the CRDs and installs the chart
    into `foc-system`; binds the people's roles in `warehouse-a`.

@@ -16,11 +16,13 @@
 #      Robots name it but the quickstart does not ship it, and Swarmada
 #      refuses every Robot spec update until it exists (docs/KNOWN-LIMITS.md);
 #   2. the client certificates of sim-fleet-adapter-2 and -3 (the pinned
-#      tree's demo-ab-live overlay), FleetAdapters with sim-fleet-adapter's
-#      spec, and sim-robot-002/003 pointed at them;
+#      tree's demo-ab-live overlay) and FleetAdapters with sim-fleet-adapter's
+#      spec;
 #   3. the port-forward and three adapters; logs in $FOC_UP_DIR/logs, PIDs in
-#      $FOC_UP_DIR/sim-fleet/pids;
-#   4. waits until every Robot is Idle and every FleetAdapter Connected.
+#      $FOC_UP_DIR/sim-fleet/pids; waits until every FleetAdapter is Connected;
+#   4. points sim-robot-002/003 at their adapters (Swarmada's Robot webhook
+#      admits only a Connected one) and waits until every Robot is live
+#      (Idle, or InProgress on work Swarmada gave it).
 #
 # stop kills only the processes in the pidfile whose command line is still
 # the one recorded (a reused PID is left alone), adapters first.
@@ -120,7 +122,7 @@ client_tls() {
   chmod 600 "$d"/*
 }
 
-adapters_and_robots() {
+adapters() {
   local i
   k apply -f "$sw/config/overlays/demo-ab-live/adapter-client-cert-2.yaml" -f "$sw/config/overlays/demo-ab-live/adapter-client-cert-3.yaml" >/dev/null
   for i in "${!adapters[@]}"; do client_tls "${adapters[$i]}" "$i"; done
@@ -130,11 +132,21 @@ adapters_and_robots() {
       jq --arg n "${adapters[$i]}" --arg l "$label" \
         '{apiVersion, kind, metadata: {name: $n, namespace: .metadata.namespace, labels: {($l): "true"}}, spec}' |
       k apply -f - >/dev/null
+  done
+  say "FleetAdapters ${adapters[1]}, ${adapters[2]} (sim-fleet-adapter's spec)"
+}
+
+# robots points sim-robot-002/003 at their own adapters. Swarmada's Robot
+# webhook admits only a Connected adapter, so this runs after its process
+# has registered.
+robots() {
+  local i
+  for i in 1 2; do
+    k -n "$ns" annotate robot "${robots[$i]}" "swarmada.io/robot-id=${robots[$i]}" --overwrite >/dev/null
     k -n "$ns" patch robot "${robots[$i]}" --type=json \
       -p "[{\"op\":\"replace\",\"path\":\"/spec/adapter/name\",\"value\":\"${adapters[$i]}\"}]" >/dev/null
-    k -n "$ns" annotate robot "${robots[$i]}" "swarmada.io/robot-id=${robots[$i]}" --overwrite >/dev/null
   done
-  say "FleetAdapters ${adapters[1]}, ${adapters[2]}; ${robots[1]}, ${robots[2]} point at them"
+  say "${robots[1]}, ${robots[2]} point at ${adapters[1]}, ${adapters[2]}"
 }
 
 launch() {
@@ -159,13 +171,21 @@ launch() {
   say "port-forward 127.0.0.1:$port and ${#robots[@]} adapters started; PIDs in $pidfile, logs in $logs"
 }
 
+# ready [adapters]: every FleetAdapter Connected and, unless "adapters", every
+# Robot live: Idle, or InProgress on work Swarmada gave it (the quickstart's
+# pending FleetActions go to a robot as soon as it is live).
 ready() {
   local r a waited=0 pending
   while :; do
     pending=""
-    for r in "${robots[@]}"; do
-      [[ "$(k -n "$ns" get robot "$r" -o jsonpath='{.status.phase}' 2>/dev/null)" == Idle ]] || pending+=" Robot/$r"
-    done
+    if [[ "${1:-}" != adapters ]]; then
+      for r in "${robots[@]}"; do
+        case "$(k -n "$ns" get robot "$r" -o jsonpath='{.status.phase}' 2>/dev/null)" in
+          Idle | InProgress) ;;
+          *) pending+=" Robot/$r" ;;
+        esac
+      done
+    fi
     for a in "${adapters[@]}"; do
       [[ "$(k -n "$ns" get fleetadapter "$a" -o jsonpath='{.status.phase}' 2>/dev/null)" == Connected ]] || pending+=" FleetAdapter/$a"
     done
@@ -173,7 +193,7 @@ ready() {
     ((waited >= timeout)) && fail "not live after ${timeout}s:$pending (logs: $logs/sim-adapter-*.log)"
     sleep 3; waited=$((waited + 3))
   done
-  say "every Robot Idle, every FleetAdapter Connected"
+  if [[ "${1:-}" == adapters ]]; then say "every FleetAdapter Connected"; else say "every Robot live (Idle or InProgress), every FleetAdapter Connected"; fi
 }
 
 case "$cmd" in
@@ -184,8 +204,10 @@ start)
   # A start that fails leaves nothing running.
   trap 'rc=$?; if [[ $rc -ne 0 ]]; then stop >/dev/null; fi' EXIT
   robot_class
-  adapters_and_robots
+  adapters
   launch
+  ready adapters
+  robots
   ready
   ;;
 stop) stop ;;

@@ -161,6 +161,11 @@ func TestSimFleetStartStop(t *testing.T) {
 			t.Errorf("calls lack %q:\n%s", want, calls)
 		}
 	}
+	// Swarmada's Robot webhook admits only a Connected adapter: the Robots
+	// are pointed at theirs after the adapters' phase was read.
+	if a, p := strings.Index(calls, "get fleetadapter sim-fleet-adapter-2 -o jsonpath={.status.phase}"), strings.Index(calls, "patch robot sim-robot-002"); a < 0 || p < a {
+		t.Errorf("sim-robot-002 repointed before sim-fleet-adapter-2 was seen Connected:\n%s", calls)
+	}
 	for _, l := range strings.Split(strings.TrimSpace(calls), "\n") {
 		if strings.HasPrefix(l, "kubectl ") && (!strings.Contains(l, "--kubeconfig "+vars["KUBECONFIG"]) || !strings.Contains(l, "--context kind-foc-test-1")) {
 			t.Errorf("kubectl without the dedicated kubeconfig and context: %s", l)
@@ -171,7 +176,7 @@ func TestSimFleetStartStop(t *testing.T) {
 		!strings.Contains(applied, "fleetops.alexbahel.github.io/demo-workaround") || !strings.Contains(applied, "does not ship it") {
 		t.Errorf("RobotClass not created as a labelled workaround:\n%s", applied)
 	}
-	if !strings.Contains(out, "every Robot Idle, every FleetAdapter Connected") {
+	if !strings.Contains(out, "every Robot live (Idle or InProgress), every FleetAdapter Connected") {
 		t.Errorf("start output:\n%s", out)
 	}
 

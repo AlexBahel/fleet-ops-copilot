@@ -13,7 +13,7 @@
 #   4. scripts/foc-up-preflight.sh (webhooks present, with endpoints, answering);
 #   4b. hack/foc-sim-fleet.sh start: the simulated fleet kept live (one sim
 #      adapter per robot, in the background; RobotClass simbot-v1 as a
-#      labelled demo workaround), every Robot Idle (R73);
+#      labelled demo workaround), every Robot live (R73);
 #   5. the image built on the host and loaded into the cluster;
 #   6. the Helm chart installed into foc-system;
 #   7. the people's RoleBindings and token kubeconfigs;
