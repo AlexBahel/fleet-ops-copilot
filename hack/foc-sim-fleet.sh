@@ -74,7 +74,7 @@ stop() {
     if ours "$pid" "$pat"; then
       kill "$pid" 2>/dev/null || true
       for _ in $(seq 50); do ours "$pid" "$pat" || break; sleep 0.1; done
-      ours "$pid" "$pat" && kill -9 "$pid" 2>/dev/null || true
+      if ours "$pid" "$pat"; then kill -9 "$pid" 2>/dev/null || true; fi
       n=$((n + 1))
     elif kill -0 "$pid" 2>/dev/null; then
       say "PID $pid no longer runs '$pat'; left alone"
@@ -202,6 +202,7 @@ start)
   [[ -f "$sw/adapters/simulation/sim_adapter.py" ]] || fail "no quickstart tree at $sw (run make foc-up)"
   stop >/dev/null
   # A start that fails leaves nothing running.
+  # shellcheck disable=SC2154 # rc is assigned inside the single-quoted trap body
   trap 'rc=$?; if [[ $rc -ne 0 ]]; then stop >/dev/null; fi' EXIT
   robot_class
   adapters
