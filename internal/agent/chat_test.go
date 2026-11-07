@@ -18,6 +18,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -286,5 +287,74 @@ func TestEarlierResponseTextShownWithPreview(t *testing.T) {
 	}
 	if len(tr.Responses) != 2 || tr.Responses[0] != "Robot/sim-robot-002 status.phase=Idle." {
 		t.Fatalf("responses %q", tr.Responses)
+	}
+}
+
+// P8: propose_task's schema lists the catalogue's asks, kinds and field
+// names as enums, and no other field name.
+func TestProposeSchemaEnumeratesTheCatalogue(t *testing.T) {
+	cat, err := catalogue.Load("../../catalogue/warehouse-a.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var s struct {
+		Properties map[string]struct {
+			Enum                 []string                   `json:"enum"`
+			Properties           map[string]json.RawMessage `json:"properties"`
+			AdditionalProperties json.RawMessage            `json:"additionalProperties"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(ProposeSpec(cat).InputSchema, &s); err != nil {
+		t.Fatal(err)
+	}
+	var asks, kinds []string
+	for _, a := range cat.Asks {
+		asks = append(asks, a.Name)
+	}
+	for _, k := range cat.Kinds {
+		kinds = append(kinds, k.Name)
+	}
+	if got, want := strings.Join(s.Properties["ask"].Enum, ","), strings.Join(append(asks, "something-else"), ","); got != want {
+		t.Errorf("ask enum %q, want %q", got, want)
+	}
+	if got, want := strings.Join(s.Properties["kind"].Enum, ","), strings.Join(kinds, ","); got != want {
+		t.Errorf("kind enum %q, want %q", got, want)
+	}
+	f := s.Properties["fields"]
+	if string(f.AdditionalProperties) != "false" || len(f.Properties) != len(catalogue.Fields) {
+		t.Fatalf("fields: additionalProperties %s, %d properties, want false and %d", f.AdditionalProperties, len(f.Properties), len(catalogue.Fields))
+	}
+	for _, name := range catalogue.Fields {
+		if _, ok := f.Properties[name]; !ok {
+			t.Errorf("field %s not in the schema", name)
+		}
+	}
+}
+
+// P8: an unknown field name is refused with a question naming the allowed
+// ones, nothing of that call is applied, and the model's next call with the
+// right name is used (the recorded guided-12 reading: repeat for times).
+func TestUnknownFieldNameRefused(t *testing.T) {
+	c := world(t)
+	_, conv, send := chatFixture(t, c,
+		llm.Step{Calls: []llm.ToolCall{call("p1", ProposeTool, map[string]any{"ask": "patrol", "fields": map[string]any{"repeat": "3", "route": "receiving-dock-1,charging-bay"}})}},
+		llm.Step{Calls: []llm.ToolCall{call("p2", ProposeTool, map[string]any{"ask": "patrol", "fields": map[string]any{"times": "3", "route": "receiving-dock-1,charging-bay"}})}},
+	)
+	tr := send("Patrol the dock and the charging bay three times.")
+	var first *ToolEvent
+	for i := range tr.Calls {
+		if tr.Calls[i].Name == ProposeTool {
+			first = &tr.Calls[i]
+			break
+		}
+	}
+	if first == nil || !first.IsError || !strings.Contains(first.ErrorText, `"repeat"`) || !strings.Contains(first.ErrorText, "times") {
+		t.Fatalf("first propose_task not refused with the allowed names: %+v", first)
+	}
+	if tr.Dialogue == nil || tr.Dialogue.Outcome != OutcomePreview || !strings.Contains(tr.Final, "Times: 3 round(s)") {
+		t.Fatalf("dialogue %+v\n%s", tr.Dialogue, tr.Final)
+	}
+	if _, ok := conv.State.Fields["repeat"]; ok {
+		t.Fatal("the unknown field was kept")
 	}
 }

@@ -148,7 +148,7 @@ type SomethingElseInput struct {
 type Input struct {
 	Ask           string              `json:"ask,omitempty" jsonschema:"the ask: one of the catalogue's asks, or something-else"`
 	Kind          string              `json:"kind,omitempty" jsonschema:"the kind, when the person's words say it"`
-	Fields        map[string]string   `json:"fields,omitempty" jsonschema:"fields the person's words state (location, from, to, route, robot, zone, times, mode, start, reason, task, priority, onFailure, dock)"`
+	Fields        map[string]string   `json:"fields,omitempty" jsonschema:"the fields the person's words state, by the catalogue's field names; no other name is accepted"`
 	SomethingElse *SomethingElseInput `json:"somethingElse,omitempty" jsonschema:"your reading of a 'something else' description"`
 }
 
@@ -174,6 +174,9 @@ type Outcome struct {
 	Question    *Question `json:"question,omitempty"`
 	Proposal    *Proposal `json:"-"`
 	NotPossible string    `json:"notPossible,omitempty"`
+	// Invalid is for the model, not the person: the call named a field the
+	// catalogue does not know, and nothing of it was applied (D85).
+	Invalid string `json:"invalid,omitempty"`
 }
 
 // ReviewEntry is a "something else" answer for the catalogue review log.
@@ -200,6 +203,9 @@ type Engine struct {
 func (e *Engine) Propose(st *State, in Input, snap Snapshot) Outcome {
 	if st.Fields == nil {
 		st.Fields = map[string]string{}
+	}
+	if msg := e.unknownFields(st, in); msg != "" {
+		return Outcome{Invalid: msg}
 	}
 	for k, v := range in.Fields {
 		if v != "" && slices.Contains(catalogue.Fields, k) {

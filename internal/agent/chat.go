@@ -19,7 +19,9 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -88,6 +90,7 @@ func ProposeSpec(cat *catalogue.Catalogue) llm.ToolSpec {
 	if err != nil {
 		panic(err)
 	}
+	enumerate(schema, cat)
 	b, _ := json.Marshal(schema)
 	var asks, kinds, steps, gaps []string
 	for _, a := range cat.Asks {
@@ -116,6 +119,63 @@ func ProposeSpec(cat *catalogue.Catalogue) llm.ToolSpec {
 		"the preview says what is not reported. " +
 		"Fields are strings; location, from, to and dock are waypoint names, route is waypoint names separated by commas."
 	return llm.ToolSpec{Name: ProposeTool, Description: desc, InputSchema: b}
+}
+
+// enumerate narrows propose_task's schema to the site catalogue (D85): the
+// asks, kinds, basic steps, gaps and lookFor words as enums, and fields as
+// an object with exactly catalogue.Fields, each described, closed values
+// as enums, the kinds that use it named.
+func enumerate(s *jsonschema.Schema, cat *catalogue.Catalogue) {
+	var asks, kinds, gaps []string
+	for _, a := range cat.Asks {
+		asks = append(asks, a.Name)
+	}
+	for _, k := range cat.Kinds {
+		kinds = append(kinds, k.Name)
+	}
+	for _, g := range cat.NotYetPossible {
+		gaps = append(gaps, g.ID)
+	}
+	enum := func(xs ...string) []any {
+		out := make([]any, len(xs))
+		for i, x := range xs {
+			out[i] = x
+		}
+		return out
+	}
+	fields := func(desc string) *jsonschema.Schema {
+		f := &jsonschema.Schema{Type: "object", Description: desc, Properties: map[string]*jsonschema.Schema{}, AdditionalProperties: &jsonschema.Schema{Not: &jsonschema.Schema{}}}
+		for _, name := range catalogue.Fields {
+			form := dialogue.Forms[name]
+			var used []string
+			for _, k := range cat.Kinds {
+				if slices.Contains(k.Fields(), name) {
+					used = append(used, k.Name)
+				}
+			}
+			d := form.Desc
+			if len(used) > 0 {
+				d += " (kinds: " + strings.Join(used, ", ") + ")"
+			}
+			p := &jsonschema.Schema{Type: "string", Description: d}
+			if len(form.Enum) > 0 {
+				p.Enum = enum(form.Enum...)
+			}
+			f.Properties[name] = p
+		}
+		return f
+	}
+	s.Properties["ask"].Enum = enum(append(asks, dialogue.AskSomethingElse)...)
+	s.Properties["kind"].Enum = enum(kinds...)
+	s.Properties["fields"] = fields(s.Properties["fields"].Description)
+	se := s.Properties["somethingElse"]
+	se.Properties["interpretation"].Enum = enum(dialogue.Known, dialogue.Composed, dialogue.NotPossible)
+	se.Properties["kind"].Enum = enum(kinds...)
+	se.Properties["need"].Enum = enum(gaps...)
+	se.Properties["lookFor"].Items.Enum = enum(append(cat.LookForWords(), "both")...)
+	step := se.Properties["steps"].Items
+	step.Properties["kind"].Enum = enum(cat.BasicSteps...)
+	step.Properties["fields"] = fields(step.Properties["fields"].Description)
 }
 
 // ProposeTool as an mcp.Tool, for the tools digest (mcpserver.ToolsDigest).
@@ -263,6 +323,10 @@ func (c *Chat) turn(ctx context.Context, cs *mcp.ClientSession, conv *conversati
 				return "", "", err
 			}
 			out := c.engine(operator).Propose(&conv.State, in, snap)
+			if out.Invalid != "" {
+				// Back to the model, which reads the person's words again (D85).
+				return "", "", errors.New(out.Invalid)
+			}
 			tr := Trace{}
 			text, e, err := c.render(ctx, cs, conv, operator, sessionID, out, &tr)
 			extra = append(extra, tr.Calls...)

@@ -405,7 +405,9 @@ model does not write the question, the choices or the preview. The person sees t
 model response of the message, in order, before the engine's text, and the trace records each
 response (D84).
 
-1. **Extract** every field the message states (kind, location, robot, times, zone, mode, start).
+1. **Extract** every field the message states (kind, location, robot, times, zone, mode, start),
+   by the catalogue's field names; a call naming another field is refused and the model is asked
+   which allowed field it meant (D85).
 2. **Infer** from live state instead of asking: one zone means no zone question; a named robot
    becomes `robotSelector` for charge and `preferredRobot` elsewhere; a dock comes from the robot's
    `spec.charging.dockName` or the zone's `ChargingDock`.
@@ -868,6 +870,7 @@ these, `check_task` correctly finds no eligible robot in those fixtures. Results
 | D82 | `make demo`'s preflight resolves the Python the quickstart will run (`python3`, else `python`, on `PATH`, as `run.sh` does) and stops before creating anything if it cannot `import grpc` and `google.protobuf`, saying which interpreter and how to provide them | Owner's ruling R59, found 2026-11-05: the quickstart's simulated adapter runs on the host with that Python and imports `grpc`; the preflight makes a missing package a clear stop at the start instead of a failure later in the run. |
 | D83 | The Dockerfile copies the binaries with `COPY --chmod=0755`; a test builds the binaries under umask 077, builds the image, and runs each binary in it as user 65532 (`-h`, exit status checked) | Owner's ruling R60, found 2026-11-05: a plain `COPY` keeps the mode the host build gave the files, which depends on the builder's umask, so whether user 65532 can run them depended on the machine that built the image. |
 | D84 | The reply to a message is the text of every model response of that message, in order, each separated by a blank line, then the engine's question or preview when `propose_task` ended the turn; the trace records each response's text (`responses`, one entry per model turn, empty for a response with tool calls only). The judge grades that reply, which is what the person saw | BACKLOG-v4 P9, found in the v4 record runs (2026-11-07): when `propose_task` ended the turn, only that response's text reached the person, so a model that cited the fleet state in an earlier response of the same message was shown without it, and the trace did not record it. Showing every response keeps what the model said visible next to the preview; the engine's text stays last, so the question or the preview's choices are what the person answers. |
+| D85 | `propose_task`'s schema is narrowed to the site catalogue: `ask`, `kind`, `somethingElse.interpretation`, `.kind`, `.need`, `.lookFor` and the basic steps' `kind` are enums of the catalogue's values, and `fields` (also a step's) is an object with exactly the catalogue's field names, each described with its form and the kinds that use it, closed values (`mode`, `priority`, `onFailure`) as enums, no other property. The engine refuses a call that names a field the catalogue does not know before applying anything of it, and returns to the model a question naming the kind's fields and all allowed names; the model then calls again | BACKLOG-v4 P8, found in the v4 record runs (2026-11-07): unknown field names were dropped without notice and the default used, so six guided-12 runs passed the rounds as `repeat` and the preview showed "1 round(s) (default)". The schema says what is allowed; the refusal makes a wrong name a correction by the model instead of a silent default. The question goes to the model, not the person, because the person does not name fields. |
 
 ## 8. Resolved questions (2026-11-03)
 
