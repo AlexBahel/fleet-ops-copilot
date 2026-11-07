@@ -336,6 +336,7 @@ func TestFocUpDryRunPlan(t *testing.T) {
 		"people tokens", "kind create cluster --name foc-test-1", "--config " + filepath.Join(work, "kind-config.yaml"),
 		"kind-people.sh kubeconfig kind-foc-test-1 sam", "warehouse-quickstart/run.sh --scenario healthy-fleet",
 		"apply -k " + filepath.Join(work, "swarmada", "config", "controlstream-tls"), "foc-up-preflight.sh",
+		"hack/foc-sim-fleet.sh start",
 		"make -C", "kind load docker-image fleet-ops-copilot:dev --name foc-test-1",
 		"upgrade --install foc", "tracing.backend.enabled=true", "kind-people.sh bind kind-foc-test-1 warehouse-a",
 		"rollout status deploy/foc-mcp deploy/foc-approvals", "dry run finished",

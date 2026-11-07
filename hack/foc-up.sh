@@ -11,6 +11,9 @@
 #   3. Swarmada's admission webhooks turned on (config/controlstream-tls, the
 #      overlay its `make deploy` applies; docs/RUNBOOK.md section 6);
 #   4. scripts/foc-up-preflight.sh (webhooks present, with endpoints, answering);
+#   4b. hack/foc-sim-fleet.sh start: the simulated fleet kept live (one sim
+#      adapter per robot, in the background; RobotClass simbot-v1 as a
+#      labelled demo workaround), every Robot Idle (R73);
 #   5. the image built on the host and loaded into the cluster;
 #   6. the Helm chart installed into foc-system;
 #   7. the people's RoleBindings and token kubeconfigs;
@@ -213,6 +216,10 @@ else
   ((ok)) || fail "scripts/foc-up-preflight.sh still refuses after 3 minutes (output above)"
 fi
 
+# R73: the quickstart stopped its sim adapter on exit; keep all three robots live.
+stage "Swarmada sim fleet: three live adapters"
+x env FOC_UP_DIR="$dir" SWARMADA_NAMESPACE="$swarm_ns" "$repo/hack/foc-sim-fleet.sh" start
+
 # ---- 4. image, chart -------------------------------------------------------------
 stage "image $img"
 x make -C "$repo" image IMG="$img"
@@ -288,4 +295,5 @@ EOT
 if [[ "${FOC_UP_TRACING:-0}" == 1 ]]; then
   echo "  traces:  kubectl --context $ctx -n $ns port-forward svc/foc-jaeger 16686:16686   (http://127.0.0.1:16686/)"
 fi
+echo "  sim fleet (3 adapters, background): PIDs $dir/sim-fleet/pids, logs $dir/logs/sim-adapter-*.log"
 echo "  tear down:  make foc-down"
