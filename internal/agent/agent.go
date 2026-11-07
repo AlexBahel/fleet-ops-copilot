@@ -75,8 +75,13 @@ type ToolEvent struct {
 type Trace struct {
 	Prompt string      `json:"prompt"`
 	Calls  []ToolEvent `json:"calls"`
-	Final  string      `json:"final"`
-	Turns  int         `json:"turns"`
+	// Final is what the person sees: the text of every model response of the
+	// message, in order, then the engine's question or preview (D84).
+	Final string `json:"final"`
+	// Responses is each model response's text, one entry per model turn, in
+	// order ("" for a response with tool calls only), D84.
+	Responses []string `json:"responses,omitempty"`
+	Turns     int      `json:"turns"`
 	Usage  llm.Usage   `json:"usage"`
 	// StopReasons lists the backend stop reason of each model turn (claude only).
 	StopReasons []string  `json:"stopReasons,omitempty"`
@@ -191,8 +196,9 @@ func (l *Loop) RunWith(ctx context.Context, operator, sessionID string, earlier 
 			tr.StopReasons = append(tr.StopReasons, reply.StopReason)
 		}
 		history = append(history, llm.Message{Role: "assistant", Text: reply.Text, Calls: reply.Calls, Raw: reply.Raw})
+		tr.Responses = append(tr.Responses, reply.Text)
 		if len(reply.Calls) == 0 {
-			tr.Final = reply.Text
+			tr.Final = shown(tr.Responses, "")
 			return tr, nil
 		}
 		var results []llm.ToolResult
@@ -209,7 +215,7 @@ func (l *Loop) RunWith(ctx context.Context, operator, sessionID string, earlier 
 				}
 				tr.Calls = append(tr.Calls, ev)
 				if stop != "" {
-					tr.Final = strings.TrimSpace(strings.TrimSpace(reply.Text) + "\n\n" + stop)
+					tr.Final = shown(tr.Responses, stop)
 					return tr, nil
 				}
 				results = append(results, llm.ToolResult{CallID: c.ID, Content: content, IsError: cerr != nil})
@@ -228,7 +234,24 @@ func (l *Loop) RunWith(ctx context.Context, operator, sessionID string, earlier 
 		}
 		history = append(history, llm.Message{Role: "tool", Results: results})
 	}
+	tr.Final = shown(tr.Responses, "")
 	return tr, ErrMaxTurns
+}
+
+// shown is the reply the person sees (D84): the text of every model
+// response of the message, in order, then the engine's text
+// (a question or a preview), separated by blank lines.
+func shown(responses []string, engine string) string {
+	var parts []string
+	for _, r := range responses {
+		if r = strings.TrimSpace(r); r != "" {
+			parts = append(parts, r)
+		}
+	}
+	if engine = strings.TrimSpace(engine); engine != "" {
+		parts = append(parts, engine)
+	}
+	return strings.Join(parts, "\n\n")
 }
 
 // chat is one model call, traced with its token counts and latency. No

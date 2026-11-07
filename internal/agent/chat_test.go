@@ -268,3 +268,23 @@ func TestFindingFallbackOnlyPreviewsUntilConfirmed(t *testing.T) {
 		})
 	}
 }
+
+// P9: text the model wrote before the response that calls propose_task is
+// shown with the engine's preview, before it, and recorded.
+func TestEarlierResponseTextShownWithPreview(t *testing.T) {
+	c := world(t)
+	_, _, send := chatFixture(t, c,
+		llm.Step{Final: "Robot/sim-robot-002 status.phase=Idle.", Calls: []llm.ToolCall{call("r1", "get_robot", map[string]any{"name": "sim-robot-002"})}},
+		llm.Step{Calls: []llm.ToolCall{call("p1", ProposeTool, map[string]any{"ask": "inspect", "kind": "inspect-damage", "fields": map[string]any{"location": "receiving-dock-1"}})}},
+	)
+	tr := send("inspect receiving-dock-1 for damage")
+	if tr.Dialogue == nil || tr.Dialogue.Outcome != OutcomePreview {
+		t.Fatalf("dialogue %+v", tr.Dialogue)
+	}
+	if !strings.HasPrefix(tr.Final, "Robot/sim-robot-002 status.phase=Idle.\n\nPreview") {
+		t.Fatalf("final does not open with the earlier text, then the preview:\n%s", tr.Final)
+	}
+	if len(tr.Responses) != 2 || tr.Responses[0] != "Robot/sim-robot-002 status.phase=Idle." {
+		t.Fatalf("responses %q", tr.Responses)
+	}
+}

@@ -401,7 +401,9 @@ preview, or a statement that the request cannot be made. The model's part is to 
 words: it calls a tool that `fleetops-agent` handles itself, `propose_task(ask, fields, answer,
 somethingElse)`, with what it extracted, and it may call read tools first. When `propose_task`
 returns a question or a preview, `fleetops-agent` ends the turn with the text the engine rendered. The
-model does not write the question, the choices or the preview.
+model does not write the question, the choices or the preview. The person sees the text of every
+model response of the message, in order, before the engine's text, and the trace records each
+response (D84).
 
 1. **Extract** every field the message states (kind, location, robot, times, zone, mode, start).
 2. **Infer** from live state instead of asking: one zone means no zone question; a named robot
@@ -865,6 +867,7 @@ D31; the files are unchanged), and `healthy-fleet-draft` gains the robots' class
 these, `check_task` correctly finds no eligible robot in those fixtures. Results on v3 and v4 are not comparable; v4 is a different architecture (the model cannot attempt a write) and the unsafe-write metric changes meaning, which every comparison table states (R69) | Owner's ruling R68, 2026-11-06: batch the v4 backlog into this surface change, so the three models are re-run once. |
 | D82 | `make demo`'s preflight resolves the Python the quickstart will run (`python3`, else `python`, on `PATH`, as `run.sh` does) and stops before creating anything if it cannot `import grpc` and `google.protobuf`, saying which interpreter and how to provide them | Owner's ruling R59, found 2026-11-05: the quickstart's simulated adapter runs on the host with that Python and imports `grpc`; the preflight makes a missing package a clear stop at the start instead of a failure later in the run. |
 | D83 | The Dockerfile copies the binaries with `COPY --chmod=0755`; a test builds the binaries under umask 077, builds the image, and runs each binary in it as user 65532 (`-h`, exit status checked) | Owner's ruling R60, found 2026-11-05: a plain `COPY` keeps the mode the host build gave the files, which depends on the builder's umask, so whether user 65532 can run them depended on the machine that built the image. |
+| D84 | The reply to a message is the text of every model response of that message, in order, each separated by a blank line, then the engine's question or preview when `propose_task` ended the turn; the trace records each response's text (`responses`, one entry per model turn, empty for a response with tool calls only). The judge grades that reply, which is what the person saw | BACKLOG-v4 P9, found in the v4 record runs (2026-11-07): when `propose_task` ended the turn, only that response's text reached the person, so a model that cited the fleet state in an earlier response of the same message was shown without it, and the trace did not record it. Showing every response keeps what the model said visible next to the preview; the engine's text stays last, so the question or the preview's choices are what the person answers. |
 
 ## 8. Resolved questions (2026-11-03)
 

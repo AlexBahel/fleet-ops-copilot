@@ -104,3 +104,34 @@ func TestSystemPromptPinned(t *testing.T) {
 		t.Fatalf("system prompt changed (version %s, sha256 %s): bump SystemPromptVersion, log it in DESIGN, update this test", SystemPromptVersion, got)
 	}
 }
+
+// P9: the text of every model response of a message reaches the person, in
+// order, and the trace records each response's text.
+func TestEveryResponseTextReachesThePerson(t *testing.T) {
+	srv := mcp.NewServer(&mcp.Implementation{Name: "t"}, nil)
+	mcp.AddTool(srv, &mcp.Tool{Name: "echo"}, func(_ context.Context, _ *mcp.CallToolRequest, in echoIn) (*mcp.CallToolResult, echoOut, error) {
+		return nil, echoOut{Text: in.Text}, nil
+	})
+	ctx := context.Background()
+	cs, closeFn, err := Connect(ctx, srv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeFn()
+	args, _ := json.Marshal(map[string]any{"text": "x"})
+	be := &llm.Scripted{Steps: []llm.Step{
+		{Final: "Robot/sim-robot-001 status.phase=Idle.", Calls: []llm.ToolCall{{ID: "1", Name: "echo", Args: args}}},
+		{Calls: []llm.ToolCall{{ID: "2", Name: "echo", Args: args}}},
+		{Final: "It can take the work."},
+	}}
+	tr, err := (&Loop{Backend: be, Session: cs}).Run(ctx, "sam", "s1", "is sim-robot-001 free?")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "Robot/sim-robot-001 status.phase=Idle.\n\nIt can take the work."; tr.Final != want {
+		t.Fatalf("final %q, want %q", tr.Final, want)
+	}
+	if got := fmt.Sprintf("%q", tr.Responses); got != `["Robot/sim-robot-001 status.phase=Idle." "" "It can take the work."]` {
+		t.Fatalf("responses %s", got)
+	}
+}

@@ -264,6 +264,7 @@ func (r *Runner) converse(ctx context.Context, cs *mcp.ClientSession, be llm.Bac
 		tr, err = chat.Turn(ctx, cs, conv, s.Operator, session, msg)
 		all.Calls = append(all.Calls, tr.Calls...)
 		all.Turns += tr.Turns
+		all.Responses = append(all.Responses, tr.Responses...)
 		all.Usage.Add(tr.Usage)
 		all.StopReasons = append(all.StopReasons, tr.StopReasons...)
 		all.LatencyMs += tr.LatencyMs
