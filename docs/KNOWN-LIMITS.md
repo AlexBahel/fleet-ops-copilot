@@ -151,6 +151,10 @@ remove it.
   (`sim-fleet-adapter-2`/`-3`, client certificates from Swarmada's `demo-ab-live` overlay), as the
   quickstart's all-live path does. If a process dies, the Robots go `Offline` and filing is refused
   (R65 check); `hack/foc-sim-fleet.sh start` again restarts them. `make foc-down` stops them.
+- **A finding's inspect kind may come from a word list.** When a model reads a finding as "not
+  possible" and gives no `lookFor`, the engine picks inspect-damage if the person's words contain a
+  damage word (damage, dent, crack, broken, leak, scratch, torn, bent) and inspect-location
+  otherwise (R73). The preview shows the kind, so the person can change it with choice 3.
 - **RobotClass `simbot-v1` is a demo workaround.** Swarmada's warehouse quickstart names it on its
   Robots but does not ship it, and Swarmada's Robot webhook refuses every Robot spec update while it
   is missing. foc-up creates a minimal one (manufacturer, model, base adapter, the front camera),

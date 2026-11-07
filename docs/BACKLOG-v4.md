@@ -13,7 +13,7 @@ Sonnet 5.5, Opus 5.5 and the air-gapped Qwen2.5-7B again.
 **Batched into FOC-8 (ruling R68, 2026-11-06).** J1–J3, S1 and P1 are made together with the
 guided-request change (`docs/DESIGN.md` §3.10, §4.4, D81), which changes the prompt, the tools, the
 judge and the scenarios anyway. Status of each is in its row. What remains of v4 is the model runs:
-Sonnet 5.5, Opus 5.5 and the air-gapped Qwen2.5-7B on eval surface v4 (39 scenarios), which is a
+Sonnet 5.5, Opus 5.5 and the air-gapped Qwen2.5-7B on eval surface v4 (42 scenarios), which is a
 different architecture from v3 (R69), so the comparison is a new table, not a column added to the
 old one.
 
