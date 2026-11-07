@@ -51,6 +51,10 @@ const (
 	OutcomeBlocked     = "blockedConfirm"
 )
 
+// CodeFilingError is the dialogue code of a filing that failed as a call
+// rather than with a policy decision (D86).
+const CodeFilingError = "FILING_ERROR"
+
 // DialogueEvent is what one message did in a guided request.
 type DialogueEvent struct {
 	Outcome        string   `json:"outcome"`
@@ -416,16 +420,26 @@ func (c *Chat) file(ctx context.Context, cs *mcp.ClientSession, conv *conversati
 	tr := Trace{}
 	evc, raw, err := c.agentCall(ctx, cs, operator, sessionID, pv.Tool, in, mcp.Meta{mcpserver.MetaConfirmedPreview: id})
 	tr.Calls = append(tr.Calls, evc)
-	if err != nil {
-		return tr, err
-	}
 	var res tools.RequestResult
-	_ = json.Unmarshal(raw, &res)
+	if err == nil {
+		_ = json.Unmarshal(raw, &res)
+	}
 	ns := c.Catalogue.Namespace
-	if res.Refused || res.Created == "" {
+	switch {
+	case err != nil:
+		// The filing failed as a call (the API server refused the
+		// ApprovalRequest, fleetops-mcp was unreachable): the person is told
+		// what was refused and why, never left with an empty reply (D86).
+		ev.Outcome, ev.Code = OutcomeRefused, CodeFilingError
+		title := pv.Kind
+		if k, ok := c.Catalogue.KindByName(pv.Kind); ok {
+			title = k.Title
+		}
+		tr.Final = fmt.Sprintf("Not filed: the request (%s) was refused when it was filed: %s. Nothing was filed; start the request again to change it.", title, err.Error())
+	case res.Refused || res.Created == "":
 		ev.Outcome, ev.Code = OutcomeRefused, res.Code
 		tr.Final = fmt.Sprintf("Not filed: %s — %s", res.Code, res.Reason)
-	} else {
+	default:
 		name := strings.TrimPrefix(res.Created, "ApprovalRequest/")
 		ev.Outcome, ev.Filed, ev.Code = OutcomeFiled, name, res.Code
 		tr.Final = fmt.Sprintf("Filed %s (%s). It waits for a named person: fleetops approve %s -n %s, or fleetops reject %s -n %s. Next step: %s",

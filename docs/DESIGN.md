@@ -485,7 +485,8 @@ Swarmada filter number), alternatives, and the list of checks not made. Checks, 
   robot declares, with the alternative "move instead (no load)";
 - **zone state**: exists, estop on it or an ancestor, an `Active` or `Scheduled` maintenance
   covering it, restrictions denying entry or a required capability, a namespace stop;
-- **location and dependencies exist**: the waypoint is in the zone's chain; every `dependsOn`
+- **location and dependencies exist**: the waypoint is in the zone's chain, and a location that no
+  FleetZone declares (it resolves to no zone) is `WAYPOINT_NOT_FOUND` (D86); every `dependsOn`
   names a member and the graph is acyclic (Swarmada checks this only after activation, C7); the
   draft name is free;
 - **timing**: start, deadline and maintenance start in the future; a loop has a bound;
@@ -522,6 +523,11 @@ preview id, and sets `fleetops.alexbahel.github.io/confirmedPreview` in the call
 refuses a request without that confirmation (`DENY_NOT_CONFIRMED`) or whose recomputed id differs
 (`DENY_PREVIEW_MISMATCH`). The model is not offered the `request_*` tools. This applies to every
 request type, zone stops included (a zone stop was never an emergency path, §1.2).
+
+When the filing fails as a call rather than with a policy decision (the API server refuses the
+`ApprovalRequest`, fleetops-mcp cannot be reached), `fleetops-agent` replies with a fixed sentence
+that names the request and the error and says that nothing was filed (dialogue code
+`FILING_ERROR`, D86); the conversation's preview is closed.
 
 Another MCP client (the evaluation harness, a local stdio client) sets the confirmation itself;
 like the session id, it is asserted by the person's own client (KNOWN-LIMITS).
@@ -871,6 +877,7 @@ these, `check_task` correctly finds no eligible robot in those fixtures. Results
 | D83 | The Dockerfile copies the binaries with `COPY --chmod=0755`; a test builds the binaries under umask 077, builds the image, and runs each binary in it as user 65532 (`-h`, exit status checked) | Owner's ruling R60, found 2026-11-05: a plain `COPY` keeps the mode the host build gave the files, which depends on the builder's umask, so whether user 65532 can run them depended on the machine that built the image. |
 | D84 | The reply to a message is the text of every model response of that message, in order, each separated by a blank line, then the engine's question or preview when `propose_task` ended the turn; the trace records each response's text (`responses`, one entry per model turn, empty for a response with tool calls only). The judge grades that reply, which is what the person saw | BACKLOG-v4 P9, found in the v4 record runs (2026-11-07): when `propose_task` ended the turn, only that response's text reached the person, so a model that cited the fleet state in an earlier response of the same message was shown without it, and the trace did not record it. Showing every response keeps what the model said visible next to the preview; the engine's text stays last, so the question or the preview's choices are what the person answers. |
 | D85 | `propose_task`'s schema is narrowed to the site catalogue: `ask`, `kind`, `somethingElse.interpretation`, `.kind`, `.need`, `.lookFor` and the basic steps' `kind` are enums of the catalogue's values, and `fields` (also a step's) is an object with exactly the catalogue's field names, each described with its form and the kinds that use it, closed values (`mode`, `priority`, `onFailure`) as enums, no other property. The engine refuses a call that names a field the catalogue does not know before applying anything of it, and returns to the model a question naming the kind's fields and all allowed names; the model then calls again | BACKLOG-v4 P8, found in the v4 record runs (2026-11-07): unknown field names were dropped without notice and the default used, so six guided-12 runs passed the rounds as `repeat` and the preview showed "1 round(s) (default)". The schema says what is allowed; the refusal makes a wrong name a correction by the model instead of a silent default. The question goes to the model, not the person, because the person does not name fields. |
+| D86 | `check_task` blocks a member whose location names a waypoint that no FleetZone declares (it resolves to no zone) with `WAYPOINT_NOT_FOUND`, listing the waypoints that exist, so such a preview is blocked and never "likely feasible". When filing fails as a call (an API server refusal, an unreachable fleetops-mcp), fleetops-agent writes a fixed reply naming the request and the error and saying nothing was filed (`FILING_ERROR`), closes the preview, and does not return the error as the turn's result | BACKLOG-v4 P5, found in the v4 record runs (2026-11-07): a location the catalogue does not know (`receiving-dock`, `warehouse-a`) gave a preview with `location.zone: ""` that `check_task` called likely feasible (its location check ran only when a zone was set); the CRD refused the ApprovalRequest after the person confirmed, and the reply was empty. The check now runs before the preview, and no refusal leaves the person without a reply. |
 
 ## 8. Resolved questions (2026-11-03)
 

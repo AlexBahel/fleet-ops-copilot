@@ -397,7 +397,14 @@ func payloadOf(a swarmv1.FleetActionSpec) map[string]any {
 
 func (e *eval) member(name string, a swarmv1.FleetActionSpec) {
 	explained := a.Zone != "" && !e.zoneState(name, a)
-	if wp, _ := payloadOf(a)["waypoint"].(string); wp != "" && a.Zone != "" {
+	if wp, _ := payloadOf(a)["waypoint"].(string); wp != "" && a.Zone == "" {
+		// A location no FleetZone declares has no zone to resolve to (D86).
+		e.block(CodeWaypointNotFound, name, "waypoint %s is not declared in any FleetZone in %s", wp, e.s.Namespace)
+		if names := e.waypointNames(); len(names) > 0 {
+			e.alt("waypoints that exist: %s", strings.Join(names, ", "))
+		}
+		explained = true
+	} else if wp != "" {
 		if !e.waypointExists(a.Zone, wp) {
 			e.block(CodeWaypointNotFound, name, "waypoint %s is not declared in FleetZone %s or its ancestors", wp, a.Zone)
 			if names := e.waypointNames(); len(names) > 0 {

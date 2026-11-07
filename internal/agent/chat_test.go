@@ -19,6 +19,8 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -26,6 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	swarmv1 "github.com/swarmada/swarmada/api/v1"
 
@@ -44,7 +47,7 @@ func i32(v int32) *int32 { return &v }
 // world is a fake cluster: the warehouse zone with its waypoints, one idle
 // robot with navigation and camera_front, a connected adapter, and the
 // draft gate served.
-func world(t *testing.T, robots ...*swarmv1.Robot) client.Client {
+func world(t *testing.T, robots ...*swarmv1.Robot) client.WithWatch {
 	t.Helper()
 	z := &swarmv1.FleetZone{ObjectMeta: metav1.ObjectMeta{Name: "warehouse-a", Namespace: "warehouse-a"}}
 	z.Spec.Waypoints = []swarmv1.Waypoint{{Name: "receiving-dock-1", X: 5.1, Y: 2.1}, {Name: "staging-shelf-a", X: 12.1, Y: 8.1}, {Name: "charging-bay", X: 1.1, Y: 1.1}}
@@ -356,5 +359,60 @@ func TestUnknownFieldNameRefused(t *testing.T) {
 	}
 	if _, ok := conv.State.Fields["repeat"]; ok {
 		t.Fatal("the unknown field was kept")
+	}
+}
+
+// P5: a location that is not a waypoint of the catalogue's fleet is caught by
+// check_task before the preview is shown: the preview is blocked with
+// WAYPOINT_NOT_FOUND, never "likely feasible", and cannot be confirmed.
+func TestUnknownLocationBlockedBeforeFiling(t *testing.T) {
+	c := world(t)
+	_, _, send := chatFixture(t, c,
+		llm.Step{Calls: []llm.ToolCall{call("p1", ProposeTool, map[string]any{"ask": "inspect", "kind": "inspect-location", "fields": map[string]any{"location": "receiving-dock"}})}},
+	)
+	tr := send("Inspect the receiving dock.")
+	if tr.Dialogue == nil || tr.Dialogue.Outcome != OutcomePreview || !tr.Dialogue.Blocked || !slices.Contains(tr.Dialogue.Blockers, "WAYPOINT_NOT_FOUND") {
+		t.Fatalf("preview %+v\n%s", tr.Dialogue, tr.Final)
+	}
+	if strings.Contains(tr.Final, "likely feasible") {
+		t.Fatalf("an unknown location was called likely feasible:\n%s", tr.Final)
+	}
+	if tr = send("1"); tr.Dialogue.Outcome != OutcomeBlocked {
+		t.Fatalf("confirm %+v", tr.Dialogue)
+	}
+	if n := len(requests(t, c)); n != 0 {
+		t.Fatalf("%d requests filed", n)
+	}
+}
+
+// P5: when fleetops-mcp refuses the filing with an error (here the API server
+// refusing the ApprovalRequest), the person gets the engine's fixed reply
+// saying what was refused and why, never an empty one.
+func TestRefusedFilingIsNeverAnEmptyReply(t *testing.T) {
+	c := interceptor.NewClient(world(t), interceptor.Funcs{
+		Create: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+			if _, ok := obj.(*fleetopsv1.ApprovalRequest); ok {
+				return errors.New(`ApprovalRequest.fleetops.alexbahel.github.io "areq-x" is invalid: spec.draftTask.actions[0].location.zone: Invalid value: "": should be at least 1 chars long`)
+			}
+			return cl.Create(ctx, obj, opts...)
+		},
+	})
+	_, conv, send := chatFixture(t, c,
+		llm.Step{Calls: []llm.ToolCall{call("p1", ProposeTool, map[string]any{"ask": "inspect", "kind": "inspect-damage", "fields": map[string]any{"location": "receiving-dock-1"}})}},
+	)
+	if tr := send("inspect receiving-dock-1 for damage"); tr.Dialogue == nil || tr.Dialogue.Outcome != OutcomePreview || tr.Dialogue.Blocked {
+		t.Fatalf("preview %+v", tr.Dialogue)
+	}
+	tr := send("1")
+	if tr.Dialogue == nil || tr.Dialogue.Outcome != OutcomeRefused {
+		t.Fatalf("dialogue %+v", tr.Dialogue)
+	}
+	for _, want := range []string{"Not filed", "Inspect for damage", "location.zone", "Nothing was filed"} {
+		if !strings.Contains(tr.Final, want) {
+			t.Errorf("reply lacks %q: %q", want, tr.Final)
+		}
+	}
+	if conv.Preview != nil {
+		t.Fatal("the refused preview is still open")
 	}
 }
