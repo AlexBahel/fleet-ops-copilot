@@ -100,7 +100,7 @@ func waitDead(pid int) bool {
 		}
 		// A killed child stays a zombie until its parent (gone with the
 		// script) is reaped by init; ps shows no command for it.
-		if out, _ := exec.Command("ps", "-p", strconv.Itoa(pid), "-o", "stat=").Output(); strings.HasPrefix(strings.TrimSpace(string(out)), "Z") {
+		if out, _ := exec.Command("ps", "-p", strconv.Itoa(pid), "-o", "stat=").Output(); strings.HasPrefix(strings.TrimSpace(string(out)), "Z") { //nolint:gosec // G204: fixed command, a PID the test started
 			return true
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -230,7 +230,7 @@ func TestSimFleetStartFailsAndCleansUp(t *testing.T) {
 		t.Errorf("pidfile left after a failed start: %v", err)
 	}
 	var started []int
-	out2, _ := exec.Command("pgrep", "-f", filepath.Join(work, "sim-fleet")).Output()
+	out2, _ := exec.Command("pgrep", "-f", filepath.Join(work, "sim-fleet")).Output() //nolint:gosec // G204: fixed command, the test's own temp dir
 	for _, f := range strings.Fields(string(out2)) {
 		n, _ := strconv.Atoi(f)
 		started = append(started, n)
