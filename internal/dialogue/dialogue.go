@@ -124,6 +124,28 @@ type State struct {
 	Message       string         `json:"message,omitempty"`
 	SomethingElse *SomethingElse `json:"somethingElse,omitempty"`
 	Steps         []StepInput    `json:"steps,omitempty"`
+	// Invalid holds values refused for their form, by field (start "now"):
+	// never used, kept only to say why the question is asked again (D88).
+	Invalid map[string]string `json:"invalid,omitempty"`
+}
+
+// set records a field value: one without its field's form is removed from
+// the state and remembered as invalid, so the question that fills it is
+// asked again (D88); a valid one clears an earlier refusal.
+func (st *State) set(f, v string) {
+	if st.Fields == nil {
+		st.Fields = map[string]string{}
+	}
+	if form, ok := Forms[f]; ok && !form.Valid(v) {
+		delete(st.Fields, f)
+		if st.Invalid == nil {
+			st.Invalid = map[string]string{}
+		}
+		st.Invalid[f] = v
+		return
+	}
+	st.Fields[f] = v
+	delete(st.Invalid, f)
 }
 
 // Active reports whether a request is under way.
@@ -210,7 +232,7 @@ func (e *Engine) Propose(st *State, in Input, snap Snapshot) Outcome {
 	}
 	for k, v := range in.Fields {
 		if v != "" && slices.Contains(catalogue.Fields, k) {
-			st.Fields[k] = v
+			st.set(k, v)
 		}
 	}
 	if in.SomethingElse != nil || in.Ask == AskSomethingElse || (in.Ask != "" && !e.knownAsk(in.Ask) && st.Ask == "") {
@@ -304,7 +326,7 @@ func (e *Engine) Answer(st *State, n int, rest string, snap Snapshot) (out Outco
 		st.Kind = ch.Kind
 	default:
 		for k, v := range ch.Set {
-			st.Fields[k] = v
+			st.set(k, v)
 		}
 	}
 	return e.next(st, snap), false, true
@@ -447,7 +469,7 @@ func (e *Engine) next(st *State, snap Snapshot) Outcome {
 		if len(st.Asked) >= catalogue.MaxQuestions {
 			break
 		}
-		rq := Question{ID: q.ID, Text: q.Text}
+		rq := Question{ID: q.ID, Text: invalidNote(st, q.Fills) + q.Text}
 		for i, c := range choices {
 			c.N = i + 1
 			rq.Choices = append(rq.Choices, c)
@@ -470,6 +492,9 @@ func (e *Engine) next(st *State, snap Snapshot) Outcome {
 func (e *Engine) answered(st *State, q catalogue.Question) bool {
 	k, _ := e.Cat.KindByName(st.Kind)
 	for _, f := range q.Fills {
+		if _, bad := st.Invalid[f]; bad {
+			return false // a refused value is asked again (D88)
+		}
 		if f == "kind" {
 			if st.Kind == "" {
 				return false
@@ -487,6 +512,21 @@ func (e *Engine) answered(st *State, q catalogue.Question) bool {
 		return false
 	}
 	return true
+}
+
+// invalidNote opens a question asked again for a refused value: the value
+// and the field's valid forms (D88).
+func invalidNote(st *State, fills []string) string {
+	var out []string
+	for _, f := range fills {
+		if v, ok := st.Invalid[f]; ok {
+			out = append(out, fmt.Sprintf("The %s %q cannot be used: give %s.", f, v, Forms[f].Forms))
+		}
+	}
+	if len(out) == 0 {
+		return ""
+	}
+	return strings.Join(out, " ") + " "
 }
 
 func (s Snapshot) waypoints() map[string]Waypoint {
@@ -667,7 +707,12 @@ func (e *Engine) proposal(st *State, wps map[string]Waypoint) Outcome {
 			p.Lines = append(p.Lines, fmt.Sprintf("%s: %q (your words)", label(f), v))
 			continue
 		}
-		p.Lines = append(p.Lines, fieldLine(f, v, def, k, wps))
+		line := fieldLine(f, v, def, k, wps)
+		if bad, ok := st.Invalid[f]; ok {
+			// Past the cap, or no question fills it: the default is used (D88).
+			line += fmt.Sprintf(" — %q could not be used: give %s (choose 3 to change it)", bad, Forms[f].Forms)
+		}
+		p.Lines = append(p.Lines, line)
 	}
 	if k.Request == catalogue.RequestDraftTask {
 		if _, ok := vals["robot"]; !ok && !hasPin(k) {

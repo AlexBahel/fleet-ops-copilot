@@ -416,3 +416,32 @@ func TestRefusedFilingIsNeverAnEmptyReply(t *testing.T) {
 		t.Fatal("the refused preview is still open")
 	}
 }
+
+// P7 end to end, the zone-03 reading: start "now" is not sent to check_task
+// (which refused it, and kept refusing later calls); the person is asked
+// again and the request is filed after the answer and the confirmation.
+func TestInvalidStartAskedAgainThenFiled(t *testing.T) {
+	c := world(t)
+	_, _, send := chatFixture(t, c,
+		llm.Step{Calls: []llm.ToolCall{call("p1", ProposeTool, map[string]any{"ask": "zone-maintenance", "kind": "zone-maintenance", "fields": map[string]any{"zone": "warehouse-a", "mode": "Immediate", "start": "now", "reason": "forklift crossing"}})}},
+	)
+	tr := send("A forklift has to cross warehouse-a. Pause all robots there right away.")
+	if tr.Dialogue == nil || tr.Dialogue.Outcome != OutcomeQuestion || tr.Dialogue.QuestionID != "maintenance.mode" {
+		t.Fatalf("dialogue %+v\n%s", tr.Dialogue, tr.Final)
+	}
+	for _, e := range tr.Calls {
+		if e.Name == "check_task" {
+			t.Fatalf("check_task was called with the invalid start: %s", e.Args)
+		}
+	}
+	if tr = send("2"); tr.Dialogue == nil || tr.Dialogue.Outcome != OutcomePreview || tr.Dialogue.Blocked {
+		t.Fatalf("preview %+v\n%s", tr.Dialogue, tr.Final)
+	}
+	if tr = send("1"); tr.Dialogue.Outcome != OutcomeFiled {
+		t.Fatalf("filing %+v %s", tr.Dialogue, tr.Final)
+	}
+	rs := requests(t, c)
+	if len(rs) != 1 || rs[0].Spec.ZoneMaintenance == nil || rs[0].Spec.ZoneMaintenance.Mode != "Immediate" || rs[0].Spec.ZoneMaintenance.ScheduledStart != nil {
+		t.Fatalf("requests %+v", rs)
+	}
+}

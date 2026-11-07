@@ -409,3 +409,52 @@ func TestCapCountsEveryQuestionShown(t *testing.T) {
 		t.Fatalf("%d questions shown, %d counted (%v); the cap is %d", shown, len(st.Asked), st.Asked, catalogue.MaxQuestions)
 	}
 }
+
+// P7: a value that does not have its field's form (start "now", the reading
+// Opus 5.5 gave in zone-03) is removed from the dialogue state, and the
+// person is asked the question that fills it again, with the valid forms.
+// A later call with a valid value is used, not refused.
+func TestInvalidValueRemovedAndAskedAgain(t *testing.T) {
+	e := &Engine{Cat: cat(t)}
+	st := newState("Pause all robots in warehouse-a right away.")
+	in := Input{Ask: "zone-maintenance", Kind: "zone-maintenance", Fields: map[string]string{"zone": "warehouse-a", "mode": "Immediate", "start": "now", "reason": "forklift crossing"}}
+	o := e.Propose(st, in, snap)
+	if o.Question == nil || o.Question.ID != "maintenance.mode" {
+		t.Fatalf("outcome %+v", o)
+	}
+	if text := o.Question.Render(); !strings.Contains(text, `"now"`) || !strings.Contains(text, "on approval, or a time such as 2026-11-04T08:00:00Z") {
+		t.Fatalf("question does not name the value and the valid forms:\n%s", text)
+	}
+	if _, ok := st.Fields["start"]; ok {
+		t.Fatalf("the invalid start was kept: %v", st.Fields)
+	}
+	o = e.Propose(st, Input{Ask: "zone-maintenance", Fields: map[string]string{"start": "2026-11-04T08:00:00Z"}}, snap)
+	if o.Proposal == nil {
+		t.Fatalf("a later call with a valid start: %+v", o)
+	}
+	if zm := o.Proposal.Input.(tools.ZoneMaintenanceInput); zm.ScheduledStart != "2026-11-04T08:00:00Z" || zm.Mode != "Immediate" {
+		t.Fatalf("input %+v", zm)
+	}
+	// Answering the question with a choice clears it too.
+	st = newState("Pause all robots in warehouse-a right away.")
+	e.Propose(st, in, snap)
+	o, _, ok := e.Answer(st, 2, "", snap)
+	if !ok || o.Proposal == nil || o.Proposal.Input.(tools.ZoneMaintenanceInput).ScheduledStart != "" {
+		t.Fatalf("answer 2: %+v", o)
+	}
+}
+
+// P7: past the cap the invalid value is not asked again; the preview uses
+// the default and says the value given could not be used.
+func TestInvalidValuePastTheCapShownInPreview(t *testing.T) {
+	e := &Engine{Cat: cat(t)}
+	st := newState("Pause warehouse-a now.")
+	st.Asked = []string{"a", "b"}
+	o := e.Propose(st, Input{Ask: "zone-maintenance", Fields: map[string]string{"zone": "warehouse-a", "start": "now", "reason": "r"}}, snap)
+	if o.Proposal == nil {
+		t.Fatalf("outcome %+v", o)
+	}
+	if got := strings.Join(o.Proposal.Lines, "\n"); !strings.Contains(got, `Start: on approval (default)`) || !strings.Contains(got, `"now"`) {
+		t.Fatalf("lines:\n%s", got)
+	}
+}
