@@ -44,9 +44,9 @@ func TestActivationBanner(t *testing.T) {
 			t.Errorf("API server must come before the command:\n%s", got)
 		}
 	})
-	t.Run("foc activate with a context", func(t *testing.T) {
-		got := activationBanner("https://127.0.0.1:6443", "warehouse-a", "kind-foc-x", "foc activate areq-1 -n warehouse-a")
-		if !strings.Contains(got, "  foc activate areq-1 -n warehouse-a --context kind-foc-x\n") {
+	t.Run("fleetops activate with a context", func(t *testing.T) {
+		got := activationBanner("https://127.0.0.1:6443", "warehouse-a", "kind-foc-x", "fleetops activate areq-1 -n warehouse-a")
+		if !strings.Contains(got, "  fleetops activate areq-1 -n warehouse-a --context kind-foc-x\n") {
 			t.Errorf("banner:\n%s", got)
 		}
 	})
@@ -75,7 +75,7 @@ current-context: kind-foc-test
 	return p
 }
 
-// foc chat sends the kubeconfig user's bearer token to foc-agent (R39) and
+// fleetops chat sends the kubeconfig user's bearer token to fleetops-agent (R39) and
 // warns when there is none.
 func TestChatSendsTheKubeconfigToken(t *testing.T) {
 	var gotAuth, gotBody string
@@ -110,7 +110,7 @@ func TestChatSendsTheKubeconfigToken(t *testing.T) {
 	}
 }
 
-// D75: foc chat keeps the conversation id per context and sends it back;
+// D75: fleetops chat keeps the conversation id per context and sends it back;
 // -new starts a fresh one.
 func TestChatKeepsTheConversation(t *testing.T) {
 	var bodies []string
@@ -132,7 +132,7 @@ func TestChatKeepsTheConversation(t *testing.T) {
 	if strings.Contains(bodies[0], `"conversationId":"abc`) || !strings.Contains(bodies[1], `"conversationId":"abcdefghijklmnopqrstuvwxyz"`) || strings.Contains(bodies[2], `"conversationId":"abc`) {
 		t.Fatalf("bodies %v", bodies)
 	}
-	files, _ := filepath.Glob(filepath.Join(state, "foc", "conversations", "*"))
+	files, _ := filepath.Glob(filepath.Join(state, "fleetops", "conversations", "*"))
 	if len(files) != 1 {
 		t.Fatalf("files %v", files)
 	}
@@ -144,7 +144,7 @@ func TestChatKeepsTheConversation(t *testing.T) {
 func TestChatRefusesToSendTheTokenInClearToRemoteHosts(t *testing.T) {
 	for raw, ok := range map[string]bool{
 		"http://127.0.0.1:8090": true, "http://localhost:8090": true, "http://[::1]:8090": true,
-		"https://foc.example": true, "http://foc-agent.foc-system:8090": false, "http://10.0.0.5:8090": false, "ftp://x": false,
+		"https://fleetops.example": true, "http://fleetops-agent.fleetops-system:8090": false, "http://10.0.0.5:8090": false, "ftp://x": false,
 	} {
 		if err := tokenSafeURL(raw); (err == nil) != ok {
 			t.Errorf("%s: %v", raw, err)

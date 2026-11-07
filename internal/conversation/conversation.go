@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package conversation is foc-agent's bounded, per-owner conversation store
+// Package conversation is fleetops-agent's bounded, per-owner conversation store
 // (docs/DESIGN.md §3.10.7, D75). A conversation is continued only by the
 // requester who started it; its id is returned once and stored only as a
 // SHA-256; it holds bounded person and assistant text and the dialogue state,

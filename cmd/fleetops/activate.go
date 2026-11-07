@@ -31,14 +31,14 @@ import (
 
 	swarmv1 "github.com/swarmada/swarmada/api/v1"
 
-	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
+	fleetopsv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/approval"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/feasibility"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/policy"
 )
 
-// activator is what foc activate needs from the cluster, as the person.
+// activator is what fleetops activate needs from the cluster, as the person.
 type activator struct {
 	C        client.Client
 	Identity func(ctx context.Context) (string, []string, error)
@@ -53,7 +53,7 @@ type activator struct {
 // Activation naming the person (the fleetops-decisions admission policy binds
 // it to the authenticated caller) and sends the plain spec.draft=false patch.
 // Swarmada checks the person's own activate verb; nothing is added to the
-// FleetTask. foc-approvals links the record when the task leaves Draft.
+// FleetTask. fleetops-approvals links the record when the task leaves Draft.
 func activate(ctx context.Context, a activator, ns, request, kctx string, stdout io.Writer) error {
 	user, groups, err := a.Identity(ctx)
 	if err != nil {
@@ -62,17 +62,17 @@ func activate(ctx context.Context, a activator, ns, request, kctx string, stdout
 	if (policy.Principal{Username: user, Groups: groups}).IsServiceAccount() {
 		return fmt.Errorf("%s is a ServiceAccount; Swarmada lets only a person activate a draft", user)
 	}
-	var req focv1.ApprovalRequest
+	var req fleetopsv1.ApprovalRequest
 	if err := a.C.Get(ctx, client.ObjectKey{Namespace: ns, Name: request}, &req); err != nil {
 		return err
 	}
 	switch {
-	case req.Spec.Type != focv1.RequestActivateTask || req.Spec.ActivateTask == nil:
+	case req.Spec.Type != fleetopsv1.RequestActivateTask || req.Spec.ActivateTask == nil:
 		return fmt.Errorf("%s is a %s request, not an activation", request, req.Spec.Type)
-	case req.Status.State == focv1.StateExecuted:
+	case req.Status.State == fleetopsv1.StateExecuted:
 		return fmt.Errorf("%s is already Executed: the task was activated (by %s)", request, req.Status.ActivatedBy)
-	case req.Status.State != focv1.StateApproved:
-		return fmt.Errorf("%s is %q, not Approved; a named person approves it first (foc approve %s -n %s)", request, req.Status.State, request, ns)
+	case req.Status.State != fleetopsv1.StateApproved:
+		return fmt.Errorf("%s is %q, not Approved; a named person approves it first (fleetops approve %s -n %s)", request, req.Status.State, request, ns)
 	}
 	name := req.Spec.ActivateTask.TaskName
 	var task swarmv1.FleetTask
@@ -108,9 +108,9 @@ func activate(ctx context.Context, a activator, ns, request, kctx string, stdout
 	if rep.Verdict == feasibility.Blocked {
 		return errors.New("not activated: a check is blocked (above)")
 	}
-	rec := &focv1.ApprovalDecision{
+	rec := &fleetopsv1.ApprovalDecision{
 		ObjectMeta: metav1.ObjectMeta{GenerateName: request + "-activation-", Namespace: ns, Labels: map[string]string{fleet.RequestLabel: request}},
-		Spec:       focv1.ApprovalDecisionSpec{RequestRef: request, Type: focv1.DecisionActivation, DecidedBy: user, DecidedByGroups: groups},
+		Spec:       fleetopsv1.ApprovalDecisionSpec{RequestRef: request, Type: fleetopsv1.DecisionActivation, DecidedBy: user, DecidedByGroups: groups},
 	}
 	if err := a.C.Create(ctx, rec); err != nil {
 		return fmt.Errorf("not activated: recording the activation (an ApprovalDecision of type Activation; the fleetops:approver role grants create): %w", err)
@@ -119,13 +119,13 @@ func activate(ctx context.Context, a activator, ns, request, kctx string, stdout
 	if err := a.C.Patch(ctx, &task, client.RawPatch(types.MergePatchType, []byte(approval.ActivationPatch))); err != nil {
 		return fmt.Errorf("not activated: %w (the Activation record %s stays; it is linked only if the task leaves Draft)", err, rec.Name)
 	}
-	_, _ = fmt.Fprintf(stdout, "activated FleetTask %s as %s; foc-approvals links %s to %s\n", name, user, rec.Name, request)
+	_, _ = fmt.Fprintf(stdout, "activated FleetTask %s as %s; fleetops-approvals links %s to %s\n", name, user, rec.Name, request)
 	return nil
 }
 
 func activateCmd(ctx context.Context, args []string, stdout io.Writer) error {
 	if len(args) < 1 || strings.HasPrefix(args[0], "-") {
-		return fmt.Errorf("usage: foc activate REQUEST [-n NAMESPACE] [--context NAME]")
+		return fmt.Errorf("usage: fleetops activate REQUEST [-n NAMESPACE] [--context NAME]")
 	}
 	fs := flag.NewFlagSet("activate", flag.ContinueOnError)
 	ns := fs.String("n", "warehouse-a", "namespace")

@@ -27,7 +27,7 @@ import (
 )
 
 // Load reads the snapshot for namespace ns with c. A list that fails (for
-// example a person without list permission running foc activate) is recorded
+// example a person without list permission running fleetops activate) is recorded
 // in NotChecked instead of failing the whole check. SwarmadaConfig is read
 // and projected at once (ProjectConfig); the objects are not kept.
 func Load(ctx context.Context, c client.Reader, ns string, now time.Time) Snapshot {

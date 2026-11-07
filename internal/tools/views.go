@@ -24,7 +24,7 @@ import (
 
 	swarmv1 "github.com/swarmada/swarmada/api/v1"
 
-	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
+	fleetopsv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 )
 
 // The view types below are what read tools return. Field names follow the
@@ -328,13 +328,13 @@ type RequestView struct {
 	Message      string `json:"status.message,omitempty"`
 }
 
-func requestView(r *focv1.ApprovalRequest) RequestView {
+func requestView(r *fleetopsv1.ApprovalRequest) RequestView {
 	v := RequestView{
 		Name: r.Name, Namespace: r.Namespace, Type: string(r.Spec.Type), RequestedFor: r.Spec.RequestedFor,
 		ExpiresAt: ts(&r.Spec.ExpiresAt), State: string(r.Status.State), DecidedBy: r.Status.DecidedBy, Message: r.Status.Message,
 	}
 	if v.State == "" {
-		v.State = string(focv1.StatePending)
+		v.State = string(fleetopsv1.StatePending)
 	}
 	switch {
 	case r.Spec.ActivateTask != nil:

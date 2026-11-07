@@ -15,8 +15,8 @@ limitations under the License.
 */
 
 // Package draft builds the Swarmada FleetTask a DraftTask request leads to.
-// It is the one builder: foc-approvals creates exactly this object, check_task
-// and foc activate evaluate it, and the web UI shows it (docs/DESIGN.md D53,
+// It is the one builder: fleetops-approvals creates exactly this object, check_task
+// and fleetops activate evaluate it, and the web UI shows it (docs/DESIGN.md D53,
 // D77).
 package draft
 
@@ -29,7 +29,7 @@ import (
 
 	swarmv1 "github.com/swarmada/swarmada/api/v1"
 
-	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
+	fleetopsv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 )
 
 // Payload keys: the convention this version writes (DESIGN.md §3.10.1). A
@@ -51,7 +51,7 @@ const (
 // repeat or a multi-stop route becomes spec.flow: a loop of p.Repeat.Times
 // (default 1) rounds over the members in order. Without either, members keep
 // their dependsOn and no flow is set.
-func Task(ns string, p *focv1.DraftTaskParams) (*swarmv1.FleetTask, error) {
+func Task(ns string, p *fleetopsv1.DraftTaskParams) (*swarmv1.FleetTask, error) {
 	if p == nil {
 		return nil, fmt.Errorf("no draft task parameters")
 	}
@@ -68,7 +68,7 @@ func Task(ns string, p *focv1.DraftTaskParams) (*swarmv1.FleetTask, error) {
 	}
 	var order []string
 	for _, a := range p.Actions {
-		stops := []*focv1.Location{a.Location}
+		stops := []*fleetopsv1.Location{a.Location}
 		if len(a.Route) > 0 {
 			stops = nil
 			for i := range a.Route {
@@ -108,7 +108,7 @@ func Task(ns string, p *focv1.DraftTaskParams) (*swarmv1.FleetTask, error) {
 	return t, nil
 }
 
-func actionSpec(a focv1.DraftAction, at *focv1.Location) (swarmv1.FleetActionSpec, error) {
+func actionSpec(a fleetopsv1.DraftAction, at *fleetopsv1.Location) (swarmv1.FleetActionSpec, error) {
 	spec := swarmv1.FleetActionSpec{
 		Type: swarmv1.ActionType(a.Type), CustomType: a.CustomType, Zone: a.Zone,
 		Priority: swarmv1.ActionPriority(a.Priority), RequiredCapabilities: a.RequiredCapabilities,
@@ -152,7 +152,7 @@ func actionSpec(a focv1.DraftAction, at *focv1.Location) (swarmv1.FleetActionSpe
 	return spec, nil
 }
 
-func putLocation(payload map[string]any, at *focv1.Location) error {
+func putLocation(payload map[string]any, at *fleetopsv1.Location) error {
 	if at.Waypoint != "" {
 		payload[KeyWaypoint] = at.Waypoint
 	}

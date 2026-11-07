@@ -34,7 +34,7 @@ import (
 
 	swarmv1 "github.com/swarmada/swarmada/api/v1"
 
-	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
+	fleetopsv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/approval"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/policy"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/tools"
@@ -58,17 +58,17 @@ func TestExecutorRefusesWhenConditionsChange(t *testing.T) {
 		t.Fatal(err)
 	}
 	name := reqName(t, res)
-	filed := waitState(t, name, focv1.StatePending)
+	filed := waitState(t, name, fleetopsv1.StatePending)
 	if filed.Spec.Checks == nil || filed.Spec.Checks.Verdict != "likely feasible" || filed.Spec.Preview == nil || filed.Spec.Preview.ID == "" {
 		t.Fatalf("filed spec %+v", filed.Spec)
 	}
 	if err := admin.Delete(ctx, r); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := approverFor(t, "dana").Decide(ctx, swarmNS, name, focv1.VerdictApprove, ""); err != nil {
+	if _, err := approverFor(t, "dana").Decide(ctx, swarmNS, name, fleetopsv1.VerdictApprove, ""); err != nil {
 		t.Fatal(err)
 	}
-	got := waitState(t, name, focv1.StateFailed)
+	got := waitState(t, name, fleetopsv1.StateFailed)
 	// The only robot that could do it is gone: no eligible robot, or (when no
 	// robot is left that declares the capability) no robot with it.
 	if !strings.Contains(got.Status.Message, string(policy.CodeCheckFailed)) ||
@@ -95,10 +95,10 @@ func TestExecutorRecordsDryRuns(t *testing.T) {
 		t.Fatal(err)
 	}
 	name := reqName(t, res)
-	if _, err := approverFor(t, "dana").Decide(ctx, swarmNS, name, focv1.VerdictApprove, ""); err != nil {
+	if _, err := approverFor(t, "dana").Decide(ctx, swarmNS, name, fleetopsv1.VerdictApprove, ""); err != nil {
 		t.Fatal(err)
 	}
-	got := waitState(t, name, focv1.StateExecuted)
+	got := waitState(t, name, fleetopsv1.StateExecuted)
 	ec := got.Status.ExecutionChecks
 	if ec == nil || ec.Verdict != "likely feasible" || len(ec.DryRuns) != 2 {
 		t.Fatalf("execution checks %+v", ec)
@@ -120,9 +120,9 @@ func TestExecutorRecordsDryRuns(t *testing.T) {
 	}
 }
 
-// R69: a FleetAction create by foc-approvals that is not a dry run is
+// R69: a FleetAction create by fleetops-approvals that is not a dry run is
 // refused by the admission policy; a dry run is admitted.
-func TestFocApprovalsFleetActionDryRunOnly(t *testing.T) {
+func TestFleetopsApprovalsFleetActionDryRunOnly(t *testing.T) {
 	ctx := context.Background()
 	c := asSA(t, approvUser)
 	fa := func() *swarmv1.FleetAction {
@@ -142,8 +142,8 @@ func TestFocApprovalsFleetActionDryRunOnly(t *testing.T) {
 	}
 }
 
-// R69 and D25: foc-mcp has no create on any Swarmada resource.
-func TestFocMcpHasNoCreateOnSwarmada(t *testing.T) {
+// R69 and D25: fleetops-mcp has no create on any Swarmada resource.
+func TestFleetopsMcpHasNoCreateOnSwarmada(t *testing.T) {
 	ctx := context.Background()
 	lists, err := env.Discovery().ServerResourcesForGroupVersion("swarmada.io/v1")
 	if err != nil {
@@ -155,13 +155,13 @@ func TestFocMcpHasNoCreateOnSwarmada(t *testing.T) {
 			continue
 		}
 		for _, verb := range []string{"create", "update", "patch", "delete"} {
-			sar := &authzv1.SubjectAccessReview{Spec: authzv1.SubjectAccessReviewSpec{User: mcpUser, Groups: []string{"system:serviceaccounts", "system:serviceaccounts:foc-system"},
+			sar := &authzv1.SubjectAccessReview{Spec: authzv1.SubjectAccessReviewSpec{User: mcpUser, Groups: []string{"system:serviceaccounts", "system:serviceaccounts:fleetops-system"},
 				ResourceAttributes: &authzv1.ResourceAttributes{Namespace: swarmNS, Group: "swarmada.io", Resource: r.Name, Verb: verb}}}
 			if err := admin.Create(ctx, sar); err != nil {
 				t.Fatal(err)
 			}
 			if sar.Status.Allowed {
-				t.Errorf("foc-mcp may %s %s", verb, r.Name)
+				t.Errorf("fleetops-mcp may %s %s", verb, r.Name)
 			}
 			n++
 		}
@@ -171,7 +171,7 @@ func TestFocMcpHasNoCreateOnSwarmada(t *testing.T) {
 	}
 }
 
-// D79 (R71): foc activate records the activation in our own API, as an
+// D79 (R71): fleetops activate records the activation in our own API, as an
 // ApprovalDecision of type Activation, then sends the plain spec.draft=false
 // patch. The fleetops-decisions admission policy binds the record to the
 // authenticated caller; a record decides nothing; a record made before the
@@ -186,22 +186,22 @@ func TestActivationRecordIsTheAuthenticatedUser(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := approverFor(t, "dana").Decide(ctx, swarmNS, reqName(t, res), focv1.VerdictApprove, ""); err != nil {
+	if _, err := approverFor(t, "dana").Decide(ctx, swarmNS, reqName(t, res), fleetopsv1.VerdictApprove, ""); err != nil {
 		t.Fatal(err)
 	}
-	waitState(t, reqName(t, res), focv1.StateExecuted)
+	waitState(t, reqName(t, res), fleetopsv1.StateExecuted)
 	act, err := h.activate(ctx, sess, tools.ActivateTaskInput{TaskName: "act-move"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	actName := reqName(t, act)
-	record := func(person, decidedBy string) (*focv1.ApprovalDecision, error) {
+	record := func(person, decidedBy string) (*fleetopsv1.ApprovalDecision, error) {
 		_, groups, err := approverFor(t, person).Identity(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
-		d := &focv1.ApprovalDecision{ObjectMeta: metav1.ObjectMeta{GenerateName: actName + "-activation-", Namespace: swarmNS},
-			Spec: focv1.ApprovalDecisionSpec{RequestRef: actName, Type: focv1.DecisionActivation, DecidedBy: decidedBy, DecidedByGroups: groups}}
+		d := &fleetopsv1.ApprovalDecision{ObjectMeta: metav1.ObjectMeta{GenerateName: actName + "-activation-", Namespace: swarmNS},
+			Spec: fleetopsv1.ApprovalDecisionSpec{RequestRef: actName, Type: fleetopsv1.DecisionActivation, DecidedBy: decidedBy, DecidedByGroups: groups}}
 		return d, asPerson(t, person).Create(ctx, d)
 	}
 	// Same binding as a verdict: a record naming someone else is refused.
@@ -210,8 +210,8 @@ func TestActivationRecordIsTheAuthenticatedUser(t *testing.T) {
 	}
 	// A record carries no verdict, and a verdict decision needs one.
 	_, groups, _ := approverFor(t, "dana").Identity(ctx)
-	bad := &focv1.ApprovalDecision{ObjectMeta: metav1.ObjectMeta{GenerateName: "bad-", Namespace: swarmNS},
-		Spec: focv1.ApprovalDecisionSpec{RequestRef: actName, Type: focv1.DecisionActivation, Verdict: focv1.VerdictApprove, DecidedBy: "dana", DecidedByGroups: groups}}
+	bad := &fleetopsv1.ApprovalDecision{ObjectMeta: metav1.ObjectMeta{GenerateName: "bad-", Namespace: swarmNS},
+		Spec: fleetopsv1.ApprovalDecisionSpec{RequestRef: actName, Type: fleetopsv1.DecisionActivation, Verdict: fleetopsv1.VerdictApprove, DecidedBy: "dana", DecidedByGroups: groups}}
 	if err := asPerson(t, "dana").Create(ctx, bad); err == nil || !strings.Contains(err.Error(), "an Activation record has none") {
 		t.Fatalf("activation record with a verdict: %v", err)
 	}
@@ -222,13 +222,13 @@ func TestActivationRecordIsTheAuthenticatedUser(t *testing.T) {
 		t.Fatal(err)
 	}
 	time.Sleep(1100 * time.Millisecond) // creationTimestamp has one-second resolution
-	if r := waitState(t, actName, focv1.StatePending); slices.Contains(r.Status.RefusedDecisions, early.Name) || r.Status.DecidedBy != "" {
+	if r := waitState(t, actName, fleetopsv1.StatePending); slices.Contains(r.Status.RefusedDecisions, early.Name) || r.Status.DecidedBy != "" {
 		t.Fatalf("an activation record was taken as a decision: %+v", r.Status)
 	}
-	if _, err := approverFor(t, "dana").Decide(ctx, swarmNS, actName, focv1.VerdictApprove, ""); err != nil {
+	if _, err := approverFor(t, "dana").Decide(ctx, swarmNS, actName, fleetopsv1.VerdictApprove, ""); err != nil {
 		t.Fatal(err)
 	}
-	waitState(t, actName, focv1.StateApproved)
+	waitState(t, actName, fleetopsv1.StateApproved)
 	time.Sleep(1100 * time.Millisecond)
 	// eve may record, but may not activate (she holds no Swarmada role).
 	var task swarmv1.FleetTask
@@ -250,7 +250,7 @@ func TestActivationRecordIsTheAuthenticatedUser(t *testing.T) {
 	if err := asPerson(t, "dana").Patch(ctx, &task, client.RawPatch(types.MergePatchType, []byte(approval.ActivationPatch))); err != nil {
 		t.Fatalf("dana's activation: %v", err)
 	}
-	got := waitState(t, actName, focv1.StateExecuted)
+	got := waitState(t, actName, fleetopsv1.StateExecuted)
 	if got.Status.ActivatedBy != "dana" || got.Status.ActivationRef != mine.Name || !strings.Contains(got.Status.Message, "1 earlier Activation record(s) by eve") {
 		t.Fatalf("activatedBy %q ref %q (want %s), message %q", got.Status.ActivatedBy, got.Status.ActivationRef, mine.Name, got.Status.Message)
 	}
@@ -264,7 +264,7 @@ func TestActivationRecordIsTheAuthenticatedUser(t *testing.T) {
 
 // R71: the copilot installs no admission policy that matches the Swarmada
 // resources a person activates (fleettasks are matched only for
-// foc-approvals' own writes).
+// fleetops-approvals' own writes).
 func TestNoCopilotPolicyOnActivation(t *testing.T) {
 	ctx := context.Background()
 	ps := &unstructured.UnstructuredList{}
@@ -281,7 +281,7 @@ func TestNoCopilotPolicyOnActivation(t *testing.T) {
 		conds, _, _ := unstructured.NestedSlice(p.Object, "spec", "matchConditions")
 		forApprovals := false
 		for _, c := range conds {
-			if e, _ := c.(map[string]any)["expression"].(string); strings.Contains(e, "system:serviceaccount:foc-system:foc-approvals") {
+			if e, _ := c.(map[string]any)["expression"].(string); strings.Contains(e, "system:serviceaccount:fleetops-system:fleetops-approvals") {
 				forApprovals = true
 			}
 		}
@@ -308,10 +308,10 @@ func TestOutcomeAndFollowUp(t *testing.T) {
 		t.Fatal(err)
 	}
 	name := reqName(t, res)
-	if _, err := approverFor(t, "dana").Decide(ctx, swarmNS, name, focv1.VerdictApprove, ""); err != nil {
+	if _, err := approverFor(t, "dana").Decide(ctx, swarmNS, name, fleetopsv1.VerdictApprove, ""); err != nil {
 		t.Fatal(err)
 	}
-	waitState(t, name, focv1.StateExecuted)
+	waitState(t, name, fleetopsv1.StateExecuted)
 	var task swarmv1.FleetTask
 	if err := admin.Get(ctx, client.ObjectKey{Namespace: swarmNS, Name: "fu-move"}, &task); err != nil {
 		t.Fatal(err)
@@ -322,7 +322,7 @@ func TestOutcomeAndFollowUp(t *testing.T) {
 		t.Fatal(err)
 	}
 	deadline := time.Now().Add(20 * time.Second)
-	var r focv1.ApprovalRequest
+	var r fleetopsv1.ApprovalRequest
 	for {
 		if err := admin.Get(ctx, client.ObjectKey{Namespace: swarmNS, Name: name}, &r); err != nil {
 			t.Fatal(err)
@@ -335,7 +335,7 @@ func TestOutcomeAndFollowUp(t *testing.T) {
 	if r.Status.Outcome == nil || r.Status.Outcome.Phase != "Failed" || r.Status.Outcome.FailedMember != "go" || r.Status.FollowUp == nil || r.Status.FollowUp.Kind != "move" {
 		t.Fatalf("status %+v", r.Status)
 	}
-	var list focv1.ApprovalRequestList
+	var list fleetopsv1.ApprovalRequestList
 	if err := admin.List(ctx, &list, client.InNamespace(swarmNS)); err != nil {
 		t.Fatal(err)
 	}

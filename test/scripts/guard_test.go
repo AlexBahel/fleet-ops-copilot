@@ -233,7 +233,7 @@ func testRefuses(t *testing.T, sc script) {
 		{"cluster without prefix", map[string]string{"CLUSTER": "quickstart", "KUBECONFIG": dedicated}, nil, "CLUSTER must match"},
 		{"cluster prefix later", map[string]string{"CLUSTER": "x-foc-a", "KUBECONFIG": dedicated}, nil, "CLUSTER must match"},
 		{"cluster upper case", map[string]string{"CLUSTER": "foc-A", "KUBECONFIG": dedicated}, nil, "CLUSTER must match"},
-		{"cluster underscore", map[string]string{"CLUSTER": "foc-a_b", "KUBECONFIG": dedicated}, nil, "CLUSTER must match"},
+		{"cluster underscore", map[string]string{"CLUSTER": "fleetops-a_b", "KUBECONFIG": dedicated}, nil, "CLUSTER must match"},
 		{"cluster space", map[string]string{"CLUSTER": "foc-a b", "KUBECONFIG": dedicated}, nil, "CLUSTER must match"},
 		{"cluster newline", map[string]string{"CLUSTER": "foc-a\nother", "KUBECONFIG": dedicated}, nil, "CLUSTER must match"},
 		{"kubeconfig unset", map[string]string{"CLUSTER": "foc-test"}, []string{"KUBECONFIG"}, "KUBECONFIG must be set"},

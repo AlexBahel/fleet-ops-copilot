@@ -1,5 +1,5 @@
 # Fixture: zone-estop.
-# Captured from a live cluster by evals/cmd/foc-capture at 2026-11-04T03:06:20Z.
+# Captured from a live cluster by evals/cmd/fleetops-capture at 2026-11-04T03:06:20Z.
 # Source: Swarmada v0.4 quickstart SCENARIO=estop-drill (exited; its sim adapter process stopped), then swarmctl estop trigger warehouse-a, captured 10 s later; Swarmada v0.4 558da47 (docs/DESIGN.md D48).
 # Spec and status as read from the API server; server-set metadata, owner
 # references and finalizers removed. Status written by hand by the quickstart

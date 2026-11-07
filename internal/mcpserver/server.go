@@ -45,7 +45,7 @@ const (
 	MetaSession  = "fleetops.alexbahel.github.io/session"
 	MetaOperator = "fleetops.alexbahel.github.io/operator"
 	// MetaConfirmedPreview carries the id of the preview the requester
-	// confirmed. foc-agent sets it, never the model, and only on the call it
+	// confirmed. fleetops-agent sets it, never the model, and only on the call it
 	// makes after the person's confirmation (D74).
 	MetaConfirmedPreview = "fleetops.alexbahel.github.io/confirmedPreview"
 )
@@ -61,8 +61,8 @@ var (
 		"list_task_triggers", "get_events", "get_request", "check_task", "whoami",
 	}
 	RequestTools = []string{"request_draft_task", "request_activate_task", "request_zone_maintenance", "request_zone_stop"}
-	// NotForModel are served to foc-agent but never offered to a model: the
-	// request tools, which foc-agent calls itself after a confirmation
+	// NotForModel are served to fleetops-agent but never offered to a model: the
+	// request tools, which fleetops-agent calls itself after a confirmation
 	// (D74), and whoami (D75).
 	NotForModel = append(append([]string{}, RequestTools...), "whoami")
 )
@@ -136,7 +136,7 @@ func boolp(b bool) *bool { return &b }
 // NamespaceDescription is the description of every tool's namespace
 // parameter (R46, v3): it names the namespace the tools use when the
 // parameter is omitted and says that other namespaces are refused (requests
-// by policy, DENY_NAMESPACE; reads by the API server, since foc-mcp holds no
+// by policy, DENY_NAMESPACE; reads by the API server, since fleetops-mcp holds no
 // permission there). A model that does not know the namespace otherwise
 // guesses one (FOC-2r pilot: "default").
 func NamespaceDescription(svc *tools.Service) string {
@@ -225,7 +225,7 @@ func New(svc *tools.Service) *mcp.Server {
 	add(srv, svc, tr, "get_events", "Get Kubernetes Events for one object.", true, svc.GetEvents)
 	add(srv, svc, tr, "get_request", "Get one ApprovalRequest and its state.", true, svc.GetRequest)
 	add(srv, svc, tr, "check_task", "Check a request against current fleet state without filing it: an eligible robot now (Swarmada's candidate filters that a read can evaluate), zone state, location, dependencies, timing and policy. Returns 'likely feasible' or 'blocked', blockers, warnings, alternatives and what was not checked; never a guarantee.", true, svc.CheckTask)
-	add(srv, svc, tr, "whoami", "The requester as foc-mcp authenticated this call. Used by foc-agent, not offered to a model.", true, svc.Whoami)
+	add(srv, svc, tr, "whoami", "The requester as fleetops-mcp authenticated this call. Used by fleetops-agent, not offered to a model.", true, svc.Whoami)
 
 	add(srv, svc, tr, "request_draft_task", "Create a FleetTask held as a draft (spec.draft: true). Nothing is dispatched; a person must activate it.", false, svc.RequestDraftTask)
 	add(srv, svc, tr, "request_activate_task", "Ask a named person to activate a draft FleetTask. Creates an ApprovalRequest only.", false, svc.RequestActivateTask)

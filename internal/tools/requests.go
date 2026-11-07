@@ -28,7 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
+	fleetopsv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/audit"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/draft"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/feasibility"
@@ -115,7 +115,7 @@ type DraftTaskInput struct {
 
 // confirmed applies the D74 invariant: the request is filed only when the
 // client confirmed a preview whose id equals the id of this request.
-func confirmed(sess Session, in any) (focv1.ApprovalRequestSpec, *policy.Decision) {
+func confirmed(sess Session, in any) (fleetopsv1.ApprovalRequestSpec, *policy.Decision) {
 	_, spec, err := SpecFor(in)
 	if err != nil {
 		d := policy.Decision{Effect: policy.Deny, Code: policy.CodeMalformed, Message: err.Error()}
@@ -130,10 +130,10 @@ func confirmed(sess Session, in any) (focv1.ApprovalRequestSpec, *policy.Decisio
 // checkAtFiling runs check_task's evaluation on current state. A blocked
 // request is not filed (DENY_CHECK_FAILED); otherwise the checks it passed
 // are recorded in spec.checks (D77).
-func (s *Service) checkAtFiling(ctx context.Context, ns string, p feasibility.Proposal) (*focv1.ChecksRecord, *policy.Decision) {
+func (s *Service) checkAtFiling(ctx context.Context, ns string, p feasibility.Proposal) (*fleetopsv1.ChecksRecord, *policy.Decision) {
 	snap := feasibility.Load(ctx, s.C, ns, s.now())
 	rep := feasibility.Evaluate(p, snap)
-	rec := &focv1.ChecksRecord{Verdict: rep.Verdict, CheckedAt: metav1.NewTime(s.now().UTC().Truncate(time.Second)), Checks: rep.Records()}
+	rec := &fleetopsv1.ChecksRecord{Verdict: rep.Verdict, CheckedAt: metav1.NewTime(s.now().UTC().Truncate(time.Second)), Checks: rep.Records()}
 	if rep.Verdict == feasibility.Blocked {
 		var why []string
 		for _, b := range rep.Blockers {
@@ -156,8 +156,8 @@ func (s *Service) refuse(ctx context.Context, sess Session, tool string, r polic
 }
 
 // RequestDraftTask asks a named person to approve creating a FleetTask held
-// as a draft (spec.draft: true). foc-mcp writes nothing to Swarmada: on
-// approval, foc-approvals creates the draft (DESIGN.md D25), and a draft
+// as a draft (spec.draft: true). fleetops-mcp writes nothing to Swarmada: on
+// approval, fleetops-approvals creates the draft (DESIGN.md D25), and a draft
 // dispatches nothing until a person activates it. The request is filed only
 // with a confirmed preview (D74) and when check_task finds no blocker.
 func (s *Service) RequestDraftTask(ctx context.Context, sess Session, in DraftTaskInput) (RequestResult, error) {
@@ -209,7 +209,7 @@ func (s *Service) RequestDraftTask(ctx context.Context, sess Session, in DraftTa
 	}
 	reqSpec.Checks = checks
 	return s.createRequest(ctx, sess, ns, d2, reqSpec,
-		"a person with create on fleettasks runs: foc approve <request>; foc-approvals then re-checks the fleet and creates the draft, which dispatches nothing until it is activated (request_activate_task)")
+		"a person with create on fleettasks runs: fleetops approve <request>; fleetops-approvals then re-checks the fleet and creates the draft, which dispatches nothing until it is activated (request_activate_task)")
 }
 
 // ActivateTaskInput is the input of request_activate_task.
@@ -251,7 +251,7 @@ func (s *Service) RequestActivateTask(ctx context.Context, sess Session, in Acti
 	}
 	reqSpec.Checks = checks
 	return s.createRequest(ctx, sess, ns, d2, reqSpec,
-		"a person with patch and activate on this fleettask runs: foc approve <request>; once approved, a person Swarmada allows to activate runs foc activate <request>. The copilot never activates; it records the activation when it sees it")
+		"a person with patch and activate on this fleettask runs: fleetops approve <request>; once approved, a person Swarmada allows to activate runs fleetops activate <request>. The copilot never activates; it records the activation when it sees it")
 }
 
 // ZoneMaintenanceInput is the input of request_zone_maintenance.
@@ -302,7 +302,7 @@ func (s *Service) RequestZoneMaintenance(ctx context.Context, sess Session, in Z
 		return s.refuse(ctx, sess, "request_zone_maintenance", pr, *d), nil
 	}
 	reqSpec.Checks = checks
-	return s.createRequest(ctx, sess, ns, d2, reqSpec, "a person with create on zonemaintenances runs: foc approve <request>")
+	return s.createRequest(ctx, sess, ns, d2, reqSpec, "a person with create on zonemaintenances runs: fleetops approve <request>")
 }
 
 // ZoneStopInput is the input of request_zone_stop.
@@ -342,10 +342,10 @@ func (s *Service) RequestZoneStop(ctx context.Context, sess Session, in ZoneStop
 	}
 	reqSpec.Checks = checks
 	return s.createRequest(ctx, sess, ns, d2, reqSpec,
-		"a person with patch and estop-trigger on this fleetzone runs: foc approve <request>. For an emergency, use the physical E-stop or swarmctl estop trigger instead of waiting for approval")
+		"a person with patch and estop-trigger on this fleetzone runs: fleetops approve <request>. For an emergency, use the physical E-stop or swarmctl estop trigger instead of waiting for approval")
 }
 
-func (s *Service) createRequest(ctx context.Context, sess Session, ns string, d policy.Decision, spec focv1.ApprovalRequestSpec, next string) (RequestResult, error) {
+func (s *Service) createRequest(ctx context.Context, sess Session, ns string, d policy.Decision, spec fleetopsv1.ApprovalRequestSpec, next string) (RequestResult, error) {
 	if spec.Preview != nil {
 		now := metav1.NewTime(s.now().UTC().Truncate(time.Second))
 		spec.Preview.ID, spec.Preview.ConfirmedAt = PreviewID(spec), &now
@@ -354,9 +354,9 @@ func (s *Service) createRequest(ctx context.Context, sess Session, ns string, d 
 	spec.RequestedBy = s.Identity
 	spec.SessionID = sess.ID
 	spec.ExpiresAt = metav1.NewTime(s.now().Add(s.Engine.P.Approval.TTL.Duration).UTC().Truncate(time.Second))
-	spec.Policy = focv1.PolicyRecord{Effect: string(d.Effect), Code: string(d.Code), Message: d.Message}
-	req := &focv1.ApprovalRequest{
-		ObjectMeta: metav1.ObjectMeta{GenerateName: "areq-", Namespace: ns, Labels: map[string]string{fleet.SessionLabel: sess.ID, fleet.CreatedByLabel: "foc-mcp"}},
+	spec.Policy = fleetopsv1.PolicyRecord{Effect: string(d.Effect), Code: string(d.Code), Message: d.Message}
+	req := &fleetopsv1.ApprovalRequest{
+		ObjectMeta: metav1.ObjectMeta{GenerateName: "areq-", Namespace: ns, Labels: map[string]string{fleet.SessionLabel: sess.ID, fleet.CreatedByLabel: "fleetops-mcp"}},
 		Spec:       spec,
 	}
 	if err := s.C.Create(ctx, req); err != nil {
@@ -371,7 +371,7 @@ func (s *Service) createRequest(ctx context.Context, sess Session, ns string, d 
 	s.event(ctx, req, "RequestCreated", fmt.Sprintf("%s requested for %s; awaiting a person's decision", spec.Type, sess.Operator))
 	return RequestResult{
 		Effect: string(d.Effect), Code: string(d.Code), Reason: d.Message, Created: "ApprovalRequest/" + req.Name,
-		State: string(focv1.StatePending), NextStep: next,
+		State: string(fleetopsv1.StatePending), NextStep: next,
 	}, nil
 }
 

@@ -24,7 +24,7 @@ limitations under the License.
 // themselves carry no prompt, answer, tool argument or tool result text, so
 // redaction is a second line, not the only one.
 //
-// The trace context crosses the MCP hop from foc-agent to foc-mcp as W3C
+// The trace context crosses the MCP hop from fleetops-agent to fleetops-mcp as W3C
 // traceparent/tracestate keys in the tools/call request _meta.
 package tracing
 
@@ -53,15 +53,15 @@ const ScopeName = "github.com/AlexBahel/fleet-ops-copilot"
 
 // Span names.
 const (
-	SpanRequest = "foc.request"   // one operator request (foc-agent)
-	SpanChat    = "llm.chat"      // one model call (foc-agent)
-	SpanTool    = "tool.call"     // one tool call, client side (foc-agent)
-	SpanMCPTool = "mcp.tool"      // one tool call, server side (foc-mcp)
-	SpanPolicy  = "policy.decide" // one policy engine decision (foc-mcp)
+	SpanRequest = "fleetops.request" // one operator request (fleetops-agent)
+	SpanChat    = "llm.chat"         // one model call (fleetops-agent)
+	SpanTool    = "tool.call"        // one tool call, client side (fleetops-agent)
+	SpanMCPTool = "mcp.tool"         // one tool call, server side (fleetops-mcp)
+	SpanPolicy  = "policy.decide"    // one policy engine decision (fleetops-mcp)
 )
 
 // Attribute keys. gen_ai.* follow the OpenTelemetry GenAI semantic
-// conventions; foc.* are the copilot's own.
+// conventions; fleetops.* are the copilot's own.
 const (
 	AttrOperation      = attribute.Key("gen_ai.operation.name")
 	AttrProvider       = attribute.Key("gen_ai.provider.name")
@@ -73,22 +73,22 @@ const (
 	AttrFinishReasons  = attribute.Key("gen_ai.response.finish_reasons")
 	AttrToolName       = attribute.Key("gen_ai.tool.name")
 	AttrToolCallID     = attribute.Key("gen_ai.tool.call.id")
-	AttrBackend        = attribute.Key("foc.backend")
-	AttrOperator       = attribute.Key("foc.operator")
-	AttrSession        = attribute.Key("foc.session.id")
-	AttrPromptChars    = attribute.Key("foc.prompt.chars")
-	AttrAnswerChars    = attribute.Key("foc.answer.chars")
-	AttrTurn           = attribute.Key("foc.turn")
-	AttrTurns          = attribute.Key("foc.turns")
-	AttrToolCalls      = attribute.Key("foc.tool_calls")
-	AttrLatencyMs      = attribute.Key("foc.latency_ms")
-	AttrToolIsError    = attribute.Key("foc.tool.is_error")
-	AttrPolicyOp       = attribute.Key("foc.policy.op")
-	AttrPolicyEffect   = attribute.Key("foc.policy.effect")
-	AttrPolicyCode     = attribute.Key("foc.policy.code")
-	AttrPolicyRefused  = attribute.Key("foc.policy.refused")
-	AttrRequestCreated = attribute.Key("foc.request.created")
-	AttrNamespace      = attribute.Key("foc.namespace")
+	AttrBackend        = attribute.Key("fleetops.backend")
+	AttrOperator       = attribute.Key("fleetops.operator")
+	AttrSession        = attribute.Key("fleetops.session.id")
+	AttrPromptChars    = attribute.Key("fleetops.prompt.chars")
+	AttrAnswerChars    = attribute.Key("fleetops.answer.chars")
+	AttrTurn           = attribute.Key("fleetops.turn")
+	AttrTurns          = attribute.Key("fleetops.turns")
+	AttrToolCalls      = attribute.Key("fleetops.tool_calls")
+	AttrLatencyMs      = attribute.Key("fleetops.latency_ms")
+	AttrToolIsError    = attribute.Key("fleetops.tool.is_error")
+	AttrPolicyOp       = attribute.Key("fleetops.policy.op")
+	AttrPolicyEffect   = attribute.Key("fleetops.policy.effect")
+	AttrPolicyCode     = attribute.Key("fleetops.policy.code")
+	AttrPolicyRefused  = attribute.Key("fleetops.policy.refused")
+	AttrRequestCreated = attribute.Key("fleetops.request.created")
+	AttrNamespace      = attribute.Key("fleetops.namespace")
 )
 
 // Config selects the exporter.

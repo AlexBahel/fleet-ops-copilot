@@ -1,7 +1,7 @@
-{{- include "foc.validate" . }}
+{{- include "fleetops.validate" . }}
 {{- if .Values.tracing.backend.enabled }}
-# Optional trace backend (tracing.backend.enabled, off by default): foc-agent
-# and foc-mcp send OTLP/gRPC to the OpenTelemetry Collector, which forwards it
+# Optional trace backend (tracing.backend.enabled, off by default): fleetops-agent
+# and fleetops-mcp send OTLP/gRPC to the OpenTelemetry Collector, which forwards it
 # to Jaeger v2. Jaeger runs the all-in-one configuration built into its image
 # (in-memory store, OTLP receiver on 4317, UI on 16686), so there is no Jaeger
 # config to keep in step with the image. Both Services are ClusterIP; the UI is
@@ -11,31 +11,31 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: foc-otel-collector
+  name: fleetops-otel-collector
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "foc.workloadLabels" (dict "name" "foc-otel-collector" "root" .) | nindent 4 }}
+    {{- include "fleetops.workloadLabels" (dict "name" "fleetops-otel-collector" "root" .) | nindent 4 }}
 data:
   config.yaml: |
-    {{- include "foc.otelCollectorConfig" . | nindent 4 }}
+    {{- include "fleetops.otelCollectorConfig" . | nindent 4 }}
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: foc-otel-collector
+  name: fleetops-otel-collector
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "foc.workloadLabels" (dict "name" "foc-otel-collector" "root" .) | nindent 4 }}
+    {{- include "fleetops.workloadLabels" (dict "name" "fleetops-otel-collector" "root" .) | nindent 4 }}
 spec:
   replicas: 1
   selector:
-    matchLabels: {app.kubernetes.io/name: foc-otel-collector}
+    matchLabels: {app.kubernetes.io/name: fleetops-otel-collector}
   template:
     metadata:
       labels:
-        {{- include "foc.workloadLabels" (dict "name" "foc-otel-collector" "root" .) | nindent 8 }}
+        {{- include "fleetops.workloadLabels" (dict "name" "fleetops-otel-collector" "root" .) | nindent 8 }}
       annotations:
-        checksum/config: {{ include "foc.otelCollectorConfig" . | sha256sum }}
+        checksum/config: {{ include "fleetops.otelCollectorConfig" . | sha256sum }}
     spec:
       automountServiceAccountToken: false
       securityContext: {runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, seccompProfile: {type: RuntimeDefault}}
@@ -55,37 +55,37 @@ spec:
             - {name: config, mountPath: /etc/otelcol, readOnly: true}
       volumes:
         - name: config
-          configMap: {name: foc-otel-collector}
+          configMap: {name: fleetops-otel-collector}
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: foc-otel-collector
+  name: fleetops-otel-collector
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "foc.workloadLabels" (dict "name" "foc-otel-collector" "root" .) | nindent 4 }}
+    {{- include "fleetops.workloadLabels" (dict "name" "fleetops-otel-collector" "root" .) | nindent 4 }}
 spec:
   type: ClusterIP
-  selector: {app.kubernetes.io/name: foc-otel-collector}
+  selector: {app.kubernetes.io/name: fleetops-otel-collector}
   ports: [{name: otlp-grpc, port: 4317, targetPort: otlp-grpc}]
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: foc-jaeger
+  name: fleetops-jaeger
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "foc.workloadLabels" (dict "name" "foc-jaeger" "root" .) | nindent 4 }}
+    {{- include "fleetops.workloadLabels" (dict "name" "fleetops-jaeger" "root" .) | nindent 4 }}
 spec:
   replicas: 1
   # In-memory store: a second replica would hold a different set of traces.
   strategy: {type: Recreate}
   selector:
-    matchLabels: {app.kubernetes.io/name: foc-jaeger}
+    matchLabels: {app.kubernetes.io/name: fleetops-jaeger}
   template:
     metadata:
       labels:
-        {{- include "foc.workloadLabels" (dict "name" "foc-jaeger" "root" .) | nindent 8 }}
+        {{- include "fleetops.workloadLabels" (dict "name" "fleetops-jaeger" "root" .) | nindent 8 }}
     spec:
       automountServiceAccountToken: false
       securityContext: {runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, seccompProfile: {type: RuntimeDefault}}
@@ -111,13 +111,13 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: foc-jaeger
+  name: fleetops-jaeger
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "foc.workloadLabels" (dict "name" "foc-jaeger" "root" .) | nindent 4 }}
+    {{- include "fleetops.workloadLabels" (dict "name" "fleetops-jaeger" "root" .) | nindent 4 }}
 spec:
   type: ClusterIP
-  selector: {app.kubernetes.io/name: foc-jaeger}
+  selector: {app.kubernetes.io/name: fleetops-jaeger}
   ports:
     - {name: otlp-grpc, port: 4317, targetPort: otlp-grpc}
     - {name: ui, port: 16686, targetPort: ui}

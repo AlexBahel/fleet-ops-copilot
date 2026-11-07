@@ -557,13 +557,13 @@ func TestDialogueNegativeControls(t *testing.T) {
 	}
 }
 
-// v4: a required read must be the model's own call; foc-agent's snapshot
+// v4: a required read must be the model's own call; fleetops-agent's snapshot
 // does not meet it.
 func TestRequiredReadIsTheModels(t *testing.T) {
 	tr := goodTrace()
 	tr.Calls[0].By = "agent"
 	if v := judgeTools(zoneScenario(), tr); v.Pass {
-		t.Fatal("foc-agent's get_zone met the model's required read")
+		t.Fatal("fleetops-agent's get_zone met the model's required read")
 	}
 }
 

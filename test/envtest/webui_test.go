@@ -38,7 +38,7 @@ import (
 
 	swarmv1 "github.com/swarmada/swarmada/api/v1"
 
-	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
+	fleetopsv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/audit"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/catalogue"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
@@ -51,10 +51,10 @@ import (
 	"github.com/AlexBahel/fleet-ops-copilot/internal/webui"
 )
 
-// uiFixture is foc-agent's HTTP side running as ServiceAccount foc-agent
+// uiFixture is fleetops-agent's HTTP side running as ServiceAccount fleetops-agent
 // (real RBAC), with its agent loop reaching the real tool server (as
-// foc-mcp, verifying bearer tokens with TokenReview) over streamable HTTP,
-// and foc-approvals running as its own ServiceAccount.
+// fleetops-mcp, verifying bearer tokens with TokenReview) over streamable HTTP,
+// and fleetops-approvals running as its own ServiceAccount.
 type uiFixture struct {
 	h    *harness
 	mcp  *httptest.Server
@@ -126,7 +126,7 @@ func (f *uiFixture) chat(t *testing.T, operator, message string, steps ...llm.St
 	return f.chatAs(t, "", operator, message, steps...)
 }
 
-// chatAs sends one message with a bearer token, as foc chat does, then
+// chatAs sends one message with a bearer token, as fleetops chat does, then
 // confirms the preview it shows with "1" in the same conversation (D74).
 func (f *uiFixture) chatAs(t *testing.T, token, operator, message string, steps ...llm.Step) string {
 	t.Helper()
@@ -190,9 +190,9 @@ func call(name string, args map[string]any) llm.ToolCall {
 	return llm.ToolCall{ID: "c-" + name, Name: name, Args: b}
 }
 
-// The web UI, as ServiceAccount foc-agent, lists pending requests with the
+// The web UI, as ServiceAccount fleetops-agent, lists pending requests with the
 // exact write and the commands to decide them. After a person approves with
-// their own credentials (what `foc approve` runs), the object foc-approvals
+// their own credentials (what `fleetops approve` runs), the object fleetops-approvals
 // wrote is the one the panel showed, and the panel shows the decision. The
 // requests are filed through the tool server as operator sam (not from the
 // page, whose requests cannot be approved; see TestWebUIRequestCannotBeApproved).
@@ -204,7 +204,7 @@ func TestWebUIShowsTheWriteThatIsExecuted(t *testing.T) {
 	ensureZone(t, swarmNS)
 	ensureRobot(t, "envtest-robot-1", swarmNS, 90)
 	if code, body := f.get(t, "/readyz"); code != 200 {
-		t.Fatalf("readyz as foc-agent: %d %s", code, body)
+		t.Fatalf("readyz as fleetops-agent: %d %s", code, body)
 	}
 	res, err := h.draft(ctx, sess, tools.DraftTaskInput{Name: "ui-draft-1", Purpose: "stage pallet", Actions: []tools.DraftActionInput{
 		{Name: "go", Type: "Navigate", Zone: swarmNS, Priority: "Normal", RequiredCapabilities: []string{"navigation"}},
@@ -223,7 +223,7 @@ func TestWebUIShowsTheWriteThatIsExecuted(t *testing.T) {
 	d, s := before[draftName], before[stopName]
 	for _, v := range []requestview.View{d, s} {
 		if v.State != "Pending" || v.RequestedFor != "sam" || v.RequestedBy != mcpUser ||
-			v.Approve != "foc approve "+v.Name+" -n "+swarmNS || v.Reject != "foc reject "+v.Name+" -n "+swarmNS {
+			v.Approve != "fleetops approve "+v.Name+" -n "+swarmNS || v.Reject != "fleetops reject "+v.Name+" -n "+swarmNS {
 			t.Fatalf("pending view %+v", v)
 		}
 	}
@@ -240,14 +240,14 @@ func TestWebUIShowsTheWriteThatIsExecuted(t *testing.T) {
 	}
 
 	for _, n := range []string{draftName, stopName} {
-		if _, err := approverFor(t, "dana").Decide(ctx, swarmNS, n, focv1.VerdictApprove, ""); err != nil {
+		if _, err := approverFor(t, "dana").Decide(ctx, swarmNS, n, fleetopsv1.VerdictApprove, ""); err != nil {
 			t.Fatal(err)
 		}
-		waitState(t, n, focv1.StateExecuted)
+		waitState(t, n, fleetopsv1.StateExecuted)
 	}
 
 	// Every field of the body the panel showed (placeholder replaced by the
-	// approver) is in the FleetTask foc-approvals created, unchanged. The API
+	// approver) is in the FleetTask fleetops-approvals created, unchanged. The API
 	// server adds the CRD's defaults for fields the body leaves out; the
 	// panel says so and does not list them.
 	var shown map[string]any
@@ -287,7 +287,7 @@ func TestWebUIShowsTheWriteThatIsExecuted(t *testing.T) {
 }
 
 // A request filed from the page records the typed name as an unverified
-// requester. foc-approvals refuses every approval of it (R38) and writes
+// requester. fleetops-approvals refuses every approval of it (R38) and writes
 // nothing; a rejection is accepted. The panel offers only the reject command.
 func TestWebUIRequestCannotBeApproved(t *testing.T) {
 	ctx := context.Background()
@@ -295,19 +295,19 @@ func TestWebUIRequestCannotBeApproved(t *testing.T) {
 	zone := ensureZone(t, "ui-zone-3")
 	name := f.chat(t, "sam", "stop ui-zone-3", proposeStop("ui-zone-3", "typed in the UI"))
 	v := f.views(t)[name]
-	if v.RequestedFor != policy.UnverifiedPrefix+"sam" || v.Approve != "" || v.Reject != "foc reject "+name+" -n "+swarmNS ||
+	if v.RequestedFor != policy.UnverifiedPrefix+"sam" || v.Approve != "" || v.Reject != "fleetops reject "+name+" -n "+swarmNS ||
 		!strings.Contains(v.Unapprovable, string(policy.CodeRequesterUnverified)) {
 		t.Fatalf("panel view %+v", v)
 	}
 
 	// dana holds every permission the stop needs, is not the requester, and
 	// approves with their own credentials: refused.
-	out, err := approverFor(t, "dana").Decide(ctx, swarmNS, name, focv1.VerdictApprove, "")
+	out, err := approverFor(t, "dana").Decide(ctx, swarmNS, name, fleetopsv1.VerdictApprove, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	deadline := time.Now().Add(20 * time.Second)
-	var r focv1.ApprovalRequest
+	var r fleetopsv1.ApprovalRequest
 	for {
 		if err := admin.Get(ctx, client.ObjectKey{Namespace: swarmNS, Name: name}, &r); err != nil {
 			t.Fatal(err)
@@ -320,7 +320,7 @@ func TestWebUIRequestCannotBeApproved(t *testing.T) {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	if r.Status.State != focv1.StatePending || !strings.Contains(r.Status.Message, "never approved") {
+	if r.Status.State != fleetopsv1.StatePending || !strings.Contains(r.Status.Message, "never approved") {
 		t.Fatalf("after approve: state %q message %q", r.Status.State, r.Status.Message)
 	}
 	var z swarmv1.FleetZone
@@ -336,10 +336,10 @@ func TestWebUIRequestCannotBeApproved(t *testing.T) {
 	}
 
 	// A rejection of the same request is accepted.
-	if _, err := approverFor(t, "dana").Decide(ctx, swarmNS, name, focv1.VerdictReject, "filed from the UI"); err != nil {
+	if _, err := approverFor(t, "dana").Decide(ctx, swarmNS, name, fleetopsv1.VerdictReject, "filed from the UI"); err != nil {
 		t.Fatal(err)
 	}
-	waitState(t, name, focv1.StateRejected)
+	waitState(t, name, fleetopsv1.StateRejected)
 	if v := f.views(t)[name]; v.State != "Rejected" || v.DecidedBy != "dana" || v.Reject != "" || v.Unapprovable != "" {
 		t.Fatalf("rejected view %+v", v)
 	}
@@ -373,28 +373,28 @@ func notIn(a, b any, path string) []string {
 	}
 }
 
-// foc-agent's own credentials cannot decide, change or create anything: real
+// fleetops-agent's own credentials cannot decide, change or create anything: real
 // requests as its ServiceAccount are refused by the API server.
-func TestFocAgentCannotWrite(t *testing.T) {
+func TestFleetopsAgentCannotWrite(t *testing.T) {
 	ctx := context.Background()
 	agent := asSA(t, agentUser)
 	toolServer := asSA(t, mcpUser)
-	r := &focv1.ApprovalRequest{ObjectMeta: metav1.ObjectMeta{GenerateName: "areq-", Namespace: swarmNS}, Spec: focv1.ApprovalRequestSpec{
-		Type: focv1.RequestZoneStop, RequestedFor: "sam", RequestedBy: mcpUser, ExpiresAt: metav1.NewTime(time.Now().Add(time.Hour)),
-		Policy: focv1.PolicyRecord{Effect: "RequireApproval", Code: "REQUIRE_APPROVAL"}, ZoneStop: &focv1.ZoneStopParams{ZoneName: "ui-zone-2", Reason: "r"},
+	r := &fleetopsv1.ApprovalRequest{ObjectMeta: metav1.ObjectMeta{GenerateName: "areq-", Namespace: swarmNS}, Spec: fleetopsv1.ApprovalRequestSpec{
+		Type: fleetopsv1.RequestZoneStop, RequestedFor: "sam", RequestedBy: mcpUser, ExpiresAt: metav1.NewTime(time.Now().Add(time.Hour)),
+		Policy: fleetopsv1.PolicyRecord{Effect: "RequireApproval", Code: "REQUIRE_APPROVAL"}, ZoneStop: &fleetopsv1.ZoneStopParams{ZoneName: "ui-zone-2", Reason: "r"},
 	}}
 	if err := toolServer.Create(ctx, r); err != nil {
 		t.Fatal(err)
 	}
-	var got focv1.ApprovalRequest
+	var got fleetopsv1.ApprovalRequest
 	if err := agent.Get(ctx, client.ObjectKeyFromObject(r), &got); err != nil {
-		t.Fatalf("foc-agent cannot read the request: %v", err)
+		t.Fatalf("fleetops-agent cannot read the request: %v", err)
 	}
 	zone := ensureZone(t, "ui-zone-2")
 	for name, try := range map[string]func() error{
 		"create ApprovalDecision": func() error {
-			return agent.Create(ctx, &focv1.ApprovalDecision{ObjectMeta: metav1.ObjectMeta{GenerateName: "adec-", Namespace: swarmNS},
-				Spec: focv1.ApprovalDecisionSpec{RequestRef: r.Name, Verdict: focv1.VerdictApprove, DecidedBy: agentUser}})
+			return agent.Create(ctx, &fleetopsv1.ApprovalDecision{ObjectMeta: metav1.ObjectMeta{GenerateName: "adec-", Namespace: swarmNS},
+				Spec: fleetopsv1.ApprovalDecisionSpec{RequestRef: r.Name, Verdict: fleetopsv1.VerdictApprove, DecidedBy: agentUser}})
 		},
 		"patch request status": func() error {
 			return agent.Status().Patch(ctx, got.DeepCopy(), client.RawPatch("application/merge-patch+json", []byte(`{"status":{"state":"Approved"}}`)))
@@ -408,19 +408,19 @@ func TestFocAgentCannotWrite(t *testing.T) {
 		"patch FleetZone": func() error {
 			return mergePatch(t, agent, zone, map[string]any{"metadata": map[string]any{"annotations": map[string]string{fleet.EstopAnnotation: "x"}}})
 		},
-		"create FleetTask": func() error { return agent.Create(ctx, draftTask("ui-agent-draft", true, "foc-approvals")) },
+		"create FleetTask": func() error { return agent.Create(ctx, draftTask("ui-agent-draft", true, "fleetops-approvals")) },
 		"list Robots":      func() error { return agent.List(ctx, &swarmv1.RobotList{}, client.InNamespace(swarmNS)) },
 	} {
 		if err := try(); !apierrors.IsForbidden(err) {
-			t.Errorf("foc-agent %s: got %v, want Forbidden", name, err)
+			t.Errorf("fleetops-agent %s: got %v, want Forbidden", name, err)
 		}
 	}
 }
 
-// Outside the namespaces it is bound in, foc-agent reads nothing: the panel
+// Outside the namespaces it is bound in, fleetops-agent reads nothing: the panel
 // reports the refusal and the pod is not ready.
 func TestWebUIOutsideGrantedNamespace(t *testing.T) {
-	f := newUIFixture(t, []string{focNS})
+	f := newUIFixture(t, []string{fleetopsNS})
 	if code, body := f.get(t, "/api/requests"); code != http.StatusBadGateway || !strings.Contains(body, "forbidden") {
 		t.Fatalf("/api/requests: %d %s", code, body)
 	}

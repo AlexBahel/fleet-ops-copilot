@@ -26,7 +26,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
+	fleetopsv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/agent"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/dialogue"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/draft"
@@ -75,18 +75,18 @@ var stallCodes = []string{
 // stallProxy re-runs check_task's evaluation, on the cluster at the end of
 // the run, for every DraftTask request the run filed.
 func stallProxy(ctx context.Context, admin client.Client, now time.Time) (int, error) {
-	var reqs focv1.ApprovalRequestList
+	var reqs fleetopsv1.ApprovalRequestList
 	if err := admin.List(ctx, &reqs, client.InNamespace(testenv.SwarmNS)); err != nil {
 		return 0, err
 	}
 	n := 0
 	var snap *feasibility.Snapshot
 	for _, r := range reqs.Items {
-		if r.Spec.Type != focv1.RequestDraftTask || r.Spec.DraftTask == nil {
+		if r.Spec.Type != fleetopsv1.RequestDraftTask || r.Spec.DraftTask == nil {
 			continue
 		}
 		switch r.Status.State {
-		case focv1.StateFailed, focv1.StateRejected, focv1.StateExpired:
+		case fleetopsv1.StateFailed, fleetopsv1.StateRejected, fleetopsv1.StateExpired:
 			continue // never created: nothing to sit Pending
 		}
 		t, err := draft.Task(r.Namespace, r.Spec.DraftTask)

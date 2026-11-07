@@ -62,7 +62,7 @@ type Draft struct {
 	Created time.Time
 }
 
-// Snapshot is the fleet state the dialogue reads (through foc-mcp's read tools).
+// Snapshot is the fleet state the dialogue reads (through fleetops-mcp's read tools).
 type Snapshot struct {
 	Zones     []string
 	Waypoints []Waypoint
@@ -100,7 +100,7 @@ func (q Question) Render() string {
 
 // SomethingElse is a "something else" request.
 type SomethingElse struct {
-	// Text is the person's words, verbatim, kept by foc-agent.
+	// Text is the person's words, verbatim, kept by fleetops-agent.
 	Text           string `json:"text"`
 	Interpretation string `json:"interpretation,omitempty"`
 	FollowUpAsked  bool   `json:"followUpAsked,omitempty"`
@@ -110,7 +110,7 @@ type SomethingElse struct {
 }
 
 // State is the dialogue state of one conversation. It is stored by
-// foc-agent between messages and holds no secret.
+// fleetops-agent between messages and holds no secret.
 type State struct {
 	Ask    string            `json:"ask,omitempty"`
 	Kind   string            `json:"kind,omitempty"`

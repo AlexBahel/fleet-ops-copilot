@@ -8,7 +8,7 @@
 # made (R43, test only): requests are filed with sam's or dana's own token, so
 # the requester is verified (D57), and dana approves with her token's
 # kubeconfig. The script binds the people's roles in warehouse-a
-# (hack/kind-people.sh bind), port-forwards foc-mcp, and runs `make test-live`.
+# (hack/kind-people.sh bind), port-forwards fleetops-mcp, and runs `make test-live`.
 # With PHASE=webhooks it then copies Swarmada's safety audit log out of the
 # manager pod (an ephemeral busybox container that mounts the manager's
 # audit-log volume read-only, as the manager's user) and runs
@@ -33,20 +33,20 @@ mkdir -p "$WORK"
 pk="$WORK/$approver.kubeconfig"
 [[ -f "$pk" ]] || "$repo/hack/kind-people.sh" kubeconfig "$ctx" "$approver" "$TOKENS_FILE" "$pk" >/dev/null
 "$repo/hack/kind-people.sh" bind "$ctx" warehouse-a >/dev/null
-kubectl --context "$ctx" -n foc-system port-forward svc/foc-mcp 18080:8080 >"$WORK/port-forward.log" 2>&1 &
+kubectl --context "$ctx" -n fleetops-system port-forward svc/fleetops-mcp 18080:8080 >"$WORK/port-forward.log" 2>&1 &
 pf=$!
 trap 'kill $pf 2>/dev/null || true' EXIT
 for _ in $(seq 30); do curl -sf http://127.0.0.1:18080/healthz >/dev/null && break; sleep 1; done
 export KUBECONFIG="$KUBECONFIG:$pk"
 export FOC_LIVE_ADMIN_CONTEXT="$ctx" FOC_LIVE_APPROVER_CONTEXT="$approver@$CLUSTER" FOC_LIVE_TOKENS_FILE="$TOKENS_FILE" \
-  FOC_LIVE_MCP_URL=http://127.0.0.1:18080/mcp FOC_LIVE_FOC="$repo/bin/foc" FOC_LIVE_PHASE="$PHASE" \
+  FOC_LIVE_MCP_URL=http://127.0.0.1:18080/mcp FOC_LIVE_FOC="$repo/bin/fleetops" FOC_LIVE_PHASE="$PHASE" \
   FOC_LIVE_EVIDENCE_DIR="${EVIDENCE_DIR:-}"
 cd "$repo"
 rc=0
 make test-live || rc=$?
 if [[ "$PHASE" == webhooks ]]; then
   pod="$(kubectl --context "$ctx" -n system get pods -o name | grep swarmada-controller-manager | head -1)"
-  probe="focaudit-$(date +%s)"
+  probe="fleetopsaudit-$(date +%s)"
   custom="$WORK/$probe.json"
   echo '{"securityContext":{"runAsUser":65532,"runAsNonRoot":true,"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}},"volumeMounts":[{"name":"audit-log","mountPath":"/audit","readOnly":true}]}' >"$custom"
   kubectl --context "$ctx" -n system debug "$pod" --image=busybox:1.36 --custom="$custom" -c "$probe" -- sleep 600 >/dev/null

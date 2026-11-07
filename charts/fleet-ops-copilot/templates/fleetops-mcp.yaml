@@ -1,40 +1,40 @@
-{{- include "foc.validate" . }}
-# foc-mcp: tool server. Reads Swarmada, creates ApprovalRequests, never writes
+{{- include "fleetops.validate" . }}
+# fleetops-mcp: tool server. Reads Swarmada, creates ApprovalRequests, never writes
 # to Swarmada. The audit file is on an emptyDir volume and does not survive a
 # pod restart (docs/KNOWN-LIMITS.md, "Audit storage").
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: foc-mcp
+  name: fleetops-mcp
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "foc.workloadLabels" (dict "name" "foc-mcp" "root" .) | nindent 4 }}
+    {{- include "fleetops.workloadLabels" (dict "name" "fleetops-mcp" "root" .) | nindent 4 }}
 spec:
   replicas: {{ .Values.mcp.replicas }}
   selector:
-    matchLabels: {app.kubernetes.io/name: foc-mcp}
+    matchLabels: {app.kubernetes.io/name: fleetops-mcp}
   template:
     metadata:
       labels:
-        {{- include "foc.workloadLabels" (dict "name" "foc-mcp" "root" .) | nindent 8 }}
+        {{- include "fleetops.workloadLabels" (dict "name" "fleetops-mcp" "root" .) | nindent 8 }}
       annotations:
         # Restart on a policy change (helm upgrade).
-        checksum/policy: {{ include "foc.policy" . | sha256sum }}
+        checksum/policy: {{ include "fleetops.policy" . | sha256sum }}
     spec:
-      serviceAccountName: foc-mcp
+      serviceAccountName: fleetops-mcp
       securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
       containers:
-        - name: foc-mcp
-          image: {{ include "foc.image" . }}
+        - name: fleetops-mcp
+          image: {{ include "fleetops.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: [/usr/local/bin/foc-mcp]
+          command: [/usr/local/bin/fleetops-mcp]
           args:
             - -policy=/etc/fleetops/policy/default.yaml
-            - -audit={{ .Values.audit.dir }}/foc-mcp.jsonl
+            - -audit={{ .Values.audit.dir }}/fleetops-mcp.jsonl
             - -namespace={{ first .Values.swarmadaNamespaces }}
             - -listen=:{{ .Values.mcp.port }}
-            {{- with include "foc.otlpEndpoint" . }}
+            {{- with include "fleetops.otlpEndpoint" . }}
             - -otlp-endpoint={{ . }}
             {{- end }}
           env:
@@ -61,10 +61,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: foc-mcp
+  name: fleetops-mcp
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "foc.workloadLabels" (dict "name" "foc-mcp" "root" .) | nindent 4 }}
+    {{- include "fleetops.workloadLabels" (dict "name" "fleetops-mcp" "root" .) | nindent 4 }}
 spec:
-  selector: {app.kubernetes.io/name: foc-mcp}
+  selector: {app.kubernetes.io/name: fleetops-mcp}
   ports: [{name: mcp, port: {{ .Values.mcp.port }}, targetPort: mcp}]

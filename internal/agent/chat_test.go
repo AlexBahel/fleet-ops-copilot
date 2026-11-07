@@ -28,7 +28,7 @@ import (
 
 	swarmv1 "github.com/swarmada/swarmada/api/v1"
 
-	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
+	fleetopsv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/catalogue"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/conversation"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
@@ -80,7 +80,7 @@ func chatFixture(t *testing.T, c client.Client, steps ...llm.Step) (*Chat, *conv
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc := &tools.Service{C: c, Engine: policy.New(p), Identity: "system:serviceaccount:foc-system:foc-mcp", DefaultNamespace: "warehouse-a"}
+	svc := &tools.Service{C: c, Engine: policy.New(p), Identity: "system:serviceaccount:fleetops-system:fleetops-mcp", DefaultNamespace: "warehouse-a"}
 	cs, closeFn, err := Connect(context.Background(), mcpserver.New(svc))
 	if err != nil {
 		t.Fatal(err)
@@ -98,9 +98,9 @@ func chatFixture(t *testing.T, c client.Client, steps ...llm.Step) (*Chat, *conv
 	return chat, conv, send
 }
 
-func requests(t *testing.T, c client.Client) []focv1.ApprovalRequest {
+func requests(t *testing.T, c client.Client) []fleetopsv1.ApprovalRequest {
 	t.Helper()
-	var l focv1.ApprovalRequestList
+	var l fleetopsv1.ApprovalRequestList
 	if err := c.List(context.Background(), &l); err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func requests(t *testing.T, c client.Client) []focv1.ApprovalRequest {
 }
 
 // The guided path end to end: Q1 first, the numbered answer read by
-// foc-agent, a preview with checks, and the request filed only on "1",
+// fleetops-agent, a preview with checks, and the request filed only on "1",
 // with the preview's parameters and the checks recorded.
 func TestGuidedInspectFiledOnlyAfterConfirmation(t *testing.T) {
 	c := world(t)

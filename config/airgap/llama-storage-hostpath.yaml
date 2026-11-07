@@ -5,28 +5,28 @@
 # hostPath names a directory of whichever node the pod lands on.
 #
 # To use a dynamically provisioned volume instead, skip this file and create a
-# PVC named llama-models in foc-system yourself, then fill it offline.
+# PVC named llama-models in fleetops-system yourself, then fill it offline.
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: foc-llama-models
+  name: fleetops-llama-models
   labels: {app.kubernetes.io/name: llama-server, app.kubernetes.io/part-of: fleet-ops-copilot}
 spec:
   capacity: {storage: 8Gi}
   accessModes: [ReadOnlyMany]
   persistentVolumeReclaimPolicy: Retain
   storageClassName: ""
-  claimRef: {namespace: foc-system, name: llama-models}
+  claimRef: {namespace: fleetops-system, name: llama-models}
   hostPath: {path: /models, type: Directory}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: llama-models
-  namespace: foc-system
+  namespace: fleetops-system
   labels: {app.kubernetes.io/name: llama-server, app.kubernetes.io/part-of: fleet-ops-copilot}
 spec:
   accessModes: [ReadOnlyMany]
   storageClassName: ""
-  volumeName: foc-llama-models
+  volumeName: fleetops-llama-models
   resources: {requests: {storage: 8Gi}}

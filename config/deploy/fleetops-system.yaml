@@ -1,34 +1,34 @@
-# foc-mcp (tool server), foc-approvals (approval controller and executor) and
-# foc-agent (model loop and web UI) in namespace foc-system. Apply after
+# fleetops-mcp (tool server), fleetops-approvals (approval controller and executor) and
+# fleetops-agent (model loop and web UI) in namespace fleetops-system. Apply after
 # config/crd, config/rbac and config/admission (make deploy-kind). The policy
 # file comes from ConfigMap fleetops-policy (created by make deploy-kind from
-# policies/default.yaml), foc-agent's site catalogue from ConfigMap
-# fleetops-catalogue (from catalogue/warehouse-a.yaml). foc-agent does not start until Secret
-# fleet-ops-copilot-claude (key ANTHROPIC_API_KEY) exists in foc-system.
+# policies/default.yaml), fleetops-agent's site catalogue from ConfigMap
+# fleetops-catalogue (from catalogue/warehouse-a.yaml). fleetops-agent does not start until Secret
+# fleet-ops-copilot-claude (key ANTHROPIC_API_KEY) exists in fleetops-system.
 # Audit files are on emptyDir volumes: they do not survive a pod restart
 # (docs/KNOWN-LIMITS.md, "Audit storage").
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: foc-mcp
-  namespace: foc-system
-  labels: {app.kubernetes.io/name: foc-mcp, app.kubernetes.io/part-of: fleet-ops-copilot}
+  name: fleetops-mcp
+  namespace: fleetops-system
+  labels: {app.kubernetes.io/name: fleetops-mcp, app.kubernetes.io/part-of: fleet-ops-copilot}
 spec:
   replicas: 1
   selector:
-    matchLabels: {app.kubernetes.io/name: foc-mcp}
+    matchLabels: {app.kubernetes.io/name: fleetops-mcp}
   template:
     metadata:
-      labels: {app.kubernetes.io/name: foc-mcp, app.kubernetes.io/part-of: fleet-ops-copilot}
+      labels: {app.kubernetes.io/name: fleetops-mcp, app.kubernetes.io/part-of: fleet-ops-copilot}
     spec:
-      serviceAccountName: foc-mcp
+      serviceAccountName: fleetops-mcp
       securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
       containers:
-        - name: foc-mcp
+        - name: fleetops-mcp
           image: fleet-ops-copilot:dev
           imagePullPolicy: IfNotPresent
-          command: [/usr/local/bin/foc-mcp]
-          args: [-policy=/etc/fleetops/policy/default.yaml, -audit=/var/lib/fleetops/audit/foc-mcp.jsonl, -namespace=warehouse-a, -listen=:8080]
+          command: [/usr/local/bin/fleetops-mcp]
+          args: [-policy=/etc/fleetops/policy/default.yaml, -audit=/var/lib/fleetops/audit/fleetops-mcp.jsonl, -namespace=warehouse-a, -listen=:8080]
           env:
             - name: POD_NAMESPACE
               valueFrom: {fieldRef: {fieldPath: metadata.namespace}}
@@ -49,35 +49,35 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: foc-mcp
-  namespace: foc-system
-  labels: {app.kubernetes.io/name: foc-mcp, app.kubernetes.io/part-of: fleet-ops-copilot}
+  name: fleetops-mcp
+  namespace: fleetops-system
+  labels: {app.kubernetes.io/name: fleetops-mcp, app.kubernetes.io/part-of: fleet-ops-copilot}
 spec:
-  selector: {app.kubernetes.io/name: foc-mcp}
+  selector: {app.kubernetes.io/name: fleetops-mcp}
   ports: [{name: mcp, port: 8080, targetPort: mcp}]
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: foc-approvals
-  namespace: foc-system
-  labels: {app.kubernetes.io/name: foc-approvals, app.kubernetes.io/part-of: fleet-ops-copilot}
+  name: fleetops-approvals
+  namespace: fleetops-system
+  labels: {app.kubernetes.io/name: fleetops-approvals, app.kubernetes.io/part-of: fleet-ops-copilot}
 spec:
   replicas: 1
   selector:
-    matchLabels: {app.kubernetes.io/name: foc-approvals}
+    matchLabels: {app.kubernetes.io/name: fleetops-approvals}
   template:
     metadata:
-      labels: {app.kubernetes.io/name: foc-approvals, app.kubernetes.io/part-of: fleet-ops-copilot}
+      labels: {app.kubernetes.io/name: fleetops-approvals, app.kubernetes.io/part-of: fleet-ops-copilot}
     spec:
-      serviceAccountName: foc-approvals
+      serviceAccountName: fleetops-approvals
       securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
       containers:
-        - name: foc-approvals
+        - name: fleetops-approvals
           image: fleet-ops-copilot:dev
           imagePullPolicy: IfNotPresent
-          command: [/usr/local/bin/foc-approvals]
-          args: [-policy=/etc/fleetops/policy/default.yaml, -audit=/var/lib/fleetops/audit/foc-approvals.jsonl, -health-probe-bind-address=:8081]
+          command: [/usr/local/bin/fleetops-approvals]
+          args: [-policy=/etc/fleetops/policy/default.yaml, -audit=/var/lib/fleetops/audit/fleetops-approvals.jsonl, -health-probe-bind-address=:8081]
           ports: [{name: probes, containerPort: 8081}]
           securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
           volumeMounts:
@@ -89,32 +89,32 @@ spec:
         - name: audit
           emptyDir: {}
 ---
-# foc-agent: Claude backend, MCP client of foc-mcp, web UI on :8090. Its
+# fleetops-agent: Claude backend, MCP client of fleetops-mcp, web UI on :8090. Its
 # ServiceAccount may only get and list ApprovalRequests. No login: requests
 # filed from the page record an unverified requester and cannot be approved
-# (R38). ClusterIP only, no Ingress: kubectl port-forward svc/foc-agent 8090:8090.
+# (R38). ClusterIP only, no Ingress: kubectl port-forward svc/fleetops-agent 8090:8090.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: foc-agent
-  namespace: foc-system
-  labels: {app.kubernetes.io/name: foc-agent, app.kubernetes.io/part-of: fleet-ops-copilot}
+  name: fleetops-agent
+  namespace: fleetops-system
+  labels: {app.kubernetes.io/name: fleetops-agent, app.kubernetes.io/part-of: fleet-ops-copilot}
 spec:
   replicas: 1
   selector:
-    matchLabels: {app.kubernetes.io/name: foc-agent}
+    matchLabels: {app.kubernetes.io/name: fleetops-agent}
   template:
     metadata:
-      labels: {app.kubernetes.io/name: foc-agent, app.kubernetes.io/part-of: fleet-ops-copilot}
+      labels: {app.kubernetes.io/name: fleetops-agent, app.kubernetes.io/part-of: fleet-ops-copilot}
     spec:
-      serviceAccountName: foc-agent
+      serviceAccountName: fleetops-agent
       securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
       containers:
-        - name: foc-agent
+        - name: fleetops-agent
           image: fleet-ops-copilot:dev
           imagePullPolicy: IfNotPresent
-          command: [/usr/local/bin/foc-agent]
-          args: [-backend=claude, -listen=:8090, -mcp-url=http://foc-mcp:8080/mcp, -namespaces=warehouse-a, -max-concurrent=4, -catalogue=/etc/fleetops/catalogue/site.yaml, -audit=/var/lib/fleetops/audit/foc-agent.jsonl]
+          command: [/usr/local/bin/fleetops-agent]
+          args: [-backend=claude, -listen=:8090, -mcp-url=http://fleetops-mcp:8080/mcp, -namespaces=warehouse-a, -max-concurrent=4, -catalogue=/etc/fleetops/catalogue/site.yaml, -audit=/var/lib/fleetops/audit/fleetops-agent.jsonl]
           env:
             - name: ANTHROPIC_API_KEY
               valueFrom:
@@ -137,10 +137,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: foc-agent
-  namespace: foc-system
-  labels: {app.kubernetes.io/name: foc-agent, app.kubernetes.io/part-of: fleet-ops-copilot}
+  name: fleetops-agent
+  namespace: fleetops-system
+  labels: {app.kubernetes.io/name: fleetops-agent, app.kubernetes.io/part-of: fleet-ops-copilot}
 spec:
   type: ClusterIP
-  selector: {app.kubernetes.io/name: foc-agent}
+  selector: {app.kubernetes.io/name: fleetops-agent}
   ports: [{name: http, port: 8090, targetPort: http}]

@@ -73,7 +73,7 @@ const (
 )
 
 // UnverifiedPrefix marks a requester (spec.requestedFor) whose identity no
-// one authenticated, such as a name typed into foc-agent's web UI, which has
+// one authenticated, such as a name typed into fleetops-agent's web UI, which has
 // no login. Approval of such a request is always refused (R38); rejection is
 // allowed. A hard invariant: no policy file setting changes it.
 const UnverifiedPrefix = "unverified:"
@@ -335,7 +335,7 @@ func (e *Engine) decideDraft(r Request, s Snapshot) Decision {
 			return deny(CodeField, "action %q priority %q is not in the policy's allowed priorities %v", a.Name, prio, e.P.DraftTask.AllowedPriorities)
 		}
 	}
-	return needApproval("a named person approves creating the draft; foc-approvals then creates it with spec.draft: true, and it dispatches nothing until a person activates it")
+	return needApproval("a named person approves creating the draft; fleetops-approvals then creates it with spec.draft: true, and it dispatches nothing until a person activates it")
 }
 
 func (e *Engine) decideActivate(r Request, s Snapshot) Decision {

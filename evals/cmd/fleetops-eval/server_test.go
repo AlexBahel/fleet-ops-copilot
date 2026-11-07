@@ -91,7 +91,7 @@ func TestThreadsFromLog(t *testing.T) {
 func TestLlamaDeployment(t *testing.T) {
 	sel := map[string]string{"app.kubernetes.io/name": "llama-server"}
 	d := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{Name: "llama-server", Namespace: "foc-system"},
+		ObjectMeta: metav1.ObjectMeta{Name: "llama-server", Namespace: "fleetops-system"},
 		Spec: appsv1.DeploymentSpec{
 			Selector: &metav1.LabelSelector{MatchLabels: sel},
 			Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{Containers: []corev1.Container{{
@@ -106,7 +106,7 @@ func TestLlamaDeployment(t *testing.T) {
 	}
 	pod := func(name string, phase corev1.PodPhase) *corev1.Pod {
 		return &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "foc-system", Labels: sel},
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "fleetops-system", Labels: sel},
 			Spec:       corev1.PodSpec{NodeName: "foc-up-control-plane"},
 			Status: corev1.PodStatus{Phase: phase, ContainerStatuses: []corev1.ContainerStatus{{
 				Name: "llama-server", ImageID: "ghcr.io/ggml-org/llama.cpp@sha256:abc", RestartCount: 0,
@@ -121,7 +121,7 @@ func TestLlamaDeployment(t *testing.T) {
 		},
 	}
 	cs := fake.NewSimpleClientset(d, pod("llama-server-a", corev1.PodRunning), pod("llama-server-old", corev1.PodFailed), node)
-	srv, n, err := llamaDeployment(context.Background(), cs, "foc-system", "llama-server")
+	srv, n, err := llamaDeployment(context.Background(), cs, "fleetops-system", "llama-server")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +142,7 @@ func TestLlamaDeployment(t *testing.T) {
 	}
 
 	two := fake.NewSimpleClientset(d, pod("a", corev1.PodRunning), pod("b", corev1.PodRunning), node)
-	if _, _, err := llamaDeployment(context.Background(), two, "foc-system", "llama-server"); err == nil {
+	if _, _, err := llamaDeployment(context.Background(), two, "fleetops-system", "llama-server"); err == nil {
 		t.Error("two running pods: no error")
 	}
 }

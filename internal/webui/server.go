@@ -14,21 +14,21 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package webui serves foc-agent's web chat and its pending-requests panel
+// Package webui serves fleetops-agent's web chat and its pending-requests panel
 // (docs/DESIGN.md §3.9): embedded static files, no front-end build step.
 //
 // The UI does not approve. For each pending ApprovalRequest it shows the
-// exact write and the `foc approve` / `foc reject` command a person runs
-// with their own kubeconfig. foc-agent holds no permission to decide or to
+// exact write and the `fleetops approve` / `fleetops reject` command a person runs
+// with their own kubeconfig. fleetops-agent holds no permission to decide or to
 // write anything (its ServiceAccount can only get and list ApprovalRequests).
 //
-// There is no login. foc-mcp decides the requester from the caller's bearer
+// There is no login. fleetops-mcp decides the requester from the caller's bearer
 // token (R39). The page sends none, so the name typed in it is recorded as
 // requestedFor "unverified:<name>", and the policy refuses to approve any
 // request with an unverified requester (R38): a request filed from the page
 // can be rejected, or left to expire, but never approved. A client that sends
-// "Authorization: Bearer <the person's token>" to /api/chat (foc chat) has it
-// forwarded to foc-mcp, which verifies it with a TokenReview.
+// "Authorization: Bearer <the person's token>" to /api/chat (fleetops chat) has it
+// forwarded to fleetops-mcp, which verifies it with a TokenReview.
 package webui
 
 import (
@@ -49,7 +49,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
+	fleetopsv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/agent"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/authn"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/conversation"
@@ -65,17 +65,17 @@ var staticFiles embed.FS
 type Runner interface {
 	// Run answers one message of a conversation.
 	Run(ctx context.Context, in ChatInput) (ChatOutput, error)
-	// Ready reports whether a request could be answered now (foc-mcp
+	// Ready reports whether a request could be answered now (fleetops-mcp
 	// reachable).
 	Ready(ctx context.Context) error
 	// Backend names the model backend, for the page header.
 	Backend() string
 }
 
-// Server is the HTTP side of foc-agent.
+// Server is the HTTP side of fleetops-agent.
 type Server struct {
 	Runner Runner
-	// Requests reads ApprovalRequests with foc-agent's own, read-only
+	// Requests reads ApprovalRequests with fleetops-agent's own, read-only
 	// credentials.
 	Requests   client.Reader
 	Namespaces []string
@@ -199,7 +199,7 @@ type chatResponse struct {
 	// preview awaiting confirmation, a request filed, ...
 	Dialogue *agent.DialogueEvent `json:"dialogue,omitempty"`
 	// Requester is what any request filed by this message records as
-	// requestedFor when no token was sent; with a token foc-mcp decides it.
+	// requestedFor when no token was sent; with a token fleetops-mcp decides it.
 	Requester string     `json:"requester,omitempty"`
 	Answer    string     `json:"answer,omitempty"`
 	Error     string     `json:"error,omitempty"`
@@ -262,7 +262,7 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
-	// foc-mcp decides the requester from the token (R39). Without one, the
+	// fleetops-mcp decides the requester from the token (R39). Without one, the
 	// typed name is only asserted and every request it files is unverified.
 	requester := ""
 	if token == "" {
@@ -309,7 +309,7 @@ type check struct {
 	Error string `json:"error,omitempty"`
 }
 
-// readyz is ready when foc-mcp answers and ApprovalRequests can be read in
+// readyz is ready when fleetops-mcp answers and ApprovalRequests can be read in
 // every configured namespace.
 func (s *Server) readyz(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), readyzTimeout)
@@ -339,7 +339,7 @@ func listOne(ctx context.Context, c client.Reader, namespaces []string) error {
 		return errors.New("no namespaces configured")
 	}
 	for _, ns := range namespaces {
-		if err := c.List(ctx, &focv1.ApprovalRequestList{}, client.InNamespace(ns), client.Limit(1)); err != nil {
+		if err := c.List(ctx, &fleetopsv1.ApprovalRequestList{}, client.InNamespace(ns), client.Limit(1)); err != nil {
 			return err
 		}
 	}

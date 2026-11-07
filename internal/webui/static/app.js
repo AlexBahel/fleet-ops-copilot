@@ -1,6 +1,6 @@
 // Copyright 2026 Alex Bahel. Licensed under the Apache License, Version 2.0.
 //
-// Chat with foc-agent and list ApprovalRequests. Every value from the server
+// Chat with fleetops-agent and list ApprovalRequests. Every value from the server
 // is inserted as text, never as HTML. The page has no approve or reject
 // action: it shows the command a person runs with their own kubeconfig.
 "use strict";
@@ -28,7 +28,7 @@ function load(kind, key) { try { return store(kind)?.getItem(key) || ""; } catch
 function save(kind, key, v) { try { store(kind)?.setItem(key, v); } catch (_) { /* storage blocked */ } }
 function drop(kind, key) { try { store(kind)?.removeItem(key); } catch (_) { /* storage blocked */ } }
 
-let sessionId = load("sessionStorage", "foc.session");
+let sessionId = load("sessionStorage", "fleetops.session");
 // The conversation id is kept in this page's memory only (D75): a reload
 // starts a new conversation.
 let conversationId = "";
@@ -73,7 +73,7 @@ async function send(ev) {
   const message = $("message").value.trim();
   if (!operator) { $("operator").focus(); addMessage("error", "Enter your Kubernetes username first."); return; }
   if (!message) return;
-  save("localStorage", "foc.operator", operator);
+  save("localStorage", "fleetops.operator", operator);
   addMessage("user", message);
   $("message").value = "";
   $("send").disabled = true;
@@ -86,7 +86,7 @@ async function send(ev) {
     });
     const out = await res.json();
     wait.remove();
-    if (out.sessionId) { sessionId = out.sessionId; save("sessionStorage", "foc.session", sessionId); showSession(); }
+    if (out.sessionId) { sessionId = out.sessionId; save("sessionStorage", "fleetops.session", sessionId); showSession(); }
     if (out.conversationId) conversationId = out.conversationId;
     if (out.notice) addMessage("pending", out.notice);
     if (out.requester) $("requester").textContent = "Requests from this page are recorded for " + out.requester + " and cannot be approved; a person can only reject them.";
@@ -179,7 +179,7 @@ async function refresh() {
     box.replaceChildren(...items.map(card));
     if (!items.length) box.append(el("p", { class: "hint", text: showAll ? "No requests." : "No pending requests." }));
   } catch (e) {
-    $("requests-status").textContent = "Cannot reach foc-agent: " + e;
+    $("requests-status").textContent = "Cannot reach fleetops-agent: " + e;
   } finally {
     refreshing = false;
   }
@@ -188,14 +188,14 @@ async function refresh() {
 // ---- start ------------------------------------------------------------------
 
 document.addEventListener("DOMContentLoaded", async () => {
-  $("operator").value = load("localStorage", "foc.operator");
+  $("operator").value = load("localStorage", "fleetops.operator");
   showSession();
   $("ask").addEventListener("submit", send);
   $("message").addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("ask").requestSubmit(); }
   });
   $("new-session").addEventListener("click", () => {
-    sessionId = ""; drop("sessionStorage", "foc.session"); showSession();
+    sessionId = ""; drop("sessionStorage", "fleetops.session"); showSession();
     conversationId = "";
     $("log").replaceChildren();
   });

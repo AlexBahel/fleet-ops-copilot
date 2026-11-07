@@ -18,7 +18,7 @@ limitations under the License.
 // values, produces the same objects as the plain manifests in config/ that
 // envtest, the evals and make deploy-kind use.
 //
-//	helm template foc charts/fleet-ops-copilot -n foc-system --include-crds > rendered.yaml
+//	helm template fleetops charts/fleet-ops-copilot -n fleetops-system --include-crds > rendered.yaml
 //	go run ./scripts/chart-parity -rendered rendered.yaml
 //
 // Objects are compared after parsing, so formatting differences do not count.
@@ -31,7 +31,7 @@ limitations under the License.
 // file byte for byte, as are the chart's copies of the CRDs and the policy.
 //
 // It also refuses any rendered Ingress, Route or Gateway API object and any
-// Service that is not ClusterIP (R38: foc-agent's web UI has no login).
+// Service that is not ClusterIP (R38: fleetops-agent's web UI has no login).
 package main
 
 import (
@@ -139,7 +139,7 @@ func check(repo, rendered string) ([]string, error) {
 		return nil, err
 	}
 
-	delete(want, "v1/Namespace//foc-system") // created by helm install --create-namespace
+	delete(want, "v1/Namespace//fleetops-system") // created by helm install --create-namespace
 
 	// The ConfigMaps make deploy-kind creates from files (the policy, the
 	// site catalogue) are rendered by the chart from its copies.
@@ -147,7 +147,7 @@ func check(repo, rendered string) ([]string, error) {
 		{"fleetops-policy", "default.yaml", filepath.Join("policies", "default.yaml")},
 		{"fleetops-catalogue", "site.yaml", filepath.Join("catalogue", "warehouse-a.yaml")},
 	} {
-		key := "v1/ConfigMap/foc-system/" + cmf.name
+		key := "v1/ConfigMap/fleetops-system/" + cmf.name
 		cm, ok := got[key]
 		if !ok {
 			problems = append(problems, "chart renders no ConfigMap "+cmf.name)
@@ -190,7 +190,7 @@ func check(repo, rendered string) ([]string, error) {
 // exposureKinds would publish a Service outside the cluster.
 var exposureKinds = map[string]bool{"Ingress": true, "Route": true, "Gateway": true, "HTTPRoute": true, "GRPCRoute": true, "TLSRoute": true, "TCPRoute": true}
 
-// exposure enforces R38 on the rendered chart: foc-agent's web UI has no
+// exposure enforces R38 on the rendered chart: fleetops-agent's web UI has no
 // login, so nothing may expose a Service outside the cluster. Every Service
 // is ClusterIP and no Ingress, Route or Gateway API object is rendered.
 func exposure(got map[string]obj) []string {
@@ -199,7 +199,7 @@ func exposure(got map[string]obj) []string {
 		o := got[k]
 		kind, _ := o["kind"].(string)
 		if exposureKinds[kind] {
-			problems = append(problems, "R38: chart renders "+k+"; foc-agent's web UI has no login and must not be exposed")
+			problems = append(problems, "R38: chart renders "+k+"; fleetops-agent's web UI has no login and must not be exposed")
 		}
 		if kind == "Service" {
 			spec, _ := o["spec"].(obj)

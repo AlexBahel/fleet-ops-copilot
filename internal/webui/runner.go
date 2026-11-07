@@ -27,7 +27,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
+	fleetopsv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/agent"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/audit"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/catalogue"
@@ -38,7 +38,7 @@ import (
 
 // ChatInput is one person message.
 type ChatInput struct {
-	// Token is the caller's bearer token, forwarded to foc-mcp ("" for the page).
+	// Token is the caller's bearer token, forwarded to fleetops-mcp ("" for the page).
 	Token     string
 	Operator  string
 	SessionID string
@@ -60,13 +60,13 @@ type ChatOutput struct {
 }
 
 // AgentRunner answers each message with the agent (internal/agent) over a
-// fresh MCP session to foc-mcp, so a foc-mcp restart affects only messages
+// fresh MCP session to fleetops-mcp, so a fleetops-mcp restart affects only messages
 // in flight. Conversations, with their dialogue state, are kept in Store,
-// bound to the requester foc-mcp verified (D75).
+// bound to the requester fleetops-mcp verified (D75).
 type AgentRunner struct {
 	// Transport returns a new MCP client transport (streamable HTTP to
-	// foc-mcp in the cluster) that sends token, if any, as the caller's
-	// bearer token; foc-mcp verifies it (R39).
+	// fleetops-mcp in the cluster) that sends token, if any, as the caller's
+	// bearer token; fleetops-mcp verifies it (R39).
 	Transport  func(token string) mcp.Transport
 	NewBackend func() (llm.Backend, error)
 	// BackendName is shown in the page header.
@@ -87,15 +87,15 @@ type AgentRunner struct {
 	once sync.Once
 }
 
-// MCPURL returns a Transport for foc-mcp's streamable HTTP endpoint.
+// MCPURL returns a Transport for fleetops-mcp's streamable HTTP endpoint.
 func MCPURL(url string) func(token string) mcp.Transport {
 	return func(token string) mcp.Transport { return mcpserver.ClientTransport(url, token) }
 }
 
 func (a *AgentRunner) connect(ctx context.Context, token string) (*mcp.ClientSession, error) {
-	cs, err := mcp.NewClient(&mcp.Implementation{Name: "foc-agent", Version: mcpserver.Version}, nil).Connect(ctx, a.Transport(token), nil)
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "fleetops-agent", Version: mcpserver.Version}, nil).Connect(ctx, a.Transport(token), nil)
 	if err != nil {
-		return nil, fmt.Errorf("connecting to foc-mcp: %w", err)
+		return nil, fmt.Errorf("connecting to fleetops-mcp: %w", err)
 	}
 	return cs, nil
 }
@@ -140,7 +140,7 @@ func (a *AgentRunner) Run(ctx context.Context, in ChatInput) (ChatOutput, error)
 	defer conv.Unlock()
 	chat := &agent.Chat{Catalogue: a.Catalogue, MaxTurns: a.MaxTurns, Tracer: a.Tracer, Audit: a.Audit, Redact: a.Redact}
 	if in.FollowUp != "" {
-		var req focv1.ApprovalRequest
+		var req fleetopsv1.ApprovalRequest
 		if a.Requests == nil {
 			return out, errors.New("follow-ups are not available: no request reader")
 		}
@@ -158,7 +158,7 @@ func (a *AgentRunner) Run(ctx context.Context, in ChatInput) (ChatOutput, error)
 	return out, err
 }
 
-// Ready implements Runner: foc-mcp accepts a session and answers a ping.
+// Ready implements Runner: fleetops-mcp accepts a session and answers a ping.
 func (a *AgentRunner) Ready(ctx context.Context) error {
 	cs, err := a.connect(ctx, "")
 	if err != nil {

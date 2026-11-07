@@ -32,7 +32,7 @@ import (
 	"testing"
 )
 
-var binaries = []string{"foc-mcp", "foc-approvals", "foc-agent"}
+var binaries = []string{"fleetops-mcp", "fleetops-approvals", "fleetops-agent"}
 
 func run(t *testing.T, dir string, name string, args ...string) (string, error) {
 	t.Helper()
@@ -68,7 +68,7 @@ func TestBinariesRunAsNonRootWhateverTheUmask(t *testing.T) {
 	}
 	// Build under umask 077: without --chmod the files would be 0700 and
 	// owned by the builder, so user 65532 could not run them.
-	build := "umask 077 && CGO_ENABLED=0 GOOS=linux GOARCH=" + arch + " go build -o " + out + "/ ./cmd/foc-mcp ./cmd/foc-approvals ./cmd/foc-agent"
+	build := "umask 077 && CGO_ENABLED=0 GOOS=linux GOARCH=" + arch + " go build -o " + out + "/ ./cmd/fleetops-mcp ./cmd/fleetops-approvals ./cmd/fleetops-agent"
 	if o, err := run(t, repo, "sh", "-c", build); err != nil {
 		t.Fatalf("build: %v\n%s", err, o)
 	}

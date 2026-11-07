@@ -39,7 +39,7 @@ import (
 
 const (
 	swarmNS    = testenv.SwarmNS
-	focNS      = testenv.FocNS
+	fleetopsNS = testenv.FleetopsNS
 	mcpUser    = testenv.MCPUser
 	approvUser = testenv.ApprovUser
 	agentUser  = testenv.AgentUser

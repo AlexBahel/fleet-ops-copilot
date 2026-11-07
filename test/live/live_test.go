@@ -28,8 +28,8 @@ limitations under the License.
 //	FOC_LIVE_APPROVER_CONTEXT     context of a person who authenticates with a bearer token (dana) and holds fleetops:approver and swarmada:fleet-manager
 //	FOC_LIVE_TOKENS_FILE          the people's static token file (hack/kind-people.sh gen): requests are filed with the
 //	                              requester's own bearer token, so the requester is verified (D57, R43)
-//	FOC_LIVE_MCP_URL              foc-mcp streamable HTTP endpoint, e.g. http://127.0.0.1:18080/mcp
-//	FOC_LIVE_FOC                  path to the foc binary
+//	FOC_LIVE_MCP_URL              fleetops-mcp streamable HTTP endpoint, e.g. http://127.0.0.1:18080/mcp
+//	FOC_LIVE_FOC                  path to the fleetops binary
 //	FOC_LIVE_PHASE                "no-webhooks" (Swarmada serves no admission webhooks) or "webhooks"
 //	FOC_LIVE_EVIDENCE_DIR         optional; the executor's audit file is copied there
 package live
@@ -62,7 +62,7 @@ import (
 
 	swarmv1 "github.com/swarmada/swarmada/api/v1"
 
-	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
+	fleetopsv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/audit"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/mcpserver"
@@ -73,19 +73,19 @@ const (
 	ns       = "warehouse-a"
 	zone     = "warehouse-a"
 	operator = "sam" // the fictional shift supervisor who asks for the change
-	execSA   = "system:serviceaccount:foc-system:foc-approvals"
+	execSA   = "system:serviceaccount:fleetops-system:fleetops-approvals"
 )
 
 type env struct {
-	adminCtx, approverCtx, mcpURL, focBin, evidence string
-	tokens                                          map[string]string // person -> bearer token (never logged)
-	sessions                                        map[string]*mcp.ClientSession
-	admin                                           client.Client
-	adminCS                                         *kubernetes.Clientset
-	adminCfg                                        *rest.Config
-	approverCfg                                     *rest.Config
-	approverUser                                    string
-	session                                         string
+	adminCtx, approverCtx, mcpURL, fleetopsBin, evidence string
+	tokens                                               map[string]string // person -> bearer token (never logged)
+	sessions                                             map[string]*mcp.ClientSession
+	admin                                                client.Client
+	adminCS                                              *kubernetes.Clientset
+	adminCfg                                             *rest.Config
+	approverCfg                                          *rest.Config
+	approverUser                                         string
+	session                                              string
 }
 
 // readTokens parses a kube-apiserver static token file: token,user,uid,"groups".
@@ -121,7 +121,7 @@ func setup(t *testing.T, phase string) *env {
 	}
 	e := &env{
 		adminCtx: mustEnv(t, "FOC_LIVE_ADMIN_CONTEXT"), approverCtx: mustEnv(t, "FOC_LIVE_APPROVER_CONTEXT"),
-		mcpURL: mustEnv(t, "FOC_LIVE_MCP_URL"), focBin: mustEnv(t, "FOC_LIVE_FOC"), evidence: os.Getenv("FOC_LIVE_EVIDENCE_DIR"),
+		mcpURL: mustEnv(t, "FOC_LIVE_MCP_URL"), fleetopsBin: mustEnv(t, "FOC_LIVE_FOC"), evidence: os.Getenv("FOC_LIVE_EVIDENCE_DIR"),
 		session:  fmt.Sprintf("live-%d", time.Now().Unix()),
 		sessions: map[string]*mcp.ClientSession{},
 	}
@@ -173,7 +173,7 @@ func (e *env) mcpSession(t *testing.T, person string) *mcp.ClientSession {
 	cs, err := mcp.NewClient(&mcp.Implementation{Name: "foc-live-test", Version: "0"}, nil).
 		Connect(context.Background(), mcpserver.ClientTransport(e.mcpURL, token), nil)
 	if err != nil {
-		t.Fatalf("connecting to foc-mcp at %s as %q: %v", e.mcpURL, person, err)
+		t.Fatalf("connecting to fleetops-mcp at %s as %q: %v", e.mcpURL, person, err)
 	}
 	// The session belongs to the (sub)test that opened it: closed when that
 	// test ends and dropped from the cache, so a later subtest reconnects
@@ -183,8 +183,8 @@ func (e *env) mcpSession(t *testing.T, person string) *mcp.ClientSession {
 	return cs
 }
 
-// callAs invokes a request tool on the deployed foc-mcp with person's bearer
-// token ("" for none) and the operator name asserted in _meta, which foc-mcp
+// callAs invokes a request tool on the deployed fleetops-mcp with person's bearer
+// token ("" for none) and the operator name asserted in _meta, which fleetops-mcp
 // ignores for a verified requester (D57).
 func (e *env) callAs(t *testing.T, person, asserted, tool string, args map[string]any) tools.RequestResult {
 	t.Helper()
@@ -240,7 +240,7 @@ func confirmFor(t *testing.T, tool string, args map[string]any) string {
 // requestedFor returns spec.requestedFor of an ApprovalRequest.
 func (e *env) requestedFor(t *testing.T, name string) string {
 	t.Helper()
-	var r focv1.ApprovalRequest
+	var r fleetopsv1.ApprovalRequest
 	if err := e.admin.Get(context.Background(), client.ObjectKey{Namespace: ns, Name: name}, &r); err != nil {
 		t.Fatal(err)
 	}
@@ -269,21 +269,21 @@ func requestName(t *testing.T, r tools.RequestResult) string {
 	return strings.TrimPrefix(r.Created, "ApprovalRequest/")
 }
 
-// foc runs the foc CLI as the approver (a person, with their own kubeconfig context).
-func (e *env) foc(t *testing.T, args ...string) string {
+// fleetops runs the fleetops CLI as the approver (a person, with their own kubeconfig context).
+func (e *env) fleetops(t *testing.T, args ...string) string {
 	t.Helper()
-	cmd := exec.Command(e.focBin, args...)
+	cmd := exec.Command(e.fleetopsBin, args...)
 	out, err := cmd.CombinedOutput()
-	t.Logf("$ foc %s\n%s", strings.Join(args, " "), out)
+	t.Logf("$ fleetops %s\n%s", strings.Join(args, " "), out)
 	if err != nil {
-		t.Fatalf("foc %v: %v", args, err)
+		t.Fatalf("fleetops %v: %v", args, err)
 	}
 	return string(out)
 }
 
-func (e *env) waitState(t *testing.T, name string, want focv1.RequestState, d time.Duration) *focv1.ApprovalRequest {
+func (e *env) waitState(t *testing.T, name string, want fleetopsv1.RequestState, d time.Duration) *fleetopsv1.ApprovalRequest {
 	t.Helper()
-	var r focv1.ApprovalRequest
+	var r fleetopsv1.ApprovalRequest
 	deadline := time.Now().Add(d)
 	for {
 		if err := e.admin.Get(context.Background(), client.ObjectKey{Namespace: ns, Name: name}, &r); err != nil {
@@ -323,8 +323,8 @@ func (e *env) saClient(t *testing.T, saNS, sa string) client.Client {
 
 func (e *env) auditFile(t *testing.T) []byte {
 	t.Helper()
-	cmd := exec.Command("kubectl", "--context", e.adminCtx, "-n", "foc-system", "exec", "deploy/foc-approvals", "--",
-		"/busybox/cat", "/var/lib/fleetops/audit/foc-approvals.jsonl")
+	cmd := exec.Command("kubectl", "--context", e.adminCtx, "-n", "fleetops-system", "exec", "deploy/fleetops-approvals", "--",
+		"/busybox/cat", "/var/lib/fleetops/audit/fleetops-approvals.jsonl")
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	if err := cmd.Run(); err != nil {
@@ -428,8 +428,8 @@ func TestLiveApprovalPaths(t *testing.T) {
 			"actions": []map[string]any{{"name": "inspect", "type": "Navigate", "zone": zone}},
 		})
 		req := requestName(t, r)
-		e.foc(t, "approve", req, "-n", ns, "--context", e.approverCtx, "-comment", "live check")
-		ar := e.waitState(t, req, focv1.StateExecuted, 60*time.Second)
+		e.fleetops(t, "approve", req, "-n", ns, "--context", e.approverCtx, "-comment", "live check")
+		ar := e.waitState(t, req, fleetopsv1.StateExecuted, 60*time.Second)
 		if ar.Status.DecidedBy != e.approverUser {
 			t.Errorf("decidedBy %q, want %q", ar.Status.DecidedBy, e.approverUser)
 		}
@@ -452,7 +452,7 @@ func TestLiveApprovalPaths(t *testing.T) {
 		if string(ft.Status.Phase) != "Draft" {
 			t.Errorf("status.phase %q, want Draft", ft.Status.Phase)
 		}
-		if ft.Labels[fleet.CreatedByLabel] != "foc-approvals" || ft.Labels[fleet.RequestLabel] != req {
+		if ft.Labels[fleet.CreatedByLabel] != "fleetops-approvals" || ft.Labels[fleet.RequestLabel] != req {
 			t.Errorf("labels %v", ft.Labels)
 		}
 		time.Sleep(10 * time.Second)
@@ -486,7 +486,7 @@ func TestLiveApprovalPaths(t *testing.T) {
 		t.Cleanup(func() { _ = e.admin.Delete(ctx, rb); _ = e.admin.Delete(ctx, sa) })
 		time.Sleep(2 * time.Second)
 		patch := client.RawPatch(types.MergePatchType, []byte(`{"spec":{"draft":false}}`))
-		for _, who := range []struct{ ns, sa string }{{ns, "foc-live-probe"}, {"foc-system", "foc-approvals"}, {"foc-system", "foc-mcp"}, {"foc-system", "foc-agent"}} {
+		for _, who := range []struct{ ns, sa string }{{ns, "foc-live-probe"}, {"fleetops-system", "fleetops-approvals"}, {"fleetops-system", "fleetops-mcp"}, {"fleetops-system", "fleetops-agent"}} {
 			c := e.saClient(t, who.ns, who.sa)
 			err := c.Patch(ctx, &swarmv1.FleetTask{ObjectMeta: metav1.ObjectMeta{Name: draft, Namespace: ns}}, patch)
 			t.Logf("activate as system:serviceaccount:%s:%s -> %v", who.ns, who.sa, err)
@@ -506,26 +506,26 @@ func TestLiveApprovalPaths(t *testing.T) {
 	t.Run("activation-by-person-observed", func(t *testing.T) {
 		r := e.call(t, operator, "request_activate_task", map[string]any{"taskName": draft})
 		req := requestName(t, r)
-		out := e.foc(t, "approve", req, "-n", ns, "--context", e.approverCtx)
+		out := e.fleetops(t, "approve", req, "-n", ns, "--context", e.approverCtx)
 		host := "API server: " + e.approverCfg.Host
 		iHost, iNS := strings.Index(out, host), strings.Index(out, "namespace:  "+ns)
-		want := "\n  foc activate " + req + " -n " + ns + " --context " + e.approverCtx
+		want := "\n  fleetops activate " + req + " -n " + ns + " --context " + e.approverCtx
 		iCmd := strings.Index(out, want)
 		if iHost < 0 || iNS < 0 || iCmd < 0 || iHost > iCmd || iNS > iCmd {
-			t.Fatalf("foc approve must show %q and the namespace above %q; got:\n%s", host, want, out)
+			t.Fatalf("fleetops approve must show %q and the namespace above %q; got:\n%s", host, want, out)
 		}
 		var before swarmv1.FleetTask
 		if err := e.admin.Get(ctx, client.ObjectKey{Namespace: ns, Name: draft}, &before); err != nil {
 			t.Fatal(err)
 		}
 		// The person runs the printed command with their own credentials:
-		// foc activate records an Activation ApprovalDecision, then sends the
+		// fleetops activate records an Activation ApprovalDecision, then sends the
 		// plain spec.draft=false patch through Swarmada's real webhook (R71).
-		act := e.foc(t, strings.Fields(strings.TrimSpace(out[iCmd+1 : iCmd+len(want)]))[1:]...)
+		act := e.fleetops(t, strings.Fields(strings.TrimSpace(out[iCmd+1 : iCmd+len(want)]))[1:]...)
 		if !strings.Contains(act, "recorded ApprovalDecision "+req+"-activation-") || !strings.Contains(act, "activated FleetTask "+draft) {
-			t.Fatalf("foc activate output:\n%s", act)
+			t.Fatalf("fleetops activate output:\n%s", act)
 		}
-		e.waitState(t, req, focv1.StateExecuted, 60*time.Second)
+		e.waitState(t, req, fleetopsv1.StateExecuted, 60*time.Second)
 		var evs corev1.EventList
 		if err := e.admin.List(ctx, &evs, client.InNamespace(ns)); err != nil {
 			t.Fatal(err)
@@ -563,12 +563,12 @@ func TestLiveApprovalPaths(t *testing.T) {
 			t.Errorf("activation changed the FleetTask's annotations: %v -> %v", before.Annotations, ft.Annotations)
 		}
 		// The activation record: our own API, bound to the authenticated
-		// person, linked by foc-approvals.
-		var got focv1.ApprovalRequest
+		// person, linked by fleetops-approvals.
+		var got fleetopsv1.ApprovalRequest
 		if err := e.admin.Get(ctx, client.ObjectKey{Namespace: ns, Name: req}, &got); err != nil {
 			t.Fatal(err)
 		}
-		var rec focv1.ApprovalDecision
+		var rec fleetopsv1.ApprovalDecision
 		if err := e.admin.Get(ctx, client.ObjectKey{Namespace: ns, Name: got.Status.ActivationRef}, &rec); err != nil {
 			t.Fatalf("activationRef %q: %v", got.Status.ActivationRef, err)
 		}
@@ -603,23 +603,23 @@ func TestLiveApprovalPaths(t *testing.T) {
 		if got := e.requestedFor(t, unverified); got != "unverified:dana" {
 			t.Errorf("requestedFor %q, want unverified:dana", got)
 		}
-		e.foc(t, "approve", unverified, "-n", ns, "--context", e.approverCtx)
+		e.fleetops(t, "approve", unverified, "-n", ns, "--context", e.approverCtx)
 		time.Sleep(10 * time.Second)
-		var ar focv1.ApprovalRequest
+		var ar fleetopsv1.ApprovalRequest
 		if err := e.admin.Get(ctx, client.ObjectKey{Namespace: ns, Name: unverified}, &ar); err != nil {
 			t.Fatal(err)
 		}
 		var ft swarmv1.FleetTask
 		err := e.admin.Get(ctx, client.ObjectKey{Namespace: ns, Name: anon}, &ft)
 		t.Logf("approved unverified request %s: state=%s refusedDecisions=%v message=%q; FleetTask/%s: %v", unverified, ar.Status.State, ar.Status.RefusedDecisions, ar.Status.Message, anon, err)
-		if len(ar.Status.RefusedDecisions) == 0 || ar.Status.State == focv1.StateApproved || ar.Status.State == focv1.StateExecuted {
+		if len(ar.Status.RefusedDecisions) == 0 || ar.Status.State == fleetopsv1.StateApproved || ar.Status.State == fleetopsv1.StateExecuted {
 			t.Error("the approval of an unverified request was not refused")
 		}
 		if !apierrors.IsNotFound(err) {
 			t.Errorf("FleetTask %s exists after approving an unverified request", anon)
 		}
 		for _, r := range []string{forged, unverified} {
-			e.foc(t, "reject", r, "-n", ns, "--context", e.approverCtx, "-comment", "live check cleanup")
+			e.fleetops(t, "reject", r, "-n", ns, "--context", e.approverCtx, "-comment", "live check cleanup")
 		}
 	})
 
@@ -631,7 +631,7 @@ func TestLiveApprovalPaths(t *testing.T) {
 			"actions": []map[string]any{{"name": "inspect", "type": "Navigate", "zone": zone}},
 		}))
 		time.Sleep(15 * time.Second)
-		var ar focv1.ApprovalRequest
+		var ar fleetopsv1.ApprovalRequest
 		if err := e.admin.Get(ctx, client.ObjectKey{Namespace: ns, Name: req}, &ar); err != nil {
 			t.Fatal(err)
 		}
@@ -641,8 +641,8 @@ func TestLiveApprovalPaths(t *testing.T) {
 		if !apierrors.IsNotFound(err) {
 			t.Errorf("FleetTask %s exists without a decision", pendingDraft)
 		}
-		e.foc(t, "reject", req, "-n", ns, "--context", e.approverCtx, "-comment", "live check cleanup")
-		e.waitState(t, req, focv1.StateRejected, 60*time.Second)
+		e.fleetops(t, "reject", req, "-n", ns, "--context", e.approverCtx, "-comment", "live check cleanup")
+		e.waitState(t, req, fleetopsv1.StateRejected, 60*time.Second)
 		if err := e.admin.Get(ctx, client.ObjectKey{Namespace: ns, Name: pendingDraft}, &ft); !apierrors.IsNotFound(err) {
 			t.Errorf("FleetTask %s exists after rejection: %v", pendingDraft, err)
 		}
@@ -653,14 +653,14 @@ func TestLiveApprovalPaths(t *testing.T) {
 			"name": selfDraft, "purpose": "live check: self-approval is refused",
 			"actions": []map[string]any{{"name": "inspect", "type": "Navigate", "zone": zone}},
 		}))
-		e.foc(t, "approve", req, "-n", ns, "--context", e.approverCtx)
+		e.fleetops(t, "approve", req, "-n", ns, "--context", e.approverCtx)
 		time.Sleep(10 * time.Second)
 		if err := e.admin.Get(ctx, client.ObjectKey{Namespace: ns, Name: req}, &ar); err != nil {
 			t.Fatal(err)
 		}
 		err = e.admin.Get(ctx, client.ObjectKey{Namespace: ns, Name: selfDraft}, &ft)
 		t.Logf("self-approved request %s: state=%s refusedDecisions=%v message=%q; FleetTask/%s: %v", req, ar.Status.State, ar.Status.RefusedDecisions, ar.Status.Message, selfDraft, err)
-		if len(ar.Status.RefusedDecisions) == 0 || ar.Status.State == focv1.StateApproved || ar.Status.State == focv1.StateExecuted {
+		if len(ar.Status.RefusedDecisions) == 0 || ar.Status.State == fleetopsv1.StateApproved || ar.Status.State == fleetopsv1.StateExecuted {
 			t.Error("self-approval was not refused")
 		}
 		if !apierrors.IsNotFound(err) {
@@ -673,8 +673,8 @@ func TestLiveApprovalPaths(t *testing.T) {
 			"zoneName": zone, "mode": "Graceful", "reason": "live check: floor cleaning after the wave (fictional)",
 		})
 		req := requestName(t, r)
-		e.foc(t, "approve", req, "-n", ns, "--context", e.approverCtx)
-		ar := e.waitState(t, req, focv1.StateExecuted, 60*time.Second)
+		e.fleetops(t, "approve", req, "-n", ns, "--context", e.approverCtx)
+		ar := e.waitState(t, req, fleetopsv1.StateExecuted, 60*time.Second)
 		if ar.Status.Target == nil || ar.Status.Target.Kind != "ZoneMaintenance" {
 			t.Fatalf("target %+v", ar.Status.Target)
 		}
@@ -694,8 +694,8 @@ func TestLiveApprovalPaths(t *testing.T) {
 	t.Run("zone-stop-by-executor", func(t *testing.T) {
 		r := e.call(t, operator, "request_zone_stop", map[string]any{"zoneName": zone, "reason": stopReason})
 		req := requestName(t, r)
-		e.foc(t, "approve", req, "-n", ns, "--context", e.approverCtx)
-		e.waitState(t, req, focv1.StateExecuted, 60*time.Second)
+		e.fleetops(t, "approve", req, "-n", ns, "--context", e.approverCtx)
+		e.waitState(t, req, fleetopsv1.StateExecuted, 60*time.Second)
 		time.Sleep(5 * time.Second)
 		var z swarmv1.FleetZone
 		if err := e.admin.Get(ctx, client.ObjectKey{Namespace: ns, Name: zone}, &z); err != nil {
@@ -732,8 +732,8 @@ func TestLiveApprovalPaths(t *testing.T) {
 
 	t.Run("guardrails-api-server-refuses-serviceaccounts", func(t *testing.T) {
 		clear := client.RawPatch(types.MergePatchType, []byte(`{"metadata":{"annotations":{"swarmada.io/estop-triggered":null}}}`))
-		for _, sa := range []string{"foc-agent", "foc-mcp", "foc-approvals"} {
-			c := e.saClient(t, "foc-system", sa)
+		for _, sa := range []string{"fleetops-agent", "fleetops-mcp", "fleetops-approvals"} {
+			c := e.saClient(t, "fleetops-system", sa)
 			err := c.Delete(ctx, &swarmv1.FleetTask{ObjectMeta: metav1.ObjectMeta{Name: draft, Namespace: ns}})
 			t.Logf("delete FleetTask/%s as %s -> %v", draft, sa, err)
 			if err == nil || !(apierrors.IsForbidden(err) || apierrors.IsInvalid(err)) {
@@ -765,18 +765,18 @@ func TestLiveApprovalPaths(t *testing.T) {
 	// so every subtest that files a draft into it runs before (R65 check).
 	t.Run("every-write-traces-to-a-named-approval", func(t *testing.T) {
 		// Every object the executor created traces to an approval by a person.
-		var reqs focv1.ApprovalRequestList
+		var reqs fleetopsv1.ApprovalRequestList
 		if err := e.admin.List(ctx, &reqs, client.InNamespace(ns)); err != nil {
 			t.Fatal(err)
 		}
-		byName := map[string]focv1.ApprovalRequest{}
+		byName := map[string]fleetopsv1.ApprovalRequest{}
 		for _, r := range reqs.Items {
 			byName[r.Name] = r
 		}
 		var fts swarmv1.FleetTaskList
 		var zms swarmv1.ZoneMaintenanceList
-		_ = e.admin.List(ctx, &fts, client.InNamespace(ns), client.MatchingLabels{fleet.CreatedByLabel: "foc-approvals"})
-		_ = e.admin.List(ctx, &zms, client.InNamespace(ns), client.MatchingLabels{fleet.CreatedByLabel: "foc-approvals"})
+		_ = e.admin.List(ctx, &fts, client.InNamespace(ns), client.MatchingLabels{fleet.CreatedByLabel: "fleetops-approvals"})
+		_ = e.admin.List(ctx, &zms, client.InNamespace(ns), client.MatchingLabels{fleet.CreatedByLabel: "fleetops-approvals"})
 		objs := []client.Object{}
 		for i := range fts.Items {
 			objs = append(objs, &fts.Items[i])
@@ -799,7 +799,7 @@ func TestLiveApprovalPaths(t *testing.T) {
 		if err != nil {
 			t.Fatalf("audit chain: %v after %d entries", err, n)
 		}
-		t.Logf("foc-approvals audit file: %d entries, chain intact", n)
+		t.Logf("fleetops-approvals audit file: %d entries, chain intact", n)
 		for _, en := range auditEntries(t, b) {
 			if en.Kind == audit.KindExecuted && strings.HasPrefix(en.Object, "FleetZone/") {
 				line, _ := json.Marshal(en)
@@ -808,7 +808,7 @@ func TestLiveApprovalPaths(t *testing.T) {
 			}
 		}
 		if e.evidence != "" {
-			if err := os.WriteFile(filepath.Join(e.evidence, "foc-approvals-audit.jsonl"), b, 0o644); err != nil {
+			if err := os.WriteFile(filepath.Join(e.evidence, "fleetops-approvals-audit.jsonl"), b, 0o644); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -844,13 +844,13 @@ func TestLiveSwarmadaAuditActor(t *testing.T) {
 		}
 		entries = append(entries, en)
 	}
-	var reqs focv1.ApprovalRequestList
+	var reqs fleetopsv1.ApprovalRequestList
 	if err := e.admin.List(context.Background(), &reqs, client.InNamespace(ns)); err != nil {
 		t.Fatal(err)
 	}
 	n := 0
 	for _, r := range reqs.Items {
-		if r.Spec.Type != focv1.RequestZoneStop || r.Status.State != focv1.StateExecuted {
+		if r.Spec.Type != fleetopsv1.RequestZoneStop || r.Status.State != fleetopsv1.StateExecuted {
 			continue
 		}
 		n++

@@ -170,7 +170,7 @@ const (
 )
 
 // ParseReply reads the person's answer to a preview. It is matched here,
-// by foc-agent, never by the model (D74). Text after "3" is the change.
+// by fleetops-agent, never by the model (D74). Text after "3" is the change.
 func ParseReply(msg string) (Reply, string) {
 	m := strings.ToLower(strings.TrimSpace(msg))
 	switch m {

@@ -32,7 +32,7 @@ import (
 )
 
 // confirmed is the session of a call made after the requester confirmed
-// the preview of in (D74), as foc-agent makes it.
+// the preview of in (D74), as fleetops-agent makes it.
 func confirmed(s tools.Session, in any) tools.Session {
 	id, err := tools.PreviewIDFor(in)
 	if err != nil {

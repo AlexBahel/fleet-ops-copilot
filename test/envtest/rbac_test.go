@@ -35,7 +35,7 @@ import (
 
 	swarmv1 "github.com/swarmada/swarmada/api/v1"
 
-	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
+	fleetopsv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/testenv"
 )
@@ -60,7 +60,7 @@ func TestRBACMatrix(t *testing.T) {
 	}
 	sw, fo, core := "swarmada.io", "fleetops.alexbahel.github.io", ""
 	rows := []row{
-		// foc-agent reads ApprovalRequests for the web UI and nothing else.
+		// fleetops-agent reads ApprovalRequests for the web UI and nothing else.
 		{agentUser, fo, "approvalrequests", "", "get", true},
 		{agentUser, fo, "approvalrequests", "", "list", true},
 		{agentUser, fo, "approvalrequests", "", "watch", false},
@@ -82,7 +82,7 @@ func TestRBACMatrix(t *testing.T) {
 		{agentUser, core, "events", "", "list", false},
 		{agentUser, core, "secrets", "", "get", false},
 
-		// foc-mcp: reads and request create; no Swarmada write.
+		// fleetops-mcp: reads and request create; no Swarmada write.
 		{mcpUser, sw, "robots", "", "list", true},
 		{mcpUser, sw, "fleettasks", "", "watch", true},
 		{mcpUser, sw, "fleetzones", "", "get", true},
@@ -94,11 +94,11 @@ func TestRBACMatrix(t *testing.T) {
 		{mcpUser, sw, "robots", "", "update", false},
 		{mcpUser, fo, "approvalrequests", "", "create", true},
 		{mcpUser, core, "events", "", "list", true},
-		// foc-mcp verifies callers' tokens (R39); no other copilot SA can.
+		// fleetops-mcp verifies callers' tokens (R39); no other copilot SA can.
 		{mcpUser, "authentication.k8s.io", "tokenreviews", "", "create", true},
 		{agentUser, "authentication.k8s.io", "tokenreviews", "", "create", false},
 		{approvUser, "authentication.k8s.io", "tokenreviews", "", "create", false},
-		// foc-mcp never decides, edits, deletes, activates or stops.
+		// fleetops-mcp never decides, edits, deletes, activates or stops.
 		{mcpUser, fo, "approvalrequests", "status", "update", false},
 		{mcpUser, fo, "approvalrequests", "status", "patch", false},
 		{mcpUser, fo, "approvaldecisions", "", "create", false},
@@ -115,14 +115,14 @@ func TestRBACMatrix(t *testing.T) {
 		{mcpUser, sw, "zonemaintenances", "", "create", false},
 		{mcpUser, sw, "robots", "", "patch", false},
 
-		// foc-approvals: the three approved writes and status of requests.
+		// fleetops-approvals: the three approved writes and status of requests.
 		{approvUser, sw, "fleettasks", "", "create", true},
 		{approvUser, sw, "zonemaintenances", "", "create", true},
 		{approvUser, sw, "fleetzones", "", "patch", true},
 		{approvUser, sw, "fleetzones", "", "estop-trigger", true},
 		{approvUser, fo, "approvalrequests", "status", "patch", true},
 		{approvUser, fo, "approvaldecisions", "", "watch", true},
-		// foc-approvals never clears, releases, deletes, activates or edits work.
+		// fleetops-approvals never clears, releases, deletes, activates or edits work.
 		{approvUser, sw, "fleetzones", "", "estop-clear", false},
 		{approvUser, sw, "robots", "", "estop-clear", false},
 		{approvUser, sw, "swarmadaconfigs", "", "estop-clear", false},
@@ -144,15 +144,15 @@ func TestRBACMatrix(t *testing.T) {
 		{approvUser, fo, "approvaldecisions", "", "create", false},
 		{approvUser, fo, "approvalrequests", "", "create", false},
 	}
-	// foc-agent's read is granted per Swarmada namespace only: not in its own
+	// fleetops-agent's read is granted per Swarmada namespace only: not in its own
 	// namespace and not cluster-wide.
-	for _, ns := range []string{focNS, ""} {
+	for _, ns := range []string{fleetopsNS, ""} {
 		if sar(t, agentUser, saGroups(), ns, fo, "approvalrequests", "", "list") {
-			t.Errorf("foc-agent may list approvalrequests in namespace %q", ns)
+			t.Errorf("fleetops-agent may list approvalrequests in namespace %q", ns)
 		}
 	}
 	for _, r := range rows {
-		name := fmt.Sprintf("%s %s %s/%s %s", strings.TrimPrefix(r.user, "system:serviceaccount:foc-system:"), r.verb, r.resource, r.sub, r.group)
+		name := fmt.Sprintf("%s %s %s/%s %s", strings.TrimPrefix(r.user, "system:serviceaccount:fleetops-system:"), r.verb, r.resource, r.sub, r.group)
 		t.Run(name, func(t *testing.T) {
 			if got := sar(t, r.user, saGroups(), swarmNS, r.group, r.resource, r.sub, r.verb); got != r.want {
 				t.Fatalf("allowed=%v, want %v", got, r.want)
@@ -188,18 +188,18 @@ func mergePatch(t *testing.T, c client.Client, obj client.Object, body map[strin
 	return c.Patch(context.Background(), obj, client.RawPatch(types.MergePatchType, b))
 }
 
-// TestToolServerCannotWriteSwarmada sends real write requests as foc-mcp, the
+// TestToolServerCannotWriteSwarmada sends real write requests as fleetops-mcp, the
 // ServiceAccount the model-facing tools run as. Every one is refused.
 func TestToolServerCannotWriteSwarmada(t *testing.T) {
 	ctx := context.Background()
 	mcp := asSA(t, mcpUser)
 	z := ensureZone(t, "mcp-zone")
-	existing := draftTask("mcp-existing", true, "foc-approvals")
+	existing := draftTask("mcp-existing", true, "fleetops-approvals")
 	if err := admin.Create(ctx, existing); err != nil {
 		t.Fatal(err)
 	}
 	cases := map[string]func() error{
-		"create draft FleetTask":     func() error { return mcp.Create(ctx, draftTask("mcp-draft", true, "foc-approvals")) },
+		"create draft FleetTask":     func() error { return mcp.Create(ctx, draftTask("mcp-draft", true, "fleetops-approvals")) },
 		"create non-draft FleetTask": func() error { return mcp.Create(ctx, draftTask("mcp-run", false, "")) },
 		"activate a draft": func() error {
 			return mergePatch(t, mcp, existing, map[string]any{"spec": map[string]any{"draft": false}})
@@ -217,7 +217,7 @@ func TestToolServerCannotWriteSwarmada(t *testing.T) {
 			return mergePatch(t, mcp, r, map[string]any{"metadata": map[string]any{"labels": map[string]any{"x": "y"}}})
 		},
 		"write ApprovalRequest status": func() error {
-			r := &focv1.ApprovalRequest{ObjectMeta: metav1.ObjectMeta{Name: "any", Namespace: swarmNS}}
+			r := &fleetopsv1.ApprovalRequest{ObjectMeta: metav1.ObjectMeta{Name: "any", Namespace: swarmNS}}
 			b, _ := json.Marshal(map[string]any{"status": map[string]any{"state": "Approved"}})
 			return mcp.Status().Patch(ctx, r, client.RawPatch(types.MergePatchType, b))
 		},
@@ -232,18 +232,18 @@ func TestToolServerCannotWriteSwarmada(t *testing.T) {
 	}
 }
 
-// TestAdmissionDraftsOnly: foc-approvals can create a labelled draft and
+// TestAdmissionDraftsOnly: fleetops-approvals can create a labelled draft and
 // nothing else; RBAC refuses it any update or delete.
 func TestAdmissionDraftsOnly(t *testing.T) {
 	ctx := context.Background()
 	ap := asSA(t, approvUser)
-	if err := ap.Create(ctx, draftTask("vap-draft-ok", true, "foc-approvals")); err != nil {
+	if err := ap.Create(ctx, draftTask("vap-draft-ok", true, "fleetops-approvals")); err != nil {
 		t.Fatalf("labelled draft refused: %v", err)
 	}
 	for name, task := range map[string]*swarmv1.FleetTask{
-		"non-draft":           draftTask("vap-nondraft", false, "foc-approvals"),
-		"unlabelled":          draftTask("vap-unlabelled", true, ""),
-		"labelled as foc-mcp": draftTask("vap-wronglabel", true, "foc-mcp"),
+		"non-draft":                draftTask("vap-nondraft", false, "fleetops-approvals"),
+		"unlabelled":               draftTask("vap-unlabelled", true, ""),
+		"labelled as fleetops-mcp": draftTask("vap-wronglabel", true, "fleetops-mcp"),
 	} {
 		err := ap.Create(ctx, task)
 		if err == nil || !apierrors.IsInvalid(err) && !apierrors.IsForbidden(err) {
@@ -252,14 +252,14 @@ func TestAdmissionDraftsOnly(t *testing.T) {
 	}
 	err := mergePatch(t, ap, draftTask("vap-draft-ok", true, ""), map[string]any{"spec": map[string]any{"draft": false}})
 	if !apierrors.IsForbidden(err) {
-		t.Errorf("foc-approvals activation: want Forbidden, got %v", err)
+		t.Errorf("fleetops-approvals activation: want Forbidden, got %v", err)
 	}
 	if err := ap.Delete(ctx, draftTask("vap-draft-ok", true, "")); !apierrors.IsForbidden(err) {
-		t.Errorf("foc-approvals delete: want Forbidden, got %v", err)
+		t.Errorf("fleetops-approvals delete: want Forbidden, got %v", err)
 	}
 }
 
-// TestAdmissionZoneStopOnly: foc-approvals can add the estop annotation and
+// TestAdmissionZoneStopOnly: fleetops-approvals can add the estop annotation and
 // make no other change to a FleetZone.
 func TestAdmissionZoneStopOnly(t *testing.T) {
 	ctx := context.Background()
@@ -298,10 +298,10 @@ func TestAdmissionZoneStopOnly(t *testing.T) {
 	}
 }
 
-func decision(req, by string, groups []string) *focv1.ApprovalDecision {
-	return &focv1.ApprovalDecision{
+func decision(req, by string, groups []string) *fleetopsv1.ApprovalDecision {
+	return &fleetopsv1.ApprovalDecision{
 		ObjectMeta: metav1.ObjectMeta{GenerateName: "dec-", Namespace: swarmNS},
-		Spec:       focv1.ApprovalDecisionSpec{RequestRef: req, Verdict: focv1.VerdictApprove, DecidedBy: by, DecidedByGroups: groups},
+		Spec:       fleetopsv1.ApprovalDecisionSpec{RequestRef: req, Verdict: fleetopsv1.VerdictApprove, DecidedBy: by, DecidedByGroups: groups},
 	}
 }
 
@@ -321,7 +321,7 @@ func TestAdmissionDecisions(t *testing.T) {
 	if err := dana.Create(ctx, ok); err != nil {
 		t.Fatalf("honest decision refused: %v", err)
 	}
-	ok.Spec.Verdict = focv1.VerdictReject
+	ok.Spec.Verdict = fleetopsv1.VerdictReject
 	if err := admin.Update(ctx, ok); err == nil {
 		t.Error("decision update accepted (even admin must not change a decision)")
 	}
@@ -347,20 +347,20 @@ func TestAdmissionDecisions(t *testing.T) {
 // TestAdmissionRequests: a request must name the identity that creates it.
 func TestAdmissionRequests(t *testing.T) {
 	ctx := context.Background()
-	mk := func(by string) *focv1.ApprovalRequest {
-		return &focv1.ApprovalRequest{ObjectMeta: metav1.ObjectMeta{GenerateName: "areq-", Namespace: swarmNS}, Spec: focv1.ApprovalRequestSpec{
-			Type: focv1.RequestZoneStop, RequestedFor: "sam", RequestedBy: by, ExpiresAt: metav1.NewTime(time.Now().Add(time.Hour)),
-			Policy: focv1.PolicyRecord{Effect: "RequireApproval", Code: "REQUIRE_APPROVAL"}, ZoneStop: &focv1.ZoneStopParams{ZoneName: "z", Reason: "r"},
+	mk := func(by string) *fleetopsv1.ApprovalRequest {
+		return &fleetopsv1.ApprovalRequest{ObjectMeta: metav1.ObjectMeta{GenerateName: "areq-", Namespace: swarmNS}, Spec: fleetopsv1.ApprovalRequestSpec{
+			Type: fleetopsv1.RequestZoneStop, RequestedFor: "sam", RequestedBy: by, ExpiresAt: metav1.NewTime(time.Now().Add(time.Hour)),
+			Policy: fleetopsv1.PolicyRecord{Effect: "RequireApproval", Code: "REQUIRE_APPROVAL"}, ZoneStop: &fleetopsv1.ZoneStopParams{ZoneName: "z", Reason: "r"},
 		}}
 	}
 	if err := admin.Create(ctx, mk(mcpUser)); err == nil {
 		t.Error("request naming another creator accepted")
 	}
 	if err := asSA(t, mcpUser).Create(ctx, mk(mcpUser)); err != nil {
-		t.Fatalf("foc-mcp request refused: %v", err)
+		t.Fatalf("fleetops-mcp request refused: %v", err)
 	}
 	// Spec is immutable (CRD validation rule).
-	var list focv1.ApprovalRequestList
+	var list fleetopsv1.ApprovalRequestList
 	if err := admin.List(ctx, &list, client.InNamespace(swarmNS)); err != nil || len(list.Items) == 0 {
 		t.Fatalf("list: %v", err)
 	}

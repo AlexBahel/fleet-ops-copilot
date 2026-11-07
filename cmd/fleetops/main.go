@@ -14,18 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Command foc is the operator and approver CLI. It acts with the caller's own
+// Command fleetops is the operator and approver CLI. It acts with the caller's own
 // kubeconfig credentials.
 //
-//	foc chat [-agent URL] [--context NAME] [-operator NAME] [-session ID] MESSAGE
-//	foc requests [-n NS] [--context NAME]
-//	foc approve REQUEST [-n NS] [--context NAME] [-comment TEXT]
-//	foc reject  REQUEST [-n NS] [--context NAME] [-comment TEXT]
-//	foc activate REQUEST [-n NS] [--context NAME]
-//	foc audit verify FILE
+//	fleetops chat [-agent URL] [--context NAME] [-operator NAME] [-session ID] MESSAGE
+//	fleetops requests [-n NS] [--context NAME]
+//	fleetops approve REQUEST [-n NS] [--context NAME] [-comment TEXT]
+//	fleetops reject  REQUEST [-n NS] [--context NAME] [-comment TEXT]
+//	fleetops activate REQUEST [-n NS] [--context NAME]
+//	fleetops audit verify FILE
 //
 // --context selects a kubeconfig context; without it the current context is
-// used. Before an activation command, foc approve prints the API server and
+// used. Before an activation command, fleetops approve prints the API server and
 // namespace the decision was recorded in, so the approver can check that the
 // command will run against the same cluster.
 package main
@@ -42,23 +42,23 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
-	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
+	fleetopsv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/approval"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/audit"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
 )
 
 const usage = `usage:
-  foc chat [-agent URL] [--context NAME] [-operator NAME] [-session ID] [-new] [-follow-up REQUEST] MESSAGE
-  foc requests [-n NAMESPACE] [--context NAME]
-  foc approve REQUEST [-n NAMESPACE] [--context NAME] [-comment TEXT]
-  foc reject  REQUEST [-n NAMESPACE] [--context NAME] [-comment TEXT]
-  foc activate REQUEST [-n NAMESPACE] [--context NAME]
-  foc audit verify FILE`
+  fleetops chat [-agent URL] [--context NAME] [-operator NAME] [-session ID] [-new] [-follow-up REQUEST] MESSAGE
+  fleetops requests [-n NAMESPACE] [--context NAME]
+  fleetops approve REQUEST [-n NAMESPACE] [--context NAME] [-comment TEXT]
+  fleetops reject  REQUEST [-n NAMESPACE] [--context NAME] [-comment TEXT]
+  fleetops activate REQUEST [-n NAMESPACE] [--context NAME]
+  fleetops audit verify FILE`
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
-		fmt.Fprintln(os.Stderr, "foc:", err)
+		fmt.Fprintln(os.Stderr, "fleetops:", err)
 		os.Exit(1)
 	}
 }
@@ -106,7 +106,7 @@ func run(args []string) error {
 		if err != nil {
 			return err
 		}
-		var l focv1.ApprovalRequestList
+		var l fleetopsv1.ApprovalRequestList
 		if err := c.List(ctx, &l, client.InNamespace(*ns)); err != nil {
 			return err
 		}
@@ -115,7 +115,7 @@ func run(args []string) error {
 		for _, r := range l.Items {
 			st := r.Status.State
 			if st == "" {
-				st = focv1.StatePending
+				st = fleetopsv1.StatePending
 			}
 			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", r.Name, r.Spec.Type, r.Spec.RequestedFor, st, r.Status.DecidedBy, r.Spec.ExpiresAt.UTC().Format("2006-01-02T15:04:05Z"))
 		}
@@ -139,9 +139,9 @@ func run(args []string) error {
 		if err != nil {
 			return err
 		}
-		v := focv1.VerdictApprove
+		v := fleetopsv1.VerdictApprove
 		if args[0] == "reject" {
-			v = focv1.VerdictReject
+			v = fleetopsv1.VerdictReject
 		}
 		out, err := a.Decide(ctx, *ns, args[1], v, *comment)
 		if err != nil {
@@ -172,7 +172,7 @@ func activationBanner(host, ns, kctx, instruction string) string {
 	if kctx != "" && strings.HasPrefix(cmd, "kubectl ") {
 		cmd = "kubectl --context " + kctx + " " + strings.TrimPrefix(cmd, "kubectl ")
 	}
-	if kctx != "" && strings.HasPrefix(cmd, "foc activate ") {
+	if kctx != "" && strings.HasPrefix(cmd, "fleetops activate ") {
 		cmd += " --context " + kctx
 	}
 	fmt.Fprintf(&b, "\n  %s\n", cmd)

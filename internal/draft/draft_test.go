@@ -22,7 +22,7 @@ import (
 
 	swarmv1 "github.com/swarmada/swarmada/api/v1"
 
-	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
+	fleetopsv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 )
 
 func payload(t *testing.T, a swarmv1.FleetActionSpec) map[string]any {
@@ -40,9 +40,9 @@ func payload(t *testing.T, a swarmv1.FleetActionSpec) map[string]any {
 // An inspection carries its location as waypoint, x and y in the payload,
 // with what to look for and the person's words (BACKLOG-v4 P1).
 func TestInspectPayload(t *testing.T) {
-	task, err := Task("warehouse-a", &focv1.DraftTaskParams{TaskName: "inspect-dock", Actions: []focv1.DraftAction{{
+	task, err := Task("warehouse-a", &fleetopsv1.DraftTaskParams{TaskName: "inspect-dock", Actions: []fleetopsv1.DraftAction{{
 		Name: "inspect", Type: "Navigate", RequiredCapabilities: []string{"navigation", "camera_front"},
-		Location: &focv1.Location{Zone: "warehouse-a", Waypoint: "receiving-dock-1", X: "5.1", Y: "2.1"},
+		Location: &fleetopsv1.Location{Zone: "warehouse-a", Waypoint: "receiving-dock-1", X: "5.1", Y: "2.1"},
 		LookFor:  []string{"damage"}, Instruction: "look at the dock door",
 	}}})
 	if err != nil {
@@ -64,9 +64,9 @@ func TestInspectPayload(t *testing.T) {
 // A patrol route becomes one member per stop in a flow loop of N rounds,
 // and no member keeps dependsOn (Swarmada's CEL rule).
 func TestPatrolRouteFlow(t *testing.T) {
-	task, err := Task("warehouse-a", &focv1.DraftTaskParams{TaskName: "patrol", Repeat: &focv1.Repeat{Times: 3}, Actions: []focv1.DraftAction{{
+	task, err := Task("warehouse-a", &fleetopsv1.DraftTaskParams{TaskName: "patrol", Repeat: &fleetopsv1.Repeat{Times: 3}, Actions: []fleetopsv1.DraftAction{{
 		Name: "patrol", Type: "Patrol", OnFailure: "Alert", DependsOn: []string{"x"},
-		Route: []focv1.Location{{Zone: "warehouse-a", Waypoint: "a", X: "1", Y: "2"}, {Zone: "warehouse-a", Waypoint: "b", X: "3", Y: "4"}},
+		Route: []fleetopsv1.Location{{Zone: "warehouse-a", Waypoint: "a", X: "1", Y: "2"}, {Zone: "warehouse-a", Waypoint: "b", X: "3", Y: "4"}},
 	}}})
 	if err != nil {
 		t.Fatal(err)
@@ -89,9 +89,9 @@ func TestPatrolRouteFlow(t *testing.T) {
 }
 
 func TestDeliverAndCharge(t *testing.T) {
-	task, err := Task("warehouse-a", &focv1.DraftTaskParams{TaskName: "t", Actions: []focv1.DraftAction{
-		{Name: "pickup", Type: "PickUp", Location: &focv1.Location{Zone: "warehouse-a", Waypoint: "a", X: "1", Y: "1"}},
-		{Name: "dropoff", Type: "DropOff", DependsOn: []string{"pickup"}, Location: &focv1.Location{Zone: "warehouse-a", Waypoint: "b", X: "2", Y: "2"}},
+	task, err := Task("warehouse-a", &fleetopsv1.DraftTaskParams{TaskName: "t", Actions: []fleetopsv1.DraftAction{
+		{Name: "pickup", Type: "PickUp", Location: &fleetopsv1.Location{Zone: "warehouse-a", Waypoint: "a", X: "1", Y: "1"}},
+		{Name: "dropoff", Type: "DropOff", DependsOn: []string{"pickup"}, Location: &fleetopsv1.Location{Zone: "warehouse-a", Waypoint: "b", X: "2", Y: "2"}},
 		{Name: "charge", Type: "Charge", RobotSelector: "sim-robot-001", Dock: "charging-bay"},
 	}})
 	if err != nil {
@@ -107,7 +107,7 @@ func TestDeliverAndCharge(t *testing.T) {
 }
 
 func TestBadCoordinate(t *testing.T) {
-	_, err := Task("ns", &focv1.DraftTaskParams{TaskName: "t", Actions: []focv1.DraftAction{{Name: "a", Type: "Navigate", Location: &focv1.Location{Zone: "z", X: "east", Y: "1"}}}})
+	_, err := Task("ns", &fleetopsv1.DraftTaskParams{TaskName: "t", Actions: []fleetopsv1.DraftAction{{Name: "a", Type: "Navigate", Location: &fleetopsv1.Location{Zone: "z", X: "east", Y: "1"}}}})
 	if err == nil {
 		t.Fatal("want an error for x=east")
 	}

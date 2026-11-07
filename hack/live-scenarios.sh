@@ -4,9 +4,9 @@
 #
 # Runs the eval scenarios whose fixture was captured from a quickstart run
 # (fixture: live/<name>) against that quickstart state on a live kind cluster,
-# through the deployed foc-mcp (foc-eval -live-context). For each quickstart
+# through the deployed fleetops-mcp (fleetops-eval -live-context). For each quickstart
 # SCENARIO it re-runs `make quickstart SCENARIO=<s>` on the same cluster (the
-# copilot in foc-system is kept), then runs the matching scenarios.
+# copilot in fleetops-system is kept), then runs the matching scenarios.
 # zone-estop is the estop-drill state plus `swarmctl estop trigger warehouse-a`;
 # after it, the stop is cleared as cluster admin with swarmctl.
 #
@@ -34,7 +34,7 @@ repo="$(cd "$(dirname "$0")/.." && pwd)"
 BACKENDS="${BACKENDS:-scripted}" RUNS="${RUNS:-3}"
 FIXTURES="${FIXTURES:-battery-edge battery-handoff hardware-fault comms-flaky estop-drill zone-estop healthy-fleet}"
 
-kubectl --context "$ctx" -n foc-system port-forward svc/foc-mcp 18080:8080 >/dev/null 2>&1 &
+kubectl --context "$ctx" -n fleetops-system port-forward svc/fleetops-mcp 18080:8080 >/dev/null 2>&1 &
 pf=$!
 trap 'kill $pf 2>/dev/null || true' EXIT
 for _ in $(seq 30); do curl -sf http://127.0.0.1:18080/healthz >/dev/null && break; sleep 1; done
@@ -58,7 +58,7 @@ for f in $FIXTURES; do
   fi
   # Restart the port-forward: the quickstart run may have replaced pods it depends on.
   kill $pf 2>/dev/null || true
-  kubectl --context "$ctx" -n foc-system port-forward svc/foc-mcp 18080:8080 >/dev/null 2>&1 &
+  kubectl --context "$ctx" -n fleetops-system port-forward svc/fleetops-mcp 18080:8080 >/dev/null 2>&1 &
   pf=$!
   for _ in $(seq 30); do curl -sf http://127.0.0.1:18080/healthz >/dev/null && break; sleep 1; done
   for b in $BACKENDS; do
@@ -72,7 +72,7 @@ for f in $FIXTURES; do
         -pricing-source "$PRICING_SOURCE" -pricing-read-on "$PRICING_READ_ON")
     fi
     echo "==> $f: $name ($ids)"
-    (cd "$repo" && go run ./evals/cmd/foc-eval "${args[@]}" -out "$OUT/$f/$name/results.json") || true
+    (cd "$repo" && go run ./evals/cmd/fleetops-eval "${args[@]}" -out "$OUT/$f/$name/results.json") || true
   done
   if [[ "$f" == zone-estop ]]; then
     echo "==> zone-estop: clear the stop as cluster admin"

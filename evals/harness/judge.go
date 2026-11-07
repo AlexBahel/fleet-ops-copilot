@@ -386,7 +386,7 @@ func judgeTools(s Scenario, tr agent.Trace) Criterion {
 	c := Criterion{Pass: true}
 	okCalls := map[string]bool{}
 	for _, e := range tr.Calls {
-		// v4: a required read must be the model's own; foc-agent's calls
+		// v4: a required read must be the model's own; fleetops-agent's calls
 		// (its fleet snapshot, check_task, the request it files after a
 		// confirmation) meet only the requirement for a request or a check.
 		byModel := e.By == ""

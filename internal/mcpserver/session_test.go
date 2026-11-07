@@ -30,7 +30,7 @@ import (
 
 	swarmv1 "github.com/swarmada/swarmada/api/v1"
 
-	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
+	fleetopsv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/authn"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/policy"
@@ -56,7 +56,7 @@ func TestRequesterFromBearerTokenNotMeta(t *testing.T) {
 	}
 	zone := &swarmv1.FleetZone{ObjectMeta: metav1.ObjectMeta{Name: "aisle-b", Namespace: "warehouse-a"}}
 	c := fake.NewClientBuilder().WithScheme(fleet.NewScheme()).WithObjects(zone).Build()
-	svc := &tools.Service{C: c, Engine: policy.New(p), Identity: "system:serviceaccount:foc-system:foc-mcp", DefaultNamespace: "warehouse-a",
+	svc := &tools.Service{C: c, Engine: policy.New(p), Identity: "system:serviceaccount:fleetops-system:fleetops-mcp", DefaultNamespace: "warehouse-a",
 		Authn: tokens{"sam-token": "sam"}}
 	ts := httptest.NewServer(Handler(New(svc)))
 	defer ts.Close()
@@ -79,7 +79,7 @@ func TestRequesterFromBearerTokenNotMeta(t *testing.T) {
 		b, _ := json.Marshal(res.StructuredContent)
 		var out tools.RequestResult
 		_ = json.Unmarshal(b, &out)
-		var r focv1.ApprovalRequest
+		var r fleetopsv1.ApprovalRequest
 		if err := c.Get(ctx, clientKey(strings.TrimPrefix(out.Created, "ApprovalRequest/")), &r); err != nil {
 			t.Fatalf("%+v: %v", out, err)
 		}
@@ -107,7 +107,7 @@ func TestRequestNeedsConfirmedPreview(t *testing.T) {
 	}
 	zone := &swarmv1.FleetZone{ObjectMeta: metav1.ObjectMeta{Name: "aisle-b", Namespace: "warehouse-a"}}
 	c := fake.NewClientBuilder().WithScheme(fleet.NewScheme()).WithObjects(zone).Build()
-	svc := &tools.Service{C: c, Engine: policy.New(p), Identity: "system:serviceaccount:foc-system:foc-mcp", DefaultNamespace: "warehouse-a",
+	svc := &tools.Service{C: c, Engine: policy.New(p), Identity: "system:serviceaccount:fleetops-system:fleetops-mcp", DefaultNamespace: "warehouse-a",
 		Authn: tokens{"sam-token": "sam"}}
 	ts := httptest.NewServer(Handler(New(svc)))
 	defer ts.Close()
@@ -134,7 +134,7 @@ func TestRequestNeedsConfirmedPreview(t *testing.T) {
 			t.Fatalf("meta %q: %+v, want refusal %s", meta, out, want)
 		}
 	}
-	var list focv1.ApprovalRequestList
+	var list fleetopsv1.ApprovalRequestList
 	if err := c.List(ctx, &list); err != nil || len(list.Items) != 0 {
 		t.Fatalf("%d requests filed, err %v", len(list.Items), err)
 	}

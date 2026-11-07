@@ -26,12 +26,12 @@ claude_api: "Claude API\n(cloud profile)" {class: external}
 otel: "OTLP collector\n(optional: tracing.otlpEndpoint)" {class: external}
 
 cluster: Kubernetes cluster {
-  foc: "namespace foc-system (Helm chart fleet-ops-copilot)" {
-    agent: "foc-agent (model loop, web UI)\nSA foc-agent: get/list ApprovalRequest only\nweb chat + requests panel: shows foc approve/reject,\ncannot decide; ClusterIP, no Ingress, no login\nbackend: claude, llamacpp or scripted\n(roles Router ... Reporter: not built)" {class: built}
-    mcp: "foc-mcp (MCP server)\nSA foc-mcp: get/list/watch Swarmada,\ncreate ApprovalRequest, create TokenReview;\nno Swarmada write; requester = TokenReview of\nthe caller's bearer token (R39)\npolicy engine, audit JSONL" {class: built}
-    approvals: "foc-approvals (controller, executor)\nSA foc-approvals: create draft FleetTask,\ncreate ZoneMaintenance, patch + estop-trigger FleetZone\nSubjectAccessReview, policy re-check, audit JSONL" {class: built}
+  fleetops: "namespace fleetops-system (Helm chart fleet-ops-copilot)" {
+    agent: "fleetops-agent (model loop, web UI)\nSA fleetops-agent: get/list ApprovalRequest only\nweb chat + requests panel: shows fleetops approve/reject,\ncannot decide; ClusterIP, no Ingress, no login\nbackend: claude, llamacpp or scripted\n(roles Router ... Reporter: not built)" {class: built}
+    mcp: "fleetops-mcp (MCP server)\nSA fleetops-mcp: get/list/watch Swarmada,\ncreate ApprovalRequest, create TokenReview;\nno Swarmada write; requester = TokenReview of\nthe caller's bearer token (R39)\npolicy engine, audit JSONL" {class: built}
+    approvals: "fleetops-approvals (controller, executor)\nSA fleetops-approvals: create draft FleetTask,\ncreate ZoneMaintenance, patch + estop-trigger FleetZone\nSubjectAccessReview, policy re-check, audit JSONL" {class: built}
     policy: "ConfigMap fleetops-policy\n(policies/default.yaml)" {class: built}
-    netpol: "NetworkPolicy (networkPolicy.enabled, off by default)\ndefault deny; DNS; API server ipBlock (incl. foc-agent);\nfoc-agent -> foc-mcp; foc-agent -> Claude API ipBlock;\nOTLP egress if given; no ingress to the web UI" {class: planned}
+    netpol: "NetworkPolicy (networkPolicy.enabled, off by default)\ndefault deny; DNS; API server ipBlock (incl. fleetops-agent);\nfleetops-agent -> fleetops-mcp; fleetops-agent -> Claude API ipBlock;\nOTLP egress if given; no ingress to the web UI" {class: planned}
 
     airgap: "Air-gapped profile (config/airgap, not in chart)" {
       class: built
@@ -46,7 +46,7 @@ cluster: Kubernetes cluster {
   }
 
   apiserver: "Kubernetes API server" {
-    vap: "Copilot ValidatingAdmissionPolicies\nfleetops-requests: requestedBy = caller\nfleetops-decisions: person only, decidedBy = caller, immutable\nfleetops-foc-approvals-drafts-only\nfleetops-foc-approvals-zone-stop-only" {class: built}
+    vap: "Copilot ValidatingAdmissionPolicies\nfleetops-requests: requestedBy = caller\nfleetops-decisions: person only, decidedBy = caller, immutable\nfleetops-approvals-drafts-only\nfleetops-approvals-zone-stop-only" {class: built}
     crds: "CRDs\nswarmada.io/v1 (Swarmada)\nApprovalRequest, ApprovalDecision\n(fleetops.alexbahel.github.io/v1alpha1)"
   }
 
@@ -56,14 +56,14 @@ cluster: Kubernetes cluster {
     manager -> webhooks: serves
   }
 
-  foc.mcp -> apiserver: "read Swarmada;\ncreate ApprovalRequest"
-  foc.agent -> apiserver: "get/list ApprovalRequest\n(requests panel)"
-  foc.approvals -> apiserver: "watch ApprovalDecision;\nexecute approved writes"
+  fleetops.mcp -> apiserver: "read Swarmada;\ncreate ApprovalRequest"
+  fleetops.agent -> apiserver: "get/list ApprovalRequest\n(requests panel)"
+  fleetops.approvals -> apiserver: "watch ApprovalDecision;\nexecute approved writes"
   apiserver -> swarmada.webhooks: "admission calls\nfor swarmada.io writes"
 }
 
-people.operator -> cluster.foc.agent: "foc chat with own token: verified requester;\nweb chat (no token): unverified:<name>,\nnever approvable (R38, R39)"
-cluster.foc.agent -> claude_api: "Messages API (cloud profile)\nkey from an existing Secret"
-cluster.foc.agent -> otel: "traces (OTLP/gRPC)" {style.stroke-dash: 5}
-cluster.foc.mcp -> otel: "traces: tool calls,\npolicy decisions" {style.stroke-dash: 5}
-people.approver -> cluster.apiserver: "foc approve or foc reject:\nApprovalDecision with own credentials;\nruns the activation command itself"
+people.operator -> cluster.fleetops.agent: "fleetops chat with own token: verified requester;\nweb chat (no token): unverified:<name>,\nnever approvable (R38, R39)"
+cluster.fleetops.agent -> claude_api: "Messages API (cloud profile)\nkey from an existing Secret"
+cluster.fleetops.agent -> otel: "traces (OTLP/gRPC)" {style.stroke-dash: 5}
+cluster.fleetops.mcp -> otel: "traces: tool calls,\npolicy decisions" {style.stroke-dash: 5}
+people.approver -> cluster.apiserver: "fleetops approve or fleetops reject:\nApprovalDecision with own credentials;\nruns the activation command itself"

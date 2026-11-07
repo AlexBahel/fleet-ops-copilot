@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 // Package approval turns a person's ApprovalDecision into at most one
-// Swarmada write. It runs in foc-approvals under its own ServiceAccount.
+// Swarmada write. It runs in fleetops-approvals under its own ServiceAccount.
 package approval
 
 import (
@@ -39,7 +39,7 @@ import (
 
 	swarmv1 "github.com/swarmada/swarmada/api/v1"
 
-	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
+	fleetopsv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/audit"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/draft"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
@@ -65,20 +65,20 @@ func (a SARAuthorizer) Allowed(ctx context.Context, user string, groups []string
 
 // RequiredAttributes lists the Swarmada permissions a person needs to perform
 // a request's write themselves. All must be allowed.
-func RequiredAttributes(r *focv1.ApprovalRequest) []authzv1.ResourceAttributes {
+func RequiredAttributes(r *fleetopsv1.ApprovalRequest) []authzv1.ResourceAttributes {
 	ns := r.Namespace
 	switch r.Spec.Type {
-	case focv1.RequestDraftTask:
+	case fleetopsv1.RequestDraftTask:
 		return []authzv1.ResourceAttributes{{Namespace: ns, Group: fleet.SwarmadaGroup, Resource: "fleettasks", Verb: "create"}}
-	case focv1.RequestZoneMaintenance:
+	case fleetopsv1.RequestZoneMaintenance:
 		return []authzv1.ResourceAttributes{{Namespace: ns, Group: fleet.SwarmadaGroup, Resource: "zonemaintenances", Verb: "create"}}
-	case focv1.RequestZoneStop:
+	case fleetopsv1.RequestZoneStop:
 		z := r.Spec.ZoneStop.ZoneName
 		return []authzv1.ResourceAttributes{
 			{Namespace: ns, Group: fleet.SwarmadaGroup, Resource: "fleetzones", Name: z, Verb: "patch"},
 			{Namespace: ns, Group: fleet.SwarmadaGroup, Resource: "fleetzones", Name: z, Verb: "estop-trigger"},
 		}
-	case focv1.RequestActivateTask:
+	case fleetopsv1.RequestActivateTask:
 		t := r.Spec.ActivateTask.TaskName
 		return []authzv1.ResourceAttributes{
 			{Namespace: ns, Group: fleet.SwarmadaGroup, Resource: "fleettasks", Name: t, Verb: "patch"},
@@ -127,8 +127,8 @@ func (r *Reconciler) event(ctx context.Context, obj client.Object, typ, reason, 
 // changes and on every ApprovalDecision, mapped to the request it names.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&focv1.ApprovalRequest{}).
-		Watches(&focv1.ApprovalDecision{}, DecisionToRequest()).
+		For(&fleetopsv1.ApprovalRequest{}).
+		Watches(&fleetopsv1.ApprovalDecision{}, DecisionToRequest()).
 		Watches(&swarmv1.FleetTask{}, TaskToRequest()).
 		Complete(r)
 }
@@ -136,7 +136,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 // DecisionToRequest maps an ApprovalDecision event to the request it names.
 func DecisionToRequest() handler.EventHandler {
 	return handler.EnqueueRequestsFromMapFunc(func(_ context.Context, o client.Object) []reconcile.Request {
-		d, ok := o.(*focv1.ApprovalDecision)
+		d, ok := o.(*fleetopsv1.ApprovalDecision)
 		if !ok {
 			return nil
 		}
@@ -146,29 +146,29 @@ func DecisionToRequest() handler.EventHandler {
 
 // Reconcile implements reconcile.Reconciler.
 func (r *Reconciler) Reconcile(ctx context.Context, key reconcile.Request) (reconcile.Result, error) {
-	var req focv1.ApprovalRequest
+	var req fleetopsv1.ApprovalRequest
 	if err := r.C.Get(ctx, key.NamespacedName, &req); err != nil {
 		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}
 	st := req.Status.State
-	if st == focv1.StateExecuted && req.Spec.Type == focv1.RequestDraftTask && req.Status.Outcome == nil && req.Status.Target != nil {
+	if st == fleetopsv1.StateExecuted && req.Spec.Type == fleetopsv1.RequestDraftTask && req.Status.Outcome == nil && req.Status.Target != nil {
 		return reconcile.Result{}, r.observeOutcome(ctx, &req)
 	}
 	if st.IsTerminal() {
 		return reconcile.Result{}, nil
 	}
 	if st == "" {
-		return reconcile.Result{Requeue: true}, r.setStatus(ctx, &req, func(s *focv1.ApprovalRequestStatus) { s.State = focv1.StatePending })
+		return reconcile.Result{Requeue: true}, r.setStatus(ctx, &req, func(s *fleetopsv1.ApprovalRequestStatus) { s.State = fleetopsv1.StatePending })
 	}
-	if st == focv1.StateApproved {
+	if st == fleetopsv1.StateApproved {
 		return r.execute(ctx, &req)
 	}
 	// Pending.
 	if r.now().After(req.Spec.ExpiresAt.Time) {
 		r.log(audit.Entry{Kind: audit.KindExpired, Namespace: req.Namespace, Object: "ApprovalRequest/" + req.Name, SessionID: req.Spec.SessionID})
 		r.event(ctx, &req, corev1.EventTypeNormal, "Expired", "request expired without an accepted decision")
-		return reconcile.Result{}, r.setStatus(ctx, &req, func(s *focv1.ApprovalRequestStatus) {
-			s.State, s.Message = focv1.StateExpired, "expired without an accepted decision"
+		return reconcile.Result{}, r.setStatus(ctx, &req, func(s *fleetopsv1.ApprovalRequestStatus) {
+			s.State, s.Message = fleetopsv1.StateExpired, "expired without an accepted decision"
 		})
 	}
 	decisions, err := r.decisionsFor(ctx, &req)
@@ -189,12 +189,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, key reconcile.Request) (reco
 	return reconcile.Result{RequeueAfter: time.Until(req.Spec.ExpiresAt.Time) + time.Second}, nil
 }
 
-func (r *Reconciler) decisionsFor(ctx context.Context, req *focv1.ApprovalRequest) ([]focv1.ApprovalDecision, error) {
-	var list focv1.ApprovalDecisionList
+func (r *Reconciler) decisionsFor(ctx context.Context, req *fleetopsv1.ApprovalRequest) ([]fleetopsv1.ApprovalDecision, error) {
+	var list fleetopsv1.ApprovalDecisionList
 	if err := r.C.List(ctx, &list, client.InNamespace(req.Namespace)); err != nil {
 		return nil, err
 	}
-	var out []focv1.ApprovalDecision
+	var out []fleetopsv1.ApprovalDecision
 	for _, d := range list.Items {
 		if d.Spec.RequestRef == req.Name {
 			out = append(out, d)
@@ -211,8 +211,8 @@ func (r *Reconciler) decisionsFor(ctx context.Context, req *focv1.ApprovalReques
 
 // consider accepts or refuses one decision. It returns true when the
 // decision moved the request to Approved or Rejected.
-func (r *Reconciler) consider(ctx context.Context, req *focv1.ApprovalRequest, d *focv1.ApprovalDecision) (bool, error) {
-	approve := d.Spec.Verdict == focv1.VerdictApprove
+func (r *Reconciler) consider(ctx context.Context, req *fleetopsv1.ApprovalRequest, d *fleetopsv1.ApprovalDecision) (bool, error) {
+	approve := d.Spec.Verdict == fleetopsv1.VerdictApprove
 	authorized := false
 	if approve {
 		authorized = true
@@ -239,7 +239,7 @@ func (r *Reconciler) consider(ctx context.Context, req *focv1.ApprovalRequest, d
 	if verdict.Effect != policy.Allow {
 		r.log(audit.Entry{Kind: audit.KindDecisionRefused, Actor: d.Spec.DecidedBy, Namespace: req.Namespace, Object: obj, SessionID: req.Spec.SessionID, Code: string(verdict.Code), Message: verdict.Message, Detail: map[string]any{"decision": d.Name}})
 		r.event(ctx, req, corev1.EventTypeWarning, "DecisionRefused", fmt.Sprintf("decision %s by %s refused: %s", d.Name, d.Spec.DecidedBy, verdict.Message))
-		return false, r.setStatus(ctx, req, func(s *focv1.ApprovalRequestStatus) {
+		return false, r.setStatus(ctx, req, func(s *fleetopsv1.ApprovalRequestStatus) {
 			s.RefusedDecisions = append(s.RefusedDecisions, d.Name)
 			s.Message = verdict.Message
 		})
@@ -248,8 +248,8 @@ func (r *Reconciler) consider(ctx context.Context, req *focv1.ApprovalRequest, d
 	if !approve {
 		r.log(audit.Entry{Kind: audit.KindRejected, Actor: d.Spec.DecidedBy, Namespace: req.Namespace, Object: obj, SessionID: req.Spec.SessionID, Message: d.Spec.Comment})
 		r.event(ctx, req, corev1.EventTypeNormal, "Rejected", "rejected by "+d.Spec.DecidedBy)
-		return true, r.setStatus(ctx, req, func(s *focv1.ApprovalRequestStatus) {
-			s.State, s.DecidedBy, s.DecisionRef, s.DecidedAt, s.Message = focv1.StateRejected, d.Spec.DecidedBy, d.Name, &now, "rejected"
+		return true, r.setStatus(ctx, req, func(s *fleetopsv1.ApprovalRequestStatus) {
+			s.State, s.DecidedBy, s.DecisionRef, s.DecidedAt, s.Message = fleetopsv1.StateRejected, d.Spec.DecidedBy, d.Name, &now, "rejected"
 		})
 	}
 	// Fresh policy check before recording the approval.
@@ -260,29 +260,29 @@ func (r *Reconciler) consider(ctx context.Context, req *focv1.ApprovalRequest, d
 	if fresh.Effect != policy.RequireApproval {
 		r.log(audit.Entry{Kind: audit.KindExecutionFailed, Actor: d.Spec.DecidedBy, Namespace: req.Namespace, Object: obj, SessionID: req.Spec.SessionID, Code: string(fresh.Code), Message: "policy re-check at approval: " + fresh.Message})
 		r.event(ctx, req, corev1.EventTypeWarning, "PolicyDenied", fresh.Message)
-		return true, r.setStatus(ctx, req, func(s *focv1.ApprovalRequestStatus) {
-			s.State, s.DecidedBy, s.DecisionRef, s.DecidedAt = focv1.StateFailed, d.Spec.DecidedBy, d.Name, &now
+		return true, r.setStatus(ctx, req, func(s *fleetopsv1.ApprovalRequestStatus) {
+			s.State, s.DecidedBy, s.DecisionRef, s.DecidedAt = fleetopsv1.StateFailed, d.Spec.DecidedBy, d.Name, &now
 			s.Message = "approved, but the policy re-check on current state refused it: " + fresh.Message
 		})
 	}
 	// Record before effect.
 	instruction := ""
 	msg := "approved"
-	if req.Spec.Type == focv1.RequestActivateTask {
+	if req.Spec.Type == fleetopsv1.RequestActivateTask {
 		instruction = ActivationCommand(req.Namespace, req.Name)
 		msg = "approved; Swarmada refuses activate to every ServiceAccount, so " + d.Spec.DecidedBy + " runs: " + instruction
 	}
 	r.log(audit.Entry{Kind: audit.KindApproved, Actor: d.Spec.DecidedBy, Namespace: req.Namespace, Object: obj, SessionID: req.Spec.SessionID, Detail: map[string]any{"decision": d.Name, "type": string(req.Spec.Type), "instruction": instruction}})
 	r.event(ctx, req, corev1.EventTypeNormal, "Approved", "approved by "+d.Spec.DecidedBy)
-	return true, r.setStatus(ctx, req, func(s *focv1.ApprovalRequestStatus) {
-		s.State, s.DecidedBy, s.DecisionRef, s.DecidedAt, s.Message, s.Instruction = focv1.StateApproved, d.Spec.DecidedBy, d.Name, &now, msg, instruction
+	return true, r.setStatus(ctx, req, func(s *fleetopsv1.ApprovalRequestStatus) {
+		s.State, s.DecidedBy, s.DecisionRef, s.DecidedAt, s.Message, s.Instruction = fleetopsv1.StateApproved, d.Spec.DecidedBy, d.Name, &now, msg, instruction
 	})
 }
 
-func (r *Reconciler) freshDecision(ctx context.Context, req *focv1.ApprovalRequest) (policy.Decision, error) {
+func (r *Reconciler) freshDecision(ctx context.Context, req *fleetopsv1.ApprovalRequest) (policy.Decision, error) {
 	ns := req.Namespace
 	switch req.Spec.Type {
-	case focv1.RequestDraftTask:
+	case fleetopsv1.RequestDraftTask:
 		p := req.Spec.DraftTask
 		snap, err := fleet.TaskSnapshot(ctx, r.C, ns, p.TaskName)
 		if err != nil {
@@ -300,7 +300,7 @@ func (r *Reconciler) freshDecision(ctx context.Context, req *focv1.ApprovalReque
 		}
 		// The per-session draft limit applies when requests are made, not here.
 		return r.Engine.Decide(policy.Request{Op: policy.OpDraftTask, Namespace: ns, DraftTask: params}, snap), nil
-	case focv1.RequestZoneMaintenance:
+	case fleetopsv1.RequestZoneMaintenance:
 		p := req.Spec.ZoneMaintenance
 		snap, err := fleet.ZoneSnapshot(ctx, r.C, ns, p.ZoneName)
 		if err != nil {
@@ -309,14 +309,14 @@ func (r *Reconciler) freshDecision(ctx context.Context, req *focv1.ApprovalReque
 		return r.Engine.Decide(policy.Request{Op: policy.OpZoneMaintenance, Namespace: ns, ZoneMaintenance: &policy.ZoneMaintenanceParams{
 			ScopeType: p.ScopeType, ZoneName: p.ZoneName, Mode: p.Mode, Reason: p.Reason,
 		}}, snap), nil
-	case focv1.RequestZoneStop:
+	case fleetopsv1.RequestZoneStop:
 		p := req.Spec.ZoneStop
 		snap, err := fleet.ZoneSnapshot(ctx, r.C, ns, p.ZoneName)
 		if err != nil {
 			return policy.Decision{}, err
 		}
 		return r.Engine.Decide(policy.Request{Op: policy.OpZoneStop, Namespace: ns, ZoneStop: &policy.ZoneStopParams{ZoneName: p.ZoneName, Reason: p.Reason}}, snap), nil
-	case focv1.RequestActivateTask:
+	case fleetopsv1.RequestActivateTask:
 		snap, err := fleet.TaskSnapshot(ctx, r.C, ns, req.Spec.ActivateTask.TaskName)
 		if err != nil {
 			return policy.Decision{}, err
@@ -332,10 +332,10 @@ func (r *Reconciler) freshDecision(ctx context.Context, req *focv1.ApprovalReque
 // ActivationCommand is the exact command a person runs to activate the draft
 // an approved ActivateTask request names, with their own kubeconfig (D79).
 func ActivationCommand(ns, request string) string {
-	return fmt.Sprintf("foc activate %s -n %s", request, ns)
+	return fmt.Sprintf("fleetops activate %s -n %s", request, ns)
 }
 
-func (r *Reconciler) observeActivation(ctx context.Context, req *focv1.ApprovalRequest) (reconcile.Result, error) {
+func (r *Reconciler) observeActivation(ctx context.Context, req *fleetopsv1.ApprovalRequest) (reconcile.Result, error) {
 	var t swarmv1.FleetTask
 	if err := r.C.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: req.Spec.ActivateTask.TaskName}, &t); err != nil {
 		return reconcile.Result{}, client.IgnoreNotFound(err)
@@ -348,8 +348,8 @@ func (r *Reconciler) observeActivation(ctx context.Context, req *focv1.ApprovalR
 		return reconcile.Result{RequeueAfter: period}, nil
 	}
 	now := metav1.NewTime(r.now())
-	target := focv1.TargetRef{APIVersion: swarmv1.GroupVersion.String(), Kind: "FleetTask", Name: t.Name}
-	// foc activate creates an Activation ApprovalDecision, bound to the
+	target := fleetopsv1.TargetRef{APIVersion: swarmv1.GroupVersion.String(), Kind: "FleetTask", Name: t.Name}
+	// fleetops activate creates an Activation ApprovalDecision, bound to the
 	// authenticated person by the fleetops-decisions admission policy, before
 	// it patches the task (D79). An activation made another way has none.
 	rec, others, err := r.activationRecord(ctx, req)
@@ -357,7 +357,7 @@ func (r *Reconciler) observeActivation(ctx context.Context, req *focv1.ApprovalR
 		return reconcile.Result{}, err
 	}
 	activator, ref := "unknown", ""
-	msg := "activation observed: " + OutsideFocActivate
+	msg := "activation observed: " + OutsideFleetopsActivate
 	if rec != nil {
 		activator, ref = rec.Spec.DecidedBy, rec.Name
 		msg = "activation observed (performed by " + activator + ", not by the copilot)"
@@ -370,33 +370,33 @@ func (r *Reconciler) observeActivation(ctx context.Context, req *focv1.ApprovalR
 	logMsg, evMsg := "spec.draft is false; activation was performed outside the copilot",
 		fmt.Sprintf("FleetTask/%s left Draft after approval by %s, activated by %s; the copilot did not perform the activation", t.Name, req.Status.DecidedBy, activator)
 	if rec == nil {
-		logMsg = "spec.draft is false; " + OutsideFocActivate
-		evMsg = fmt.Sprintf("FleetTask/%s left Draft after approval by %s; %s", t.Name, req.Status.DecidedBy, OutsideFocActivate)
+		logMsg = "spec.draft is false; " + OutsideFleetopsActivate
+		evMsg = fmt.Sprintf("FleetTask/%s left Draft after approval by %s; %s", t.Name, req.Status.DecidedBy, OutsideFleetopsActivate)
 	}
 	r.log(audit.Entry{Kind: audit.KindActivationObserved, Actor: activator, Namespace: req.Namespace, Object: "ApprovalRequest/" + req.Name, SessionID: req.Spec.SessionID,
 		Message: logMsg, Detail: detail})
 	r.event(ctx, req, corev1.EventTypeNormal, "ActivationObserved", evMsg)
-	return reconcile.Result{}, r.setStatus(ctx, req, func(s *focv1.ApprovalRequestStatus) {
-		s.State, s.ExecutedAt, s.Target, s.ActivatedBy, s.ActivationRef = focv1.StateExecuted, &now, &target, activator, ref
+	return reconcile.Result{}, r.setStatus(ctx, req, func(s *fleetopsv1.ApprovalRequestStatus) {
+		s.State, s.ExecutedAt, s.Target, s.ActivatedBy, s.ActivationRef = fleetopsv1.StateExecuted, &now, &target, activator, ref
 		s.Message = msg
 	})
 }
 
-// OutsideFocActivate is what foc-approvals records when a draft left Draft
+// OutsideFleetopsActivate is what fleetops-approvals records when a draft left Draft
 // with no Activation record, e.g. after a plain kubectl patch (R72).
-const OutsideFocActivate = "activated outside foc activate; activator not recorded"
+const OutsideFleetopsActivate = "activated outside fleetops activate; activator not recorded"
 
 // activationRecord returns the most recent Activation ApprovalDecision for
 // an approved ActivateTask request, made no earlier than the approval, and
-// the people named by any earlier ones (foc activate records before it
+// the people named by any earlier ones (fleetops activate records before it
 // patches, so a record whose patch Swarmada refused can precede the one that
 // succeeded).
-func (r *Reconciler) activationRecord(ctx context.Context, req *focv1.ApprovalRequest) (*focv1.ApprovalDecision, []string, error) {
+func (r *Reconciler) activationRecord(ctx context.Context, req *fleetopsv1.ApprovalRequest) (*fleetopsv1.ApprovalDecision, []string, error) {
 	ds, err := r.decisionsFor(ctx, req)
 	if err != nil {
 		return nil, nil, err
 	}
-	var recs []focv1.ApprovalDecision
+	var recs []fleetopsv1.ApprovalDecision
 	for _, d := range ds {
 		if !d.Spec.IsActivation() || (req.Status.DecidedAt != nil && d.CreationTimestamp.Before(&metav1.Time{Time: req.Status.DecidedAt.Truncate(time.Second)})) {
 			continue
@@ -415,15 +415,15 @@ func (r *Reconciler) activationRecord(ctx context.Context, req *focv1.ApprovalRe
 
 // MaintenanceName is the deterministic ZoneMaintenance name for a request, so
 // a retried execution returns AlreadyExists instead of creating a second window.
-func MaintenanceName(req *focv1.ApprovalRequest) string { return "foc-" + req.Name }
+func MaintenanceName(req *fleetopsv1.ApprovalRequest) string { return "fleetops-" + req.Name }
 
-func (r *Reconciler) execute(ctx context.Context, req *focv1.ApprovalRequest) (reconcile.Result, error) {
+func (r *Reconciler) execute(ctx context.Context, req *fleetopsv1.ApprovalRequest) (reconcile.Result, error) {
 	obj := "ApprovalRequest/" + req.Name
-	var target focv1.TargetRef
+	var target fleetopsv1.TargetRef
 	var err error
-	var checks *focv1.ChecksRecord
+	var checks *fleetopsv1.ChecksRecord
 	switch req.Spec.Type {
-	case focv1.RequestDraftTask:
+	case fleetopsv1.RequestDraftTask:
 		var t *swarmv1.FleetTask
 		t, err = DraftTaskObject(req, req.Status.DecidedBy)
 		if err != nil {
@@ -445,11 +445,11 @@ func (r *Reconciler) execute(ctx context.Context, req *focv1.ApprovalRequest) (r
 			return reconcile.Result{}, r.refuseExecution(ctx, req, checks, *refusal)
 		}
 		target, err = r.createDraft(ctx, req)
-	case focv1.RequestZoneMaintenance:
+	case fleetopsv1.RequestZoneMaintenance:
 		target, err = r.createMaintenance(ctx, req)
-	case focv1.RequestZoneStop:
+	case fleetopsv1.RequestZoneStop:
 		target, err = r.stopZone(ctx, req)
-	case focv1.RequestActivateTask:
+	case fleetopsv1.RequestActivateTask:
 		// The copilot never activates: Swarmada's FleetTask webhook refuses
 		// clearing spec.draft to every ServiceAccount (authorizeActivate,
 		// internal/webhook/fleettask_webhook.go). The approver runs
@@ -463,8 +463,8 @@ func (r *Reconciler) execute(ctx context.Context, req *focv1.ApprovalRequest) (r
 		r.log(audit.Entry{Kind: audit.KindExecutionFailed, Namespace: req.Namespace, Object: obj, SessionID: req.Spec.SessionID, Message: err.Error()})
 		r.event(ctx, req, corev1.EventTypeWarning, "ExecutionFailed", err.Error())
 		if apierrors.IsForbidden(err) || apierrors.IsInvalid(err) || apierrors.IsAlreadyExists(err) {
-			return reconcile.Result{}, r.setStatus(ctx, req, func(s *focv1.ApprovalRequestStatus) {
-				s.State, s.Message = focv1.StateFailed, "execution refused by the API server: "+err.Error()
+			return reconcile.Result{}, r.setStatus(ctx, req, func(s *fleetopsv1.ApprovalRequestStatus) {
+				s.State, s.Message = fleetopsv1.StateFailed, "execution refused by the API server: "+err.Error()
 			})
 		}
 		return reconcile.Result{}, err
@@ -472,24 +472,24 @@ func (r *Reconciler) execute(ctx context.Context, req *focv1.ApprovalRequest) (r
 	now := metav1.NewTime(r.now())
 	r.log(audit.Entry{Kind: audit.KindExecuted, Actor: req.Status.DecidedBy, Namespace: req.Namespace, Object: obj, SessionID: req.Spec.SessionID, Detail: map[string]any{"target": target.Kind + "/" + target.Name}})
 	r.event(ctx, req, corev1.EventTypeNormal, "Executed", fmt.Sprintf("%s/%s written after approval by %s", target.Kind, target.Name, req.Status.DecidedBy))
-	return reconcile.Result{}, r.setStatus(ctx, req, func(s *focv1.ApprovalRequestStatus) {
-		s.State, s.ExecutedAt, s.Target, s.Message = focv1.StateExecuted, &now, &target, "executed"
+	return reconcile.Result{}, r.setStatus(ctx, req, func(s *fleetopsv1.ApprovalRequestStatus) {
+		s.State, s.ExecutedAt, s.Target, s.Message = fleetopsv1.StateExecuted, &now, &target, "executed"
 		if checks != nil {
 			s.ExecutionChecks = checks
 		}
 	})
 }
 
-// DraftTaskObject is the FleetTask foc-approvals creates for an approved
+// DraftTaskObject is the FleetTask fleetops-approvals creates for an approved
 // DraftTask request, held as a draft (internal/draft builds it). approvedBy is
 // recorded in an annotation. The web UI shows this same object before approval.
-func DraftTaskObject(req *focv1.ApprovalRequest, approvedBy string) (*swarmv1.FleetTask, error) {
+func DraftTaskObject(req *fleetopsv1.ApprovalRequest, approvedBy string) (*swarmv1.FleetTask, error) {
 	p := req.Spec.DraftTask
 	t, err := draft.Task(req.Namespace, p)
 	if err != nil {
 		return nil, err
 	}
-	t.Labels = map[string]string{fleet.CreatedByLabel: "foc-approvals", fleet.RequestLabel: req.Name, fleet.SessionLabel: req.Spec.SessionID}
+	t.Labels = map[string]string{fleet.CreatedByLabel: "fleetops-approvals", fleet.RequestLabel: req.Name, fleet.SessionLabel: req.Spec.SessionID}
 	t.Annotations = map[string]string{
 		"fleetops.alexbahel.github.io/approved-by":   approvedBy,
 		"fleetops.alexbahel.github.io/requested-for": req.Spec.RequestedFor,
@@ -501,12 +501,12 @@ func DraftTaskObject(req *focv1.ApprovalRequest, approvedBy string) (*swarmv1.Fl
 // createDraft creates the approved FleetTask held as a draft. Swarmada
 // generates no child action for it, and only a person holding activate can
 // clear spec.draft (internal/webhook/fleettask_webhook.go in Swarmada).
-func (r *Reconciler) createDraft(ctx context.Context, req *focv1.ApprovalRequest) (focv1.TargetRef, error) {
+func (r *Reconciler) createDraft(ctx context.Context, req *fleetopsv1.ApprovalRequest) (fleetopsv1.TargetRef, error) {
 	t, err := DraftTaskObject(req, req.Status.DecidedBy)
 	if err != nil {
-		return focv1.TargetRef{}, err
+		return fleetopsv1.TargetRef{}, err
 	}
-	ref := focv1.TargetRef{APIVersion: swarmv1.GroupVersion.String(), Kind: "FleetTask", Name: t.Name}
+	ref := fleetopsv1.TargetRef{APIVersion: swarmv1.GroupVersion.String(), Kind: "FleetTask", Name: t.Name}
 	if err := r.C.Create(ctx, t); err != nil {
 		if apierrors.IsAlreadyExists(err) {
 			var existing swarmv1.FleetTask
@@ -519,15 +519,15 @@ func (r *Reconciler) createDraft(ctx context.Context, req *focv1.ApprovalRequest
 	return ref, nil
 }
 
-// MaintenanceObject is the ZoneMaintenance foc-approvals creates for an
+// MaintenanceObject is the ZoneMaintenance fleetops-approvals creates for an
 // approved ZoneMaintenance request. autoResumeAfterMinutes is always 0.
-func MaintenanceObject(req *focv1.ApprovalRequest, approvedBy string) *swarmv1.ZoneMaintenance {
+func MaintenanceObject(req *fleetopsv1.ApprovalRequest, approvedBy string) *swarmv1.ZoneMaintenance {
 	p := req.Spec.ZoneMaintenance
 	return &swarmv1.ZoneMaintenance{
 		TypeMeta: metav1.TypeMeta{APIVersion: swarmv1.GroupVersion.String(), Kind: "ZoneMaintenance"},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: MaintenanceName(req), Namespace: req.Namespace,
-			Labels:      map[string]string{fleet.CreatedByLabel: "foc-approvals", fleet.RequestLabel: req.Name},
+			Labels:      map[string]string{fleet.CreatedByLabel: "fleetops-approvals", fleet.RequestLabel: req.Name},
 			Annotations: map[string]string{"fleetops.alexbahel.github.io/approved-by": approvedBy},
 		},
 		Spec: swarmv1.ZoneMaintenanceSpec{
@@ -540,9 +540,9 @@ func MaintenanceObject(req *focv1.ApprovalRequest, approvedBy string) *swarmv1.Z
 	}
 }
 
-func (r *Reconciler) createMaintenance(ctx context.Context, req *focv1.ApprovalRequest) (focv1.TargetRef, error) {
+func (r *Reconciler) createMaintenance(ctx context.Context, req *fleetopsv1.ApprovalRequest) (fleetopsv1.TargetRef, error) {
 	zm := MaintenanceObject(req, req.Status.DecidedBy)
-	ref := focv1.TargetRef{APIVersion: swarmv1.GroupVersion.String(), Kind: "ZoneMaintenance", Name: zm.Name}
+	ref := fleetopsv1.TargetRef{APIVersion: swarmv1.GroupVersion.String(), Kind: "ZoneMaintenance", Name: zm.Name}
 	if err := r.C.Create(ctx, zm); err != nil {
 		if apierrors.IsAlreadyExists(err) {
 			var existing swarmv1.ZoneMaintenance
@@ -555,9 +555,9 @@ func (r *Reconciler) createMaintenance(ctx context.Context, req *focv1.ApprovalR
 	return ref, nil
 }
 
-func (r *Reconciler) stopZone(ctx context.Context, req *focv1.ApprovalRequest) (focv1.TargetRef, error) {
+func (r *Reconciler) stopZone(ctx context.Context, req *fleetopsv1.ApprovalRequest) (fleetopsv1.TargetRef, error) {
 	p := req.Spec.ZoneStop
-	ref := focv1.TargetRef{APIVersion: swarmv1.GroupVersion.String(), Kind: "FleetZone", Name: p.ZoneName}
+	ref := fleetopsv1.TargetRef{APIVersion: swarmv1.GroupVersion.String(), Kind: "FleetZone", Name: p.ZoneName}
 	var z swarmv1.FleetZone
 	if err := r.C.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: p.ZoneName}, &z); err != nil {
 		return ref, err
@@ -573,20 +573,20 @@ func (r *Reconciler) stopZone(ctx context.Context, req *focv1.ApprovalRequest) (
 	return ref, r.C.Patch(ctx, &z, client.RawPatch(types.MergePatchType, patch))
 }
 
-// ZoneStopPatch is the JSON merge patch foc-approvals sends to the FleetZone
+// ZoneStopPatch is the JSON merge patch fleetops-approvals sends to the FleetZone
 // for an approved ZoneStop request: it sets only the
 // swarmada.io/estop-triggered annotation. The executor sends nothing when
 // the annotation is already present.
-func ZoneStopPatch(req *focv1.ApprovalRequest) ([]byte, error) {
+func ZoneStopPatch(req *fleetopsv1.ApprovalRequest) ([]byte, error) {
 	return json.Marshal(map[string]any{"metadata": map[string]any{"annotations": map[string]string{fleet.EstopAnnotation: req.Spec.ZoneStop.Reason}}})
 }
 
-// ActivationPatch is the merge patch foc activate sends with the person's own
+// ActivationPatch is the merge patch fleetops activate sends with the person's own
 // credentials, after it records the activation (D79): it clears spec.draft
 // and nothing else. The copilot never sends it.
 const ActivationPatch = `{"spec":{"draft":false}}`
 
-func (r *Reconciler) setStatus(ctx context.Context, req *focv1.ApprovalRequest, mutate func(*focv1.ApprovalRequestStatus)) error {
+func (r *Reconciler) setStatus(ctx context.Context, req *fleetopsv1.ApprovalRequest, mutate func(*fleetopsv1.ApprovalRequestStatus)) error {
 	base := req.DeepCopy()
 	mutate(&req.Status)
 	return r.C.Status().Patch(ctx, req, client.MergeFromWithOptions(base, client.MergeFromWithOptimisticLock{}))

@@ -75,10 +75,10 @@ import (
 // Identities used throughout the tests and evaluations.
 const (
 	SwarmNS          = "warehouse-a"
-	FocNS            = "foc-system"
-	MCPUser          = "system:serviceaccount:foc-system:foc-mcp"
-	ApprovUser       = "system:serviceaccount:foc-system:foc-approvals"
-	AgentUser        = "system:serviceaccount:foc-system:foc-agent"
+	FleetopsNS       = "fleetops-system"
+	MCPUser          = "system:serviceaccount:fleetops-system:fleetops-mcp"
+	ApprovUser       = "system:serviceaccount:fleetops-system:fleetops-approvals"
+	AgentUser        = "system:serviceaccount:fleetops-system:fleetops-agent"
 	StandinName      = "standin-swarmada-fleettask"
 	standinPath      = "/validate-fleettask-standin"
 	standinZoneName  = "standin-swarmada-fleetzone"
@@ -87,7 +87,7 @@ const (
 	EstopInForceFinz = "swarmada.io/estop-in-force"
 	// OperatorNS holds one ServiceAccount per eval operator; the harness mints
 	// its bearer token with the TokenRequest API (R39).
-	OperatorNS = "foc-eval-operators"
+	OperatorNS = "fleetops-eval-operators"
 )
 
 // OperatorIdentity is the username the API server gives the token the
@@ -280,7 +280,7 @@ func (e *Env) Stop() {
 // writeTokenFile writes a kube-apiserver static token file with a random
 // token per person (username and groups as in the person's certificate).
 func writeTokenFile(people []Person) (map[string]string, string, error) {
-	dir, err := os.MkdirTemp("", "foc-envtest-tokens-")
+	dir, err := os.MkdirTemp("", "fleetops-envtest-tokens-")
 	if err != nil {
 		return nil, "", err
 	}
@@ -331,7 +331,7 @@ func (e *Env) MintToken(ctx context.Context, ns, name string) (string, error) {
 
 // SAGroups are the groups the API server gives a copilot ServiceAccount.
 func SAGroups() []string {
-	return []string{"system:serviceaccounts", "system:serviceaccounts:" + FocNS, "system:authenticated"}
+	return []string{"system:serviceaccounts", "system:serviceaccounts:" + FleetopsNS, "system:authenticated"}
 }
 
 // SAConfig returns an admin config impersonating a ServiceAccount.

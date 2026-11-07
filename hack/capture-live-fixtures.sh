@@ -6,7 +6,7 @@
 #
 # For each scenario: tear the quickstart cluster down (run.sh --clean), run
 # `make quickstart SCENARIO=<s>` in a Swarmada checkout, then write
-# evals/fixtures/live/<s>.yaml with evals/cmd/foc-capture. For the stop
+# evals/fixtures/live/<s>.yaml with evals/cmd/fleetops-capture. For the stop
 # scenario, after the quickstart it also triggers a zone estop with
 # `swarmctl estop trigger` and captures that state as zone-estop.yaml.
 #
@@ -31,14 +31,14 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$REPO/evals/fixtures/live"
 SCENARIOS="${SCENARIOS:-healthy-fleet battery-edge battery-handoff hardware-fault comms-flaky estop-drill}"
 mkdir -p "$OUT"
-(cd "$REPO" && go build -o bin/ ./evals/cmd/foc-capture)
+(cd "$REPO" && go build -o bin/ ./evals/cmd/fleetops-capture)
 
 for s in $SCENARIOS; do
   echo "==> $s: clean"
   (cd "$SWARMADA_DIR" && QUICKSTART_CLUSTER="$CLUSTER" bash examples/warehouse-quickstart/run.sh --clean)
   echo "==> $s: quickstart"
   (cd "$SWARMADA_DIR" && QUICKSTART_CLUSTER="$CLUSTER" CI=true make quickstart SCENARIO="$s")
-  "$REPO/bin/foc-capture" -context "$CTX" -scenario "$s" \
+  "$REPO/bin/fleetops-capture" -context "$CTX" -scenario "$s" \
     -source "Swarmada v0.4 quickstart, make quickstart SCENARIO=$s, after it reached its end state and exited (the quickstart stops its sim adapter process on exit, so robot phase and connectivity drift afterwards)${SOURCE_NOTE:+; $SOURCE_NOTE}" \
     -out "$OUT/$s.yaml"
   if [[ "$s" == estop-drill ]]; then
@@ -46,7 +46,7 @@ for s in $SCENARIOS; do
     "$SWARMCTL" --context "$CTX" -n warehouse-a estop trigger warehouse-a \
       --reason "fixture capture: zone stop drill (fictional site)" --yes
     sleep 10
-    "$REPO/bin/foc-capture" -context "$CTX" -scenario zone-estop \
+    "$REPO/bin/fleetops-capture" -context "$CTX" -scenario zone-estop \
       -source "Swarmada v0.4 quickstart SCENARIO=estop-drill (exited; its sim adapter process stopped), then swarmctl estop trigger warehouse-a, captured 10 s later${SOURCE_NOTE:+; $SOURCE_NOTE}" \
       -out "$OUT/zone-estop.yaml"
   fi

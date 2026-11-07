@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 // Package authn authenticates the person behind an MCP call (ruling R39).
-// The client sends the person's own Kubernetes bearer token; foc-mcp
+// The client sends the person's own Kubernetes bearer token; fleetops-mcp
 // verifies it with a TokenReview and uses the username the API server
 // returns as the requester (ApprovalRequest spec.requestedFor). A name the
 // client asserts is never trusted: without a token, or when the review
@@ -53,7 +53,7 @@ type Authenticator interface {
 }
 
 // TokenReviewer authenticates with the TokenReview API, as the
-// ServiceAccount the client runs as (foc-mcp needs create on tokenreviews).
+// ServiceAccount the client runs as (fleetops-mcp needs create on tokenreviews).
 // Results are cached for TTL by the token's SHA-256.
 type TokenReviewer struct {
 	C client.Client

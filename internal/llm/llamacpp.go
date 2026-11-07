@@ -35,7 +35,7 @@ import (
 // llama.cpp backend defaults (docs/DESIGN.md §3.5, D15).
 const (
 	// EnvLlamaCppURL names the environment variable that holds the server base
-	// URL, for example http://llama-server.foc-system.svc:8080. No credential
+	// URL, for example http://llama-server.fleetops-system.svc:8080. No credential
 	// is involved.
 	EnvLlamaCppURL = "FOC_LLAMACPP_URL"
 	// EnvLlamaCppTemperature overrides DefaultLlamaCppTemperature.

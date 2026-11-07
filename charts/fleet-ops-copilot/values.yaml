@@ -2,8 +2,8 @@
 # the ones in config/ on main (CRDs, RBAC, admission policies, config/deploy);
 # `make chart-parity` checks that.
 #
-# Install into namespace foc-system only: the admission policies and the
-# envtest identities name ServiceAccounts in foc-system (docs/KNOWN-LIMITS.md,
+# Install into namespace fleetops-system only: the admission policies and the
+# envtest identities name ServiceAccounts in fleetops-system (docs/KNOWN-LIMITS.md,
 # "ServiceAccount names"). Any other release namespace fails the render.
 
 image:
@@ -12,8 +12,8 @@ image:
   pullPolicy: IfNotPresent
 
 # Swarmada namespaces the copilot works in. Each one gets the two namespaced
-# RoleBindings (foc-mcp, foc-approvals). Every namespace the policy file lists
-# must be here; the render fails otherwise. The first entry is foc-mcp's
+# RoleBindings (fleetops-mcp, fleetops-approvals). Every namespace the policy file lists
+# must be here; the render fails otherwise. The first entry is fleetops-mcp's
 # default namespace (-namespace).
 swarmadaNamespaces:
   - warehouse-a
@@ -26,10 +26,10 @@ swarmadaNamespaces:
 policy:
   content: ""
 
-# The site catalogue foc-agent reads (docs/DESIGN.md §3.10.1): the kinds of
+# The site catalogue fleetops-agent reads (docs/DESIGN.md §3.10.1): the kinds of
 # work a person can ask for, their Swarmada mapping and the questions that
 # lead to them. Empty content uses files/site-catalogue.yaml (the fictional
-# warehouse's, a copy of catalogue/warehouse-a.yaml). foc-agent refuses to
+# warehouse's, a copy of catalogue/warehouse-a.yaml). fleetops-agent refuses to
 # start on a catalogue that does not validate. Part of the eval surface.
 catalogue:
   content: ""
@@ -44,15 +44,15 @@ approvals:
   probePort: 8081
   resources: {}
 
-# foc-agent talks to the model, reaches foc-mcp over MCP and serves the web
-# chat with the approval-requests panel (Service foc-agent, port below). Its
+# fleetops-agent talks to the model, reaches fleetops-mcp over MCP and serves the web
+# chat with the approval-requests panel (Service fleetops-agent, port below). Its
 # ServiceAccount may only get and list ApprovalRequests. With llm.profile
 # cloud it runs the claude backend and needs the Secret in
 # llm.cloud.apiKeySecretRef; the pod does not start without it.
 agent:
   serviceAccount:
     create: true
-  # false renders no foc-agent Deployment or Service (the ServiceAccount and
+  # false renders no fleetops-agent Deployment or Service (the ServiceAccount and
   # its read-only RoleBindings stay).
   enabled: true
   # At most 1: conversations are kept in the pod's memory (D75); the render
@@ -63,7 +63,7 @@ agent:
   maxConcurrent: 4
   resources: {}
 
-# OpenTelemetry traces from foc-agent and foc-mcp: one trace per operator
+# OpenTelemetry traces from fleetops-agent and fleetops-mcp: one trace per operator
 # request (model calls, tool calls, policy decisions). OTLP/gRPC collector as
 # host:port (plaintext), http://host:port or https://host:port. Empty: off.
 # Exporter headers, if the collector needs them, go in
@@ -73,14 +73,14 @@ tracing:
   # Optional in-cluster trace backend for development and demonstrations: an
   # OpenTelemetry Collector (OTLP/gRPC in, OTLP/gRPC out) in front of Jaeger
   # v2 with its in-memory store. Off by default; nothing below is rendered
-  # unless enabled is true. When enabled, foc-agent and foc-mcp export to the
-  # Collector (foc-otel-collector:4317) and otlpEndpoint must stay empty (the
+  # unless enabled is true. When enabled, fleetops-agent and fleetops-mcp export to the
+  # Collector (fleetops-otel-collector:4317) and otlpEndpoint must stay empty (the
   # render fails if both are set). Read the traces with
-  #   kubectl --context <ctx> -n foc-system port-forward svc/foc-jaeger 16686:16686
+  #   kubectl --context <ctx> -n fleetops-system port-forward svc/fleetops-jaeger 16686:16686
   # and open http://127.0.0.1:16686/. Both Services are ClusterIP. Traces are
   # kept in the Jaeger pod's memory only (the image's default of 100000
   # traces) and are lost when it restarts. Neither pod gets a Kubernetes API
-  # token. Span attributes are redacted in foc-agent and foc-mcp before export
+  # token. Span attributes are redacted in fleetops-agent and fleetops-mcp before export
   # (docs/DESIGN.md D54). Images are pinned by tag and digest; they must be
   # pullable by the nodes (this is not part of the air-gapped profile).
   backend:
@@ -104,8 +104,8 @@ llm:
   profile: cloud
   cloud:
     model: claude-sonnet-5-5
-    # Reference to a Secret that already exists in foc-system. The chart never
-    # creates, reads or templates the key itself. foc-agent receives it as the
+    # Reference to a Secret that already exists in fleetops-system. The chart never
+    # creates, reads or templates the key itself. fleetops-agent receives it as the
     # ANTHROPIC_API_KEY environment variable (docs/DESIGN.md §3.8).
     apiKeySecretRef:
       name: fleet-ops-copilot-claude
@@ -133,15 +133,15 @@ networkPolicy:
     namespace: kube-system
     podLabels:
       k8s-app: kube-dns
-  # foc-agent egress to the Claude API. NetworkPolicy has no FQDN rules, so
+  # fleetops-agent egress to the Claude API. NetworkPolicy has no FQDN rules, so
   # this is a list of CIDRs (or an egress proxy's address). Empty: no rule.
   claudeApiEgress:
     cidrs: []
     ports: [443]
-  # Additional peers allowed to reach foc-mcp's MCP port besides foc-agent,
+  # Additional peers allowed to reach fleetops-mcp's MCP port besides fleetops-agent,
   # as NetworkPolicy `from` entries.
   mcpExtraIngressFrom: []
-  # Egress from foc-agent and foc-mcp to the OTLP collector, as NetworkPolicy
+  # Egress from fleetops-agent and fleetops-mcp to the OTLP collector, as NetworkPolicy
   # `to` entries. Empty: no rule (spans are dropped when tracing is on).
   otlpEgress:
     to: []

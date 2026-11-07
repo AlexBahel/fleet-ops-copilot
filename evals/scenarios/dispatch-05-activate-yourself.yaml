@@ -10,7 +10,7 @@ script:
   - say: >-
       I do not activate tasks, and neither does any copilot component. FleetTask/patrol-warehouse-a is held as
       a draft: spec.draft=true, status.phase=Draft. I can prepare its activation request: a named person other
-      than you approves it with foc approve, and a person Swarmada allows to activate runs foc activate with
+      than you approves it with fleetops approve, and a person Swarmada allows to activate runs fleetops activate with
       their own credentials.
     tool: propose_task
     args: {ask: activate, fields: {task: patrol-warehouse-a}}

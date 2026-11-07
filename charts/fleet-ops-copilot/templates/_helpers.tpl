@@ -2,7 +2,7 @@
 Labels added by the chart to every object it renders. `make chart-parity`
 ignores exactly these keys when it compares the chart with config/.
 */}}
-{{- define "foc.chartLabels" -}}
+{{- define "fleetops.chartLabels" -}}
 helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 app.kubernetes.io/instance: {{ .Release.Name }}
@@ -10,18 +10,18 @@ app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end -}}
 
 {{/* Labels config/ already carries on a workload, plus the chart labels. */}}
-{{- define "foc.workloadLabels" -}}
+{{- define "fleetops.workloadLabels" -}}
 app.kubernetes.io/name: {{ .name }}
 app.kubernetes.io/part-of: fleet-ops-copilot
-{{ include "foc.chartLabels" .root }}
+{{ include "fleetops.chartLabels" .root }}
 {{- end -}}
 
-{{- define "foc.image" -}}
+{{- define "fleetops.image" -}}
 {{ printf "%s:%s" .Values.image.repository .Values.image.tag }}
 {{- end -}}
 
 {{/* The policy file text: policy.content, or the chart's copy of policies/default.yaml. */}}
-{{- define "foc.policy" -}}
+{{- define "fleetops.policy" -}}
 {{- if .Values.policy.content -}}
 {{ .Values.policy.content }}
 {{- else -}}
@@ -29,7 +29,7 @@ app.kubernetes.io/part-of: fleet-ops-copilot
 {{- end -}}
 {{- end -}}
 
-{{- define "foc.catalogue" -}}
+{{- define "fleetops.catalogue" -}}
 {{- if .Values.catalogue.content -}}
 {{ .Values.catalogue.content }}
 {{- else -}}
@@ -38,10 +38,10 @@ app.kubernetes.io/part-of: fleet-ops-copilot
 {{- end -}}
 
 {{/*
-Environment for foc-agent's claude backend (templates/foc-agent.yaml). The key
+Environment for fleetops-agent's claude backend (templates/fleetops-agent.yaml). The key
 comes from an existing Secret; the chart never holds its value.
 */}}
-{{- define "foc.claudeEnv" -}}
+{{- define "fleetops.claudeEnv" -}}
 - name: ANTHROPIC_API_KEY
   valueFrom:
     secretKeyRef:
@@ -52,20 +52,20 @@ comes from an existing Secret; the chart never holds its value.
 {{- end -}}
 
 {{/*
-The OTLP/gRPC endpoint foc-agent and foc-mcp export to: the in-cluster
+The OTLP/gRPC endpoint fleetops-agent and fleetops-mcp export to: the in-cluster
 Collector when tracing.backend.enabled, otherwise tracing.otlpEndpoint (empty:
 tracing off).
 */}}
-{{- define "foc.otlpEndpoint" -}}
+{{- define "fleetops.otlpEndpoint" -}}
 {{- if .Values.tracing.backend.enabled -}}
-foc-otel-collector:4317
+fleetops-otel-collector:4317
 {{- else -}}
 {{ .Values.tracing.otlpEndpoint }}
 {{- end -}}
 {{- end -}}
 
 {{/* config.yaml of the in-cluster OpenTelemetry Collector (templates/tracing-backend.yaml). */}}
-{{- define "foc.otelCollectorConfig" -}}
+{{- define "fleetops.otelCollectorConfig" -}}
 receivers:
   otlp:
     protocols:
@@ -79,7 +79,7 @@ processors:
   batch: {}
 exporters:
   otlp:
-    endpoint: foc-jaeger:4317
+    endpoint: fleetops-jaeger:4317
     tls:
       insecure: true
 service:
@@ -94,9 +94,9 @@ service:
 Render-time checks. Called from every template file so `helm template -s`
 on a single file still fails on a bad configuration.
 */}}
-{{- define "foc.validate" -}}
-{{- if ne .Release.Namespace "foc-system" -}}
-{{- fail (printf "release namespace is %q; this chart installs into foc-system only (the admission policies name ServiceAccounts in foc-system)" .Release.Namespace) -}}
+{{- define "fleetops.validate" -}}
+{{- if ne .Release.Namespace "fleetops-system" -}}
+{{- fail (printf "release namespace is %q; this chart installs into fleetops-system only (the admission policies name ServiceAccounts in fleetops-system)" .Release.Namespace) -}}
 {{- end -}}
 {{- if eq .Values.llm.profile "airgap" -}}
 {{- fail "llm.profile=airgap is not templated yet: the air-gapped profile (llama-server, model storage, egress policy) is installed beside the chart from config/airgap with make deploy-airgap. Install with llm.profile=cloud; see docs/RUNBOOK.md, \"Switch between cloud and air-gapped\"." -}}
@@ -107,22 +107,22 @@ on a single file still fails on a bad configuration.
 {{- if not .Values.swarmadaNamespaces -}}
 {{- fail "swarmadaNamespaces must list at least one Swarmada namespace" -}}
 {{- end -}}
-{{- $pol := include "foc.policy" . | fromYaml -}}
+{{- $pol := include "fleetops.policy" . | fromYaml -}}
 {{- if hasKey $pol "Error" -}}
 {{- fail (printf "policy file is not valid YAML: %s" $pol.Error) -}}
 {{- end -}}
 {{- range ($pol.namespaces | default list) -}}
 {{- if not (has . $.Values.swarmadaNamespaces) -}}
-{{- fail (printf "the policy file lists namespace %q, which is not in swarmadaNamespaces: foc-mcp and foc-approvals would have no RoleBinding there" .) -}}
+{{- fail (printf "the policy file lists namespace %q, which is not in swarmadaNamespaces: fleetops-mcp and fleetops-approvals would have no RoleBinding there" .) -}}
 {{- end -}}
 {{- end -}}
 {{- if gt (int .Values.agent.replicas) 1 -}}
-{{- fail "agent.replicas must be 0 or 1: foc-agent keeps conversations in memory (docs/DESIGN.md D75)" -}}
+{{- fail "agent.replicas must be 0 or 1: fleetops-agent keeps conversations in memory (docs/DESIGN.md D75)" -}}
 {{- end -}}
 {{- if and .Values.tracing.backend.enabled .Values.tracing.otlpEndpoint -}}
 {{- fail "tracing.backend.enabled and tracing.otlpEndpoint are both set: the in-cluster backend is the exporter's endpoint, so leave tracing.otlpEndpoint empty (or turn the backend off to use your own collector)" -}}
 {{- end -}}
 {{- if and .Values.networkPolicy.enabled (not .Values.networkPolicy.apiServer.cidrs) -}}
-{{- fail "networkPolicy.enabled needs networkPolicy.apiServer.cidrs (the API server endpoint and Service address); without them foc-mcp and foc-approvals cannot reach the API server" -}}
+{{- fail "networkPolicy.enabled needs networkPolicy.apiServer.cidrs (the API server endpoint and Service address); without them fleetops-mcp and fleetops-approvals cannot reach the API server" -}}
 {{- end -}}
 {{- end -}}

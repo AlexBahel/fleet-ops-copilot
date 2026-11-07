@@ -191,7 +191,7 @@ func llamaDeployment(ctx context.Context, cs kubernetes.Interface, ns, name stri
 	return server, node, nil
 }
 
-// hostHardware describes the machine foc-eval runs on (and, for a kind
+// hostHardware describes the machine fleetops-eval runs on (and, for a kind
 // cluster, the machine the node's VM runs on), keyed "host.*". Best effort:
 // a value that cannot be read is left out.
 func hostHardware() map[string]string {

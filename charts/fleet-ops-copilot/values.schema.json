@@ -43,7 +43,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "replicas": {"type": "integer", "minimum": 0, "maximum": 1, "description": "foc-approvals runs without leader election; more than one replica is not supported"},
+        "replicas": {"type": "integer", "minimum": 0, "maximum": 1, "description": "fleetops-approvals runs without leader election; more than one replica is not supported"},
         "probePort": {"type": "integer", "minimum": 1, "maximum": 65535},
         "resources": {"type": "object"}
       }

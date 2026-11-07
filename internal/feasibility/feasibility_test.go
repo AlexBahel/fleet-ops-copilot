@@ -29,7 +29,7 @@ import (
 
 	swarmv1 "github.com/swarmada/swarmada/api/v1"
 
-	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
+	fleetopsv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/draft"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/testenv"
 )
@@ -73,16 +73,16 @@ func fleet() Snapshot {
 	}
 }
 
-func task(t *testing.T, actions ...focv1.DraftAction) *swarmv1.FleetTask {
+func task(t *testing.T, actions ...fleetopsv1.DraftAction) *swarmv1.FleetTask {
 	t.Helper()
-	ft, err := draft.Task("warehouse-a", &focv1.DraftTaskParams{TaskName: "t1", Actions: actions})
+	ft, err := draft.Task("warehouse-a", &fleetopsv1.DraftTaskParams{TaskName: "t1", Actions: actions})
 	if err != nil {
 		t.Fatal(err)
 	}
 	return ft
 }
 
-var dock = &focv1.Location{Zone: "warehouse-a", Waypoint: "receiving-dock-1", X: "5.1", Y: "2.1"}
+var dock = &fleetopsv1.Location{Zone: "warehouse-a", Waypoint: "receiving-dock-1", X: "5.1", Y: "2.1"}
 
 func codes(fs []Finding) string {
 	var c []string
@@ -93,7 +93,7 @@ func codes(fs []Finding) string {
 }
 
 func TestInspectLikelyFeasible(t *testing.T) {
-	r := Evaluate(Proposal{Creating: true, Task: task(t, focv1.DraftAction{Name: "inspect", Type: "Navigate", RequiredCapabilities: []string{"navigation", "camera_front"}, Location: dock})}, fleet())
+	r := Evaluate(Proposal{Creating: true, Task: task(t, fleetopsv1.DraftAction{Name: "inspect", Type: "Navigate", RequiredCapabilities: []string{"navigation", "camera_front"}, Location: dock})}, fleet())
 	if r.Verdict != LikelyFeasible || len(r.Blockers) != 0 || strings.Join(r.Eligible["inspect"], ",") != "sim-robot-002" {
 		t.Fatalf("report %+v", r)
 	}
@@ -104,7 +104,7 @@ func TestInspectLikelyFeasible(t *testing.T) {
 
 // Never "guaranteed" (DESIGN.md §3.10.4).
 func TestNeverGuaranteed(t *testing.T) {
-	r := Evaluate(Proposal{Creating: true, Task: task(t, focv1.DraftAction{Name: "m", Type: "Navigate", Location: dock})}, fleet())
+	r := Evaluate(Proposal{Creating: true, Task: task(t, fleetopsv1.DraftAction{Name: "m", Type: "Navigate", Location: dock})}, fleet())
 	b, _ := json.Marshal(r)
 	if strings.Contains(strings.ToLower(string(b)), "guarantee") {
 		t.Fatalf("report says guaranteed: %s", b)
@@ -116,7 +116,7 @@ func TestNeverGuaranteed(t *testing.T) {
 func TestChargeBelowFloor(t *testing.T) {
 	s := fleet()
 	s.Robots[0].Spec.Constraints = &swarmv1.ClassConstraints{MinBatteryPctForAction: i32(25)}
-	r := Evaluate(Proposal{Creating: true, Task: task(t, focv1.DraftAction{Name: "charge", Type: "Charge", RobotSelector: "sim-robot-001", Dock: "charging-bay"})}, s)
+	r := Evaluate(Proposal{Creating: true, Task: task(t, fleetopsv1.DraftAction{Name: "charge", Type: "Charge", RobotSelector: "sim-robot-001", Dock: "charging-bay"})}, s)
 	if r.Verdict != Blocked || codes(r.Blockers) != CodeChargeBelowFloor {
 		t.Fatalf("blockers %s", codes(r.Blockers))
 	}
@@ -124,7 +124,7 @@ func TestChargeBelowFloor(t *testing.T) {
 		t.Fatalf("report %+v", r)
 	}
 	// Without a floor the same Charge is only waiting for the robot to be idle.
-	r = Evaluate(Proposal{Creating: true, Task: task(t, focv1.DraftAction{Name: "charge", Type: "Charge", RobotSelector: "sim-robot-001"})}, fleet())
+	r = Evaluate(Proposal{Creating: true, Task: task(t, fleetopsv1.DraftAction{Name: "charge", Type: "Charge", RobotSelector: "sim-robot-001"})}, fleet())
 	if r.Verdict != LikelyFeasible || codes(r.Warnings) != CodeRobotsBusy {
 		t.Fatalf("no floor: %+v", r)
 	}
@@ -133,8 +133,8 @@ func TestChargeBelowFloor(t *testing.T) {
 // Owner's instruction on phase 0: a deliver no robot can carry.
 func TestDeliverWithoutCarryingRobot(t *testing.T) {
 	r := Evaluate(Proposal{Creating: true, Task: task(t,
-		focv1.DraftAction{Name: "pickup", Type: "PickUp", RequiredCapabilities: []string{"navigation", "transport.payload"}, Location: dock},
-		focv1.DraftAction{Name: "dropoff", Type: "DropOff", DependsOn: []string{"pickup"}, RequiredCapabilities: []string{"navigation", "transport.payload"}, Location: dock},
+		fleetopsv1.DraftAction{Name: "pickup", Type: "PickUp", RequiredCapabilities: []string{"navigation", "transport.payload"}, Location: dock},
+		fleetopsv1.DraftAction{Name: "dropoff", Type: "DropOff", DependsOn: []string{"pickup"}, RequiredCapabilities: []string{"navigation", "transport.payload"}, Location: dock},
 	)}, fleet())
 	if r.Verdict != Blocked || codes(r.Blockers) != CodeNoCarryingRobot+","+CodeNoCarryingRobot {
 		t.Fatalf("blockers %s", codes(r.Blockers))
@@ -148,20 +148,20 @@ func TestBlockers(t *testing.T) {
 	cases := []struct {
 		name string
 		mut  func(*Snapshot)
-		act  focv1.DraftAction
+		act  fleetopsv1.DraftAction
 		want string
 	}{
-		{"zone stopped", func(s *Snapshot) { s.Zones[0].Annotations = map[string]string{estopTriggered: "spill"} }, focv1.DraftAction{Name: "m", Type: "Navigate", Location: dock}, CodeZoneStopped},
-		{"namespace stop", func(s *Snapshot) { s.Config.NamespaceStop = true }, focv1.DraftAction{Name: "m", Type: "Navigate", Location: dock}, CodeNamespaceStopped},
-		{"unknown zone", nil, focv1.DraftAction{Name: "m", Type: "Navigate", Location: &focv1.Location{Zone: "aisle-b", X: "1", Y: "1"}}, CodeZoneNotFound},
-		{"unknown waypoint", nil, focv1.DraftAction{Name: "m", Type: "Navigate", Location: &focv1.Location{Zone: "warehouse-a", Waypoint: "dock-9", X: "1", Y: "1"}}, CodeWaypointNotFound},
-		{"type not in catalog", nil, focv1.DraftAction{Name: "m", Type: "Custom", CustomType: "shelf-audit", Zone: "warehouse-a"}, CodeTypeNotInCatalog},
-		{"no robot with capability", nil, focv1.DraftAction{Name: "m", Type: "Navigate", RequiredCapabilities: []string{"lidar"}, Location: dock}, CodeNoRobotWithCapability},
-		{"pinned robot missing", nil, focv1.DraftAction{Name: "m", Type: "Charge", RobotSelector: "sim-robot-009"}, CodeRobotNotFound},
+		{"zone stopped", func(s *Snapshot) { s.Zones[0].Annotations = map[string]string{estopTriggered: "spill"} }, fleetopsv1.DraftAction{Name: "m", Type: "Navigate", Location: dock}, CodeZoneStopped},
+		{"namespace stop", func(s *Snapshot) { s.Config.NamespaceStop = true }, fleetopsv1.DraftAction{Name: "m", Type: "Navigate", Location: dock}, CodeNamespaceStopped},
+		{"unknown zone", nil, fleetopsv1.DraftAction{Name: "m", Type: "Navigate", Location: &fleetopsv1.Location{Zone: "aisle-b", X: "1", Y: "1"}}, CodeZoneNotFound},
+		{"unknown waypoint", nil, fleetopsv1.DraftAction{Name: "m", Type: "Navigate", Location: &fleetopsv1.Location{Zone: "warehouse-a", Waypoint: "dock-9", X: "1", Y: "1"}}, CodeWaypointNotFound},
+		{"type not in catalog", nil, fleetopsv1.DraftAction{Name: "m", Type: "Custom", CustomType: "shelf-audit", Zone: "warehouse-a"}, CodeTypeNotInCatalog},
+		{"no robot with capability", nil, fleetopsv1.DraftAction{Name: "m", Type: "Navigate", RequiredCapabilities: []string{"lidar"}, Location: dock}, CodeNoRobotWithCapability},
+		{"pinned robot missing", nil, fleetopsv1.DraftAction{Name: "m", Type: "Charge", RobotSelector: "sim-robot-009"}, CodeRobotNotFound},
 		{"every robot paused", func(s *Snapshot) {
 			s.Maintenances = []swarmv1.ZoneMaintenance{{ObjectMeta: metav1.ObjectMeta{Name: "zm"}, Status: swarmv1.ZoneMaintenanceStatus{Phase: "Active", PausedRobots: []swarmv1.PausedRobotEntry{{Name: "sim-robot-002"}, {Name: "sim-robot-003"}}}}}
 			s.Robots = s.Robots[1:]
-		}, focv1.DraftAction{Name: "m", Type: "Navigate", Location: dock}, CodeNoEligibleRobot},
+		}, fleetopsv1.DraftAction{Name: "m", Type: "Navigate", Location: dock}, CodeNoEligibleRobot},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -181,7 +181,7 @@ func TestNoEligibleRobotNamesFilters(t *testing.T) {
 	s := fleet()
 	s.Robots = s.Robots[2:] // sim-robot-003's camera is declared but Degraded
 	s.Robots[0].Status.Capabilities = append(s.Robots[0].Status.Capabilities, swarmv1.CapabilityStatusEntry{Name: "camera_front", Status: swarmv1.CapabilityStatusDegraded})
-	r := Evaluate(Proposal{Creating: true, Task: task(t, focv1.DraftAction{Name: "inspect", Type: "Navigate", RequiredCapabilities: []string{"navigation", "camera_front"}, Location: dock})}, s)
+	r := Evaluate(Proposal{Creating: true, Task: task(t, fleetopsv1.DraftAction{Name: "inspect", Type: "Navigate", RequiredCapabilities: []string{"navigation", "camera_front"}, Location: dock})}, s)
 	if codes(r.Blockers) != CodeNoEligibleRobot || !strings.Contains(r.Blockers[0].Reason, "missing a required capability (sim-robot-003)") {
 		t.Fatalf("report %+v", r.Blockers)
 	}
@@ -190,7 +190,7 @@ func TestNoEligibleRobotNamesFilters(t *testing.T) {
 func TestDependencyCycleAndTaskExists(t *testing.T) {
 	s := fleet()
 	s.Tasks = []swarmv1.FleetTask{{ObjectMeta: metav1.ObjectMeta{Name: "t1"}}}
-	ft := task(t, focv1.DraftAction{Name: "a", Type: "Navigate", DependsOn: []string{"b"}, Location: dock}, focv1.DraftAction{Name: "b", Type: "Navigate", DependsOn: []string{"a"}, Location: dock})
+	ft := task(t, fleetopsv1.DraftAction{Name: "a", Type: "Navigate", DependsOn: []string{"b"}, Location: dock}, fleetopsv1.DraftAction{Name: "b", Type: "Navigate", DependsOn: []string{"a"}, Location: dock})
 	r := Evaluate(Proposal{Creating: true, Task: ft}, s)
 	if !strings.Contains(codes(r.Blockers), CodeTaskExists) || !strings.Contains(codes(r.Blockers), CodeBadDependency) {
 		t.Fatalf("blockers %s", codes(r.Blockers))
@@ -199,7 +199,7 @@ func TestDependencyCycleAndTaskExists(t *testing.T) {
 
 func TestActivateAndMaintenanceAndStop(t *testing.T) {
 	s := fleet()
-	draftTask := task(t, focv1.DraftAction{Name: "m", Type: "Navigate", Location: dock})
+	draftTask := task(t, fleetopsv1.DraftAction{Name: "m", Type: "Navigate", Location: dock})
 	s.Tasks = []swarmv1.FleetTask{*draftTask}
 	if r := Evaluate(Proposal{ActivateTask: "t1"}, s); r.Verdict != LikelyFeasible {
 		t.Fatalf("activate %+v", r)
@@ -212,11 +212,11 @@ func TestActivateAndMaintenanceAndStop(t *testing.T) {
 		t.Fatalf("activate missing %+v", r)
 	}
 	past := metav1.NewTime(now.Add(-time.Hour))
-	if r := Evaluate(Proposal{Maintenance: &focv1.ZoneMaintenanceParams{ScopeType: "Zone", ZoneName: "warehouse-a", ScheduledStart: &past}}, s); codes(r.Blockers) != CodeStartInPast {
+	if r := Evaluate(Proposal{Maintenance: &fleetopsv1.ZoneMaintenanceParams{ScopeType: "Zone", ZoneName: "warehouse-a", ScheduledStart: &past}}, s); codes(r.Blockers) != CodeStartInPast {
 		t.Fatalf("maintenance %+v", r)
 	}
 	s.Zones[0].Status.EstopStatus = swarmv1.ZoneEstopTriggered
-	if r := Evaluate(Proposal{ZoneStop: &focv1.ZoneStopParams{ZoneName: "warehouse-a"}}, s); codes(r.Blockers) != CodeAlreadyStopped {
+	if r := Evaluate(Proposal{ZoneStop: &fleetopsv1.ZoneStopParams{ZoneName: "warehouse-a"}}, s); codes(r.Blockers) != CodeAlreadyStopped {
 		t.Fatalf("stop %+v", r)
 	}
 }
@@ -234,7 +234,7 @@ func TestConfigProjectionAndNotChecked(t *testing.T) {
 	}
 	s := fleet()
 	s.Config = Config{}
-	r := Evaluate(Proposal{Creating: true, Task: task(t, focv1.DraftAction{Name: "m", Type: "Navigate", Location: dock})}, s)
+	r := Evaluate(Proposal{Creating: true, Task: task(t, fleetopsv1.DraftAction{Name: "m", Type: "Navigate", Location: dock})}, s)
 	if !strings.Contains(strings.Join(r.NotChecked, "|"), ConfigNotChecked) {
 		t.Fatalf("notChecked %v", r.NotChecked)
 	}

@@ -17,10 +17,10 @@ limitations under the License.
 // Package requestview shows an ApprovalRequest as the web UI presents it:
 // the exact Swarmada write it leads to, and the commands a person runs to
 // decide it. The objects come from the executor's own builders
-// (internal/approval), so what is shown is what foc-approvals sends.
+// (internal/approval), so what is shown is what fleetops-approvals sends.
 //
 // The view never decides anything. Approving or rejecting is done by a
-// person with `foc approve` / `foc reject` and their own kubeconfig.
+// person with `fleetops approve` / `fleetops reject` and their own kubeconfig.
 package requestview
 
 import (
@@ -34,14 +34,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
-	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
+	fleetopsv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/approval"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/policy"
 )
 
 // ApproverPlaceholder stands for the approver's username in an object shown
-// before anyone has decided; foc-approvals writes the real name there.
+// before anyone has decided; fleetops-approvals writes the real name there.
 const ApproverPlaceholder = "<username of the person who approves>"
 
 // Line is one line of a diff: Op is "+" (added), "-" (removed) or " ".
@@ -108,7 +108,7 @@ type View struct {
 func List(ctx context.Context, c client.Reader, namespaces []string) ([]View, error) {
 	var out []View
 	for _, ns := range namespaces {
-		var l focv1.ApprovalRequestList
+		var l fleetopsv1.ApprovalRequestList
 		if err := c.List(ctx, &l, client.InNamespace(ns)); err != nil {
 			return nil, fmt.Errorf("listing ApprovalRequests in %s: %w", ns, err)
 		}
@@ -117,7 +117,7 @@ func List(ctx context.Context, c client.Reader, namespaces []string) ([]View, er
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool {
-		pi, pj := out[i].State == string(focv1.StatePending), out[j].State == string(focv1.StatePending)
+		pi, pj := out[i].State == string(fleetopsv1.StatePending), out[j].State == string(fleetopsv1.StatePending)
 		if pi != pj {
 			return pi
 		}
@@ -127,10 +127,10 @@ func List(ctx context.Context, c client.Reader, namespaces []string) ([]View, er
 }
 
 // Of builds the view of one request.
-func Of(r *focv1.ApprovalRequest) View {
+func Of(r *fleetopsv1.ApprovalRequest) View {
 	state := r.Status.State
 	if state == "" {
-		state = focv1.StatePending
+		state = fleetopsv1.StatePending
 	}
 	v := View{
 		Name: r.Name, Namespace: r.Namespace, Type: string(r.Spec.Type), State: string(state),
@@ -140,27 +140,27 @@ func Of(r *focv1.ApprovalRequest) View {
 		DecidedBy: r.Status.DecidedBy, Message: r.Status.Message, Instruction: r.Status.Instruction,
 		Change: ChangeOf(r),
 	}
-	if state == focv1.StatePending {
-		v.Reject = fmt.Sprintf("foc reject %s -n %s", r.Name, r.Namespace)
+	if state == fleetopsv1.StatePending {
+		v.Reject = fmt.Sprintf("fleetops reject %s -n %s", r.Name, r.Namespace)
 		if policy.IsUnverified(r.Spec.RequestedFor) {
 			v.Unapprovable = "The requester was typed into the web UI and is not verified, so approval is refused (" + string(policy.CodeRequesterUnverified) + "). Reject it, or let it expire, and file the request again with an authenticated identity."
 		} else {
-			v.Approve = fmt.Sprintf("foc approve %s -n %s", r.Name, r.Namespace)
+			v.Approve = fmt.Sprintf("fleetops approve %s -n %s", r.Name, r.Namespace)
 		}
 	}
 	return v
 }
 
-const executor = "foc-approvals, as ServiceAccount foc-system/foc-approvals, after a person approves"
+const executor = "fleetops-approvals, as ServiceAccount fleetops-system/fleetops-approvals, after a person approves"
 
 // ChangeOf returns the write the request leads to.
-func ChangeOf(r *focv1.ApprovalRequest) Change {
+func ChangeOf(r *fleetopsv1.ApprovalRequest) Change {
 	approver := r.Status.DecidedBy
 	if approver == "" {
 		approver = ApproverPlaceholder
 	}
 	switch r.Spec.Type {
-	case focv1.RequestDraftTask:
+	case fleetopsv1.RequestDraftTask:
 		if r.Spec.DraftTask == nil {
 			break
 		}
@@ -171,14 +171,14 @@ func ChangeOf(r *focv1.ApprovalRequest) Change {
 		c := create(obj)
 		c.Notes = append([]string{"spec.draft is true: Swarmada creates no FleetAction for this task, and nothing is dispatched until a person activates it (a separate ActivateTask request)."}, c.Notes...)
 		return c
-	case focv1.RequestZoneMaintenance:
+	case fleetopsv1.RequestZoneMaintenance:
 		if r.Spec.ZoneMaintenance == nil {
 			break
 		}
 		c := create(approval.MaintenanceObject(r, approver))
 		c.Notes = append([]string{"autoResumeAfterMinutes is 0 (left out of the body, which is how 0 is sent): robots stay paused until a person ends the window. The copilot never ends it."}, c.Notes...)
 		return c
-	case focv1.RequestZoneStop:
+	case fleetopsv1.RequestZoneStop:
 		if r.Spec.ZoneStop == nil {
 			break
 		}
@@ -201,7 +201,7 @@ func ChangeOf(r *focv1.ApprovalRequest) Change {
 				"This waits for a person's approval; it is not an emergency path. For an emergency use the physical E-stop or swarmctl estop trigger.",
 			},
 		}
-	case focv1.RequestActivateTask:
+	case fleetopsv1.RequestActivateTask:
 		if r.Spec.ActivateTask == nil {
 			break
 		}
@@ -214,15 +214,15 @@ func ChangeOf(r *focv1.ApprovalRequest) Change {
 			Body:      approval.ActivationPatch,
 			Command:   cmd,
 			Notes: []string{
-				"Before the patch, foc activate re-checks the fleet and creates an ApprovalDecision of type Activation naming " + ActivatorPlaceholder + " (the fleetops-decisions admission policy binds it to the authenticated person). Nothing is added to the FleetTask.",
-				"Swarmada refuses this patch to every ServiceAccount and checks the activate verb of the person who sends it. When the task leaves Draft, foc-approvals links the Activation record to this request (D79).",
+				"Before the patch, fleetops activate re-checks the fleet and creates an ApprovalDecision of type Activation naming " + ActivatorPlaceholder + " (the fleetops-decisions admission policy binds it to the authenticated person). Nothing is added to the FleetTask.",
+				"Swarmada refuses this patch to every ServiceAccount and checks the activate verb of the person who sends it. When the task leaves Draft, fleetops-approvals links the Activation record to this request (D79).",
 			},
 		}
 	}
 	return Change{Notes: []string{fmt.Sprintf("request type %q has no parameters the UI can show", r.Spec.Type)}}
 }
 
-// ActivatorPlaceholder stands for the person who runs foc activate.
+// ActivatorPlaceholder stands for the person who runs fleetops activate.
 const ActivatorPlaceholder = "<you>"
 
 // create shows a new object: every line added.

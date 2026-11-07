@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 
-	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
+	fleetopsv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/audit"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/draft"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/feasibility"
@@ -114,7 +114,7 @@ func (s *Service) CheckTask(ctx context.Context, sess Session, in CheckTaskInput
 	}
 	if in.ZoneStop != nil {
 		set++
-		prop = feasibility.Proposal{ZoneStop: &focv1.ZoneStopParams{ZoneName: in.ZoneStop.ZoneName, Reason: in.ZoneStop.Reason}}
+		prop = feasibility.Proposal{ZoneStop: &fleetopsv1.ZoneStopParams{ZoneName: in.ZoneStop.ZoneName, Reason: in.ZoneStop.Reason}}
 		r = policy.Request{Op: policy.OpZoneStop, Namespace: ns, ZoneStop: &policy.ZoneStopParams{ZoneName: in.ZoneStop.ZoneName, Reason: in.ZoneStop.Reason}}
 		if snap, err = fleet.ZoneSnapshot(ctx, s.C, ns, in.ZoneStop.ZoneName); err != nil {
 			return CheckTaskResult{}, err
@@ -141,14 +141,14 @@ func (s *Service) CheckTask(ctx context.Context, sess Session, in CheckTaskInput
 // WhoamiInput is empty.
 type WhoamiInput struct{}
 
-// WhoamiResult is the requester foc-mcp authenticated for this call.
+// WhoamiResult is the requester fleetops-mcp authenticated for this call.
 type WhoamiResult struct {
 	Requester string `json:"requester"`
 	Verified  bool   `json:"verified"`
 }
 
-// Whoami returns the caller as foc-mcp verified it (TokenReview), so
-// foc-agent can bind a conversation to it without a permission of its own
+// Whoami returns the caller as fleetops-mcp verified it (TokenReview), so
+// fleetops-agent can bind a conversation to it without a permission of its own
 // (D75). It is not offered to a model.
 func (s *Service) Whoami(_ context.Context, sess Session, _ WhoamiInput) (WhoamiResult, error) {
 	return WhoamiResult{Requester: sess.Operator, Verified: sess.Verified}, nil

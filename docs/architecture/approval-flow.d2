@@ -2,19 +2,19 @@
 # (docs/DESIGN.md §3.3, D25, D28). Source for approval-flow.svg; render with
 # `d2 approval-flow.d2 approval-flow.svg` (see README.md in this directory).
 # Zone maintenance and zone stop follow steps 1-9 with a different write in
-# step 8. foc-mcp records as requestedFor the username of the caller's bearer
+# step 8. fleetops-mcp records as requestedFor the username of the caller's bearer
 # token, verified with a TokenReview (R39); without a verified token it records
 # unverified:<name>, which is refused at step 7 (R38). The web UI sends no token,
-# so its requests stop there; foc chat sends the person's token.
+# so its requests stop there; fleetops chat sends the person's token.
 
 shape: sequence_diagram
 
 operator: Operator {shape: person}
-agent: "foc chat -> foc-agent\n(SA foc-agent: no write;\nforwards the person's token)"
-mcp: "foc-mcp\n(SA foc-mcp)"
+agent: "fleetops chat -> fleetops-agent\n(SA fleetops-agent: no write;\nforwards the person's token)"
+mcp: "fleetops-mcp\n(SA fleetops-mcp)"
 api: "Kubernetes API server\n+ copilot admission policies"
 webhooks: "Swarmada webhooks\n(vfleettask)"
-approvals: "foc-approvals\n(SA foc-approvals)"
+approvals: "fleetops-approvals\n(SA fleetops-approvals)"
 approver: "Approver\n(named person)" {shape: person}
 
 request: "Request" {
@@ -27,12 +27,12 @@ request: "Request" {
 }
 
 decide: "Decision (person)" {
-  approver -> api: "6. foc approve <id>: create ApprovalDecision with own credentials\n(fleetops-decisions: not a ServiceAccount, decidedBy = caller)"
+  approver -> api: "6. fleetops approve <id>: create ApprovalDecision with own credentials\n(fleetops-decisions: not a ServiceAccount, decidedBy = caller)"
   approvals -> api: "7. checks: requester not unverified (R38: a request without a verified token, e.g. from the web UI, is refused here);\ndecider != requester; SubjectAccessReview (decider may create fleettasks);\nnot expired; policy re-run on fresh state; status Approved, approvedBy"
 }
 
 execute: "Execution (draft)" {
-  approvals -> api: "8. create FleetTask spec.draft: true, deterministic name\n(fleetops-foc-approvals-drafts-only)"
+  approvals -> api: "8. create FleetTask spec.draft: true, deterministic name\n(fleetops-approvals-drafts-only)"
   api -> webhooks: "8a. vfleettask ValidateCreate"
   approvals -> api: "9. status Executed; Event; audit line"
 }
@@ -41,7 +41,7 @@ activate: "Activation (person activates)" {
   operator -> agent: "10. 'activate it'"
   agent -> mcp: "11. request_activate_task"
   mcp -> api: "12. create ApprovalRequest (ActivateTask)"
-  approver -> api: "13. foc approve <id>"
+  approver -> api: "13. fleetops approve <id>"
   approvals -> api: "14. checks (SubjectAccessReview: activate on that FleetTask);\nstatus.instruction = exact kubectl patch command"
   approver -> api: "15. approver runs the command with own credentials:\nkubectl patch fleettask <name> --type merge -p '{\"spec\":{\"draft\":false}}'"
   api -> webhooks: "15a. vfleettask: requires the activate verb,\nrefused to every ServiceAccount"

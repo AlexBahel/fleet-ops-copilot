@@ -1,4 +1,4 @@
-{{- include "foc.validate" . }}
+{{- include "fleetops.validate" . }}
 # ClusterRoles are templates; namespaced rules are granted per Swarmada
 # namespace with a RoleBinding (rbac-bindings.yaml), as Swarmada's own roles are.
 #
@@ -9,9 +9,9 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: "fleetops:foc-mcp"
+  name: "fleetops:fleetops-mcp"
   labels:
-    {{- include "foc.chartLabels" . | nindent 4 }}
+    {{- include "fleetops.chartLabels" . | nindent 4 }}
 rules:
   - apiGroups: ["swarmada.io"]
     resources: [robots, fleettasks, fleetactions, fleetzones, zonemaintenances, discoveredrobots, fleetadapters, robotclasses, tasktriggers]
@@ -30,14 +30,14 @@ rules:
     resources: [events]
     verbs: [get, list, create]
 ---
-# foc-agent reads ApprovalRequests for the web UI's requests panel. Nothing
+# fleetops-agent reads ApprovalRequests for the web UI's requests panel. Nothing
 # else: no Swarmada access, no write of any kind, no decisions.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: "fleetops:foc-agent"
+  name: "fleetops:fleetops-agent"
   labels:
-    {{- include "foc.chartLabels" . | nindent 4 }}
+    {{- include "fleetops.chartLabels" . | nindent 4 }}
 rules:
   - apiGroups: ["fleetops.alexbahel.github.io"]
     resources: [approvalrequests]
@@ -46,9 +46,9 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: "fleetops:foc-mcp-cluster"
+  name: "fleetops:fleetops-mcp-cluster"
   labels:
-    {{- include "foc.chartLabels" . | nindent 4 }}
+    {{- include "fleetops.chartLabels" . | nindent 4 }}
 rules:
   # Draft-gate check before a DraftTask or ActivateTask request (docs/DESIGN.md §3.2).
   - apiGroups: ["admissionregistration.k8s.io"]
@@ -63,9 +63,9 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: "fleetops:foc-approvals"
+  name: "fleetops:fleetops-approvals"
   labels:
-    {{- include "foc.chartLabels" . | nindent 4 }}
+    {{- include "fleetops.chartLabels" . | nindent 4 }}
 rules:
   - apiGroups: ["swarmada.io"]
     resources: [robots, fleettasks, fleetactions, fleetzones, zonemaintenances, fleetadapters]
@@ -80,19 +80,19 @@ rules:
     verbs: [create]
   # Dry runs only: before an approved draft is created, each member is
   # dry-run as a FleetAction so Swarmada's catalog check and Pending cap
-  # answer (R65, D76). The fleetops-foc-approvals-dry-run-only admission
+  # answer (R65, D76). The fleetops-approvals-dry-run-only admission
   # policy refuses any FleetAction create that is not a dry run.
   - apiGroups: ["swarmada.io"]
     resources: [fleetactions]
     verbs: [create]
-  # Approved drafts only; the fleetops-foc-approvals-drafts-only admission
+  # Approved drafts only; the fleetops-approvals-drafts-only admission
   # policy refuses any FleetTask create without spec.draft: true.
   - apiGroups: ["swarmada.io"]
     resources: [fleettasks]
     verbs: [create]
   # Zone stop: patch delivers the swarmada.io/estop-triggered annotation and
   # estop-trigger authorizes it at Swarmada admission. The
-  # fleetops-foc-approvals-zone-stop-only admission policy narrows patch to
+  # fleetops-approvals-zone-stop-only admission policy narrows patch to
   # adding that one annotation.
   - apiGroups: ["swarmada.io"]
     resources: [fleetzones]
@@ -110,9 +110,9 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: "fleetops:foc-approvals-cluster"
+  name: "fleetops:fleetops-approvals-cluster"
   labels:
-    {{- include "foc.chartLabels" . | nindent 4 }}
+    {{- include "fleetops.chartLabels" . | nindent 4 }}
 rules:
   - apiGroups: ["authorization.k8s.io"]
     resources: [subjectaccessreviews]
@@ -122,14 +122,14 @@ rules:
     verbs: [get, list]
 ---
 # Bound to people who may decide requests. Deciding also requires the
-# Swarmada permission for the underlying write (checked by foc-approvals).
+# Swarmada permission for the underlying write (checked by fleetops-approvals).
 # The chart binds it to nobody; see docs/RUNBOOK.md, "Install".
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: "fleetops:approver"
   labels:
-    {{- include "foc.chartLabels" . | nindent 4 }}
+    {{- include "fleetops.chartLabels" . | nindent 4 }}
 rules:
   - apiGroups: ["fleetops.alexbahel.github.io"]
     resources: [approvalrequests]

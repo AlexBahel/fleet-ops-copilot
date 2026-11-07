@@ -35,7 +35,7 @@ import (
 
 	swarmv1 "github.com/swarmada/swarmada/api/v1"
 
-	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
+	fleetopsv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/approval"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/audit"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/authn"
@@ -69,8 +69,8 @@ type harness struct {
 	engine   *policy.Engine
 }
 
-// newHarness starts foc-approvals (as its ServiceAccount) in a manager and
-// returns a tools.Service acting as foc-mcp.
+// newHarness starts fleetops-approvals (as its ServiceAccount) in a manager and
+// returns a tools.Service acting as fleetops-mcp.
 func newHarness(t *testing.T, mutate func(*policy.File)) *harness {
 	t.Helper()
 	p, err := policy.Load(repoRoot + "/policies/default.yaml")
@@ -101,12 +101,12 @@ func newHarness(t *testing.T, mutate func(*policy.File)) *harness {
 	}
 	rec := &approval.Reconciler{
 		C: apClient, Engine: eng, Authz: approval.SARAuthorizer{C: apClient}, Audit: aw,
-		Events:        &audit.EventSink{C: apClient, Scheme: scheme, Component: "foc-approvals", Red: redact.New()},
+		Events:        &audit.EventSink{C: apClient, Scheme: scheme, Component: "fleetops-approvals", Red: redact.New()},
 		ObservePeriod: 200 * time.Millisecond,
 	}
 	ctrlName := strings.ToLower(strings.ReplaceAll(t.Name(), "/", "-"))
-	if err := ctrl.NewControllerManagedBy(mgr).Named(ctrlName).For(&focv1.ApprovalRequest{}).
-		Watches(&focv1.ApprovalDecision{}, approval.DecisionToRequest()).
+	if err := ctrl.NewControllerManagedBy(mgr).Named(ctrlName).For(&fleetopsv1.ApprovalRequest{}).
+		Watches(&fleetopsv1.ApprovalDecision{}, approval.DecisionToRequest()).
 		Watches(&swarmv1.FleetTask{}, approval.TaskToRequest()).Complete(rec); err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func newHarness(t *testing.T, mutate func(*policy.File)) *harness {
 	mcpClient := asSA(t, mcpUser)
 	svc := &tools.Service{
 		C: mcpClient, Engine: eng, Audit: aw, Identity: mcpUser, DefaultNamespace: swarmNS,
-		Events: &audit.EventSink{C: mcpClient, Scheme: scheme, Component: "foc-mcp", Red: redact.New()},
+		Events: &audit.EventSink{C: mcpClient, Scheme: scheme, Component: "fleetops-mcp", Red: redact.New()},
 		Authn:  &authn.TokenReviewer{C: mcpClient},
 	}
 	return &harness{svc: svc, auditBuf: buf, engine: eng}
@@ -134,10 +134,10 @@ func approverFor(t *testing.T, person string) *approval.Approver {
 	return a
 }
 
-func waitState(t *testing.T, name string, want focv1.RequestState) *focv1.ApprovalRequest {
+func waitState(t *testing.T, name string, want fleetopsv1.RequestState) *fleetopsv1.ApprovalRequest {
 	t.Helper()
 	deadline := time.Now().Add(20 * time.Second)
-	var r focv1.ApprovalRequest
+	var r fleetopsv1.ApprovalRequest
 	for time.Now().Before(deadline) {
 		if err := admin.Get(context.Background(), client.ObjectKey{Namespace: swarmNS, Name: name}, &r); err == nil && r.Status.State == want {
 			return &r
@@ -172,7 +172,7 @@ func verifyAudit(t *testing.T, h *harness, kinds ...audit.Kind) {
 var sess = tools.Session{ID: "s-envtest", Operator: "sam"}
 
 // TestApprovalPathZoneMaintenance: request -> person approves -> exactly one
-// ZoneMaintenance created by foc-approvals with autoResumeAfterMinutes 0.
+// ZoneMaintenance created by fleetops-approvals with autoResumeAfterMinutes 0.
 func TestApprovalPathZoneMaintenance(t *testing.T) {
 	ctx := context.Background()
 	h := newHarness(t, nil)
@@ -182,16 +182,16 @@ func TestApprovalPathZoneMaintenance(t *testing.T) {
 		t.Fatal(err)
 	}
 	name := reqName(t, res)
-	waitState(t, name, focv1.StatePending)
+	waitState(t, name, fleetopsv1.StatePending)
 	// Nothing written before approval.
 	var zms swarmv1.ZoneMaintenanceList
 	if err := admin.List(ctx, &zms, client.InNamespace(swarmNS), client.MatchingLabels{fleet.RequestLabel: name}); err != nil || len(zms.Items) != 0 {
 		t.Fatalf("ZoneMaintenance exists before approval: %v %d", err, len(zms.Items))
 	}
-	if _, err := approverFor(t, "dana").Decide(ctx, swarmNS, name, focv1.VerdictApprove, "ok"); err != nil {
+	if _, err := approverFor(t, "dana").Decide(ctx, swarmNS, name, fleetopsv1.VerdictApprove, "ok"); err != nil {
 		t.Fatal(err)
 	}
-	r := waitState(t, name, focv1.StateExecuted)
+	r := waitState(t, name, fleetopsv1.StateExecuted)
 	if r.Status.DecidedBy != "dana" || r.Status.Target == nil || r.Status.Target.Kind != "ZoneMaintenance" {
 		t.Fatalf("status %+v", r.Status)
 	}
@@ -230,10 +230,10 @@ func TestApprovalPathZoneStop(t *testing.T) {
 		t.Fatal(err)
 	}
 	name := reqName(t, res)
-	if _, err := approverFor(t, "dana").Decide(ctx, swarmNS, name, focv1.VerdictApprove, ""); err != nil {
+	if _, err := approverFor(t, "dana").Decide(ctx, swarmNS, name, fleetopsv1.VerdictApprove, ""); err != nil {
 		t.Fatal(err)
 	}
-	waitState(t, name, focv1.StateExecuted)
+	waitState(t, name, fleetopsv1.StateExecuted)
 	var got swarmv1.FleetZone
 	if err := admin.Get(ctx, client.ObjectKeyFromObject(z), &got); err != nil {
 		t.Fatal(err)
@@ -255,7 +255,7 @@ func TestApprovalPathZoneStop(t *testing.T) {
 }
 
 // TestApprovalPathDraftAndActivation: request_draft_task creates only an
-// ApprovalRequest; after a named approval foc-approvals creates the FleetTask
+// ApprovalRequest; after a named approval fleetops-approvals creates the FleetTask
 // held as a draft; request_activate_task is approved and the approver's own
 // credentials clear spec.draft.
 func TestApprovalPathDraftAndActivation(t *testing.T) {
@@ -274,17 +274,17 @@ func TestApprovalPathDraftAndActivation(t *testing.T) {
 	if err := admin.Get(ctx, client.ObjectKey{Namespace: swarmNS, Name: "move-to-staging"}, &task); err == nil {
 		t.Fatal("FleetTask exists before approval")
 	}
-	if _, err := approverFor(t, "dana").Decide(ctx, swarmNS, draftReq, focv1.VerdictApprove, ""); err != nil {
+	if _, err := approverFor(t, "dana").Decide(ctx, swarmNS, draftReq, fleetopsv1.VerdictApprove, ""); err != nil {
 		t.Fatal(err)
 	}
-	r := waitState(t, draftReq, focv1.StateExecuted)
+	r := waitState(t, draftReq, fleetopsv1.StateExecuted)
 	if r.Status.Target == nil || r.Status.Target.Kind != "FleetTask" || r.Status.Target.Name != "move-to-staging" {
 		t.Fatalf("target %+v", r.Status.Target)
 	}
 	if err := admin.Get(ctx, client.ObjectKey{Namespace: swarmNS, Name: "move-to-staging"}, &task); err != nil {
 		t.Fatal(err)
 	}
-	if !task.Spec.Draft || task.Labels[fleet.CreatedByLabel] != "foc-approvals" || task.Labels[fleet.RequestLabel] != draftReq || len(task.Spec.Actions) != 1 {
+	if !task.Spec.Draft || task.Labels[fleet.CreatedByLabel] != "fleetops-approvals" || task.Labels[fleet.RequestLabel] != draftReq || len(task.Spec.Actions) != 1 {
 		t.Fatalf("draft task draft=%v labels=%v actions=%d", task.Spec.Draft, task.Labels, len(task.Spec.Actions))
 	}
 	// Neither copilot ServiceAccount can activate it.
@@ -298,15 +298,15 @@ func TestApprovalPathDraftAndActivation(t *testing.T) {
 		t.Fatal(err)
 	}
 	name := reqName(t, act)
-	out, err := approverFor(t, "dana").Decide(ctx, swarmNS, name, focv1.VerdictApprove, "")
+	out, err := approverFor(t, "dana").Decide(ctx, swarmNS, name, fleetopsv1.VerdictApprove, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := approval.ActivationCommand(swarmNS, name)
-	if out.State != focv1.StateApproved || out.Instruction != want {
+	if out.State != fleetopsv1.StateApproved || out.Instruction != want {
 		t.Fatalf("outcome %+v, want instruction %q", out, want)
 	}
-	r = waitState(t, name, focv1.StateApproved)
+	r = waitState(t, name, fleetopsv1.StateApproved)
 	if r.Status.Instruction != want {
 		t.Fatalf("status.instruction %q", r.Status.Instruction)
 	}
@@ -315,21 +315,21 @@ func TestApprovalPathDraftAndActivation(t *testing.T) {
 	if err := admin.Get(ctx, client.ObjectKey{Namespace: swarmNS, Name: "move-to-staging"}, &task); err != nil || !task.Spec.Draft {
 		t.Fatalf("task activated by the copilot: draft=%v %v", task.Spec.Draft, err)
 	}
-	waitState(t, name, focv1.StateApproved)
+	waitState(t, name, fleetopsv1.StateApproved)
 	// A person without patch/activate cannot run the instruction.
 	if err := mergePatch(t, asPerson(t, "eve"), &task, map[string]any{"spec": map[string]any{"draft": false}}); err == nil {
 		t.Fatal("eve activated the draft")
 	}
-	// dana activates with a plain kubectl-style merge patch, not foc activate:
+	// dana activates with a plain kubectl-style merge patch, not fleetops activate:
 	// it works, and is recorded as such (R72).
 	if err := mergePatch(t, asPerson(t, "dana"), &task, map[string]any{"spec": map[string]any{"draft": false}}); err != nil {
 		t.Fatalf("dana's activation refused: %v", err)
 	}
-	r = waitState(t, name, focv1.StateExecuted)
+	r = waitState(t, name, fleetopsv1.StateExecuted)
 	if r.Status.DecidedBy != "dana" || r.Status.Target == nil || r.Status.Target.Name != "move-to-staging" {
 		t.Fatalf("status %+v", r.Status)
 	}
-	if r.Status.ActivatedBy != "unknown" || r.Status.ActivationRef != "" || !strings.Contains(r.Status.Message, approval.OutsideFocActivate) {
+	if r.Status.ActivatedBy != "unknown" || r.Status.ActivationRef != "" || !strings.Contains(r.Status.Message, approval.OutsideFleetopsActivate) {
 		t.Fatalf("plain patch: activatedBy %q ref %q message %q", r.Status.ActivatedBy, r.Status.ActivationRef, r.Status.Message)
 	}
 	// Activating again is refused: the task is no longer a draft.
@@ -356,18 +356,18 @@ func TestApprovalRefusals(t *testing.T) {
 		t.Fatal(err)
 	}
 	name := reqName(t, res)
-	waitState(t, name, focv1.StatePending)
+	waitState(t, name, fleetopsv1.StatePending)
 
 	// sam asked for the change: self-approval refused.
-	if _, err := approverFor(t, "sam").Decide(ctx, swarmNS, name, focv1.VerdictApprove, ""); err != nil {
+	if _, err := approverFor(t, "sam").Decide(ctx, swarmNS, name, fleetopsv1.VerdictApprove, ""); err != nil {
 		t.Fatal(err)
 	}
 	// eve holds the approver role but cannot create ZoneMaintenances herself.
-	if _, err := approverFor(t, "eve").Decide(ctx, swarmNS, name, focv1.VerdictApprove, ""); err != nil {
+	if _, err := approverFor(t, "eve").Decide(ctx, swarmNS, name, fleetopsv1.VerdictApprove, ""); err != nil {
 		t.Fatal(err)
 	}
 	deadline := time.Now().Add(20 * time.Second)
-	var r focv1.ApprovalRequest
+	var r fleetopsv1.ApprovalRequest
 	for time.Now().Before(deadline) {
 		_ = admin.Get(ctx, client.ObjectKey{Namespace: swarmNS, Name: name}, &r)
 		if len(r.Status.RefusedDecisions) == 2 {
@@ -375,7 +375,7 @@ func TestApprovalRefusals(t *testing.T) {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	if len(r.Status.RefusedDecisions) != 2 || r.Status.State != focv1.StatePending {
+	if len(r.Status.RefusedDecisions) != 2 || r.Status.State != fleetopsv1.StatePending {
 		t.Fatalf("want 2 refused decisions and Pending, got %v %s (%s)", r.Status.RefusedDecisions, r.Status.State, r.Status.Message)
 	}
 	data := string(h.auditBuf.Bytes())
@@ -385,20 +385,20 @@ func TestApprovalRefusals(t *testing.T) {
 		}
 	}
 	// dana rejects: terminal, nothing written.
-	if _, err := approverFor(t, "dana").Decide(ctx, swarmNS, name, focv1.VerdictReject, "not today"); err != nil {
+	if _, err := approverFor(t, "dana").Decide(ctx, swarmNS, name, fleetopsv1.VerdictReject, "not today"); err != nil {
 		t.Fatal(err)
 	}
-	waitState(t, name, focv1.StateRejected)
+	waitState(t, name, fleetopsv1.StateRejected)
 	var zms swarmv1.ZoneMaintenanceList
 	if err := admin.List(ctx, &zms, client.InNamespace(swarmNS), client.MatchingLabels{fleet.RequestLabel: name}); err != nil || len(zms.Items) != 0 {
 		t.Fatalf("ZoneMaintenance written after refusals/rejection: %d", len(zms.Items))
 	}
 	// A later approval of a terminal request changes nothing.
-	if _, err := approverFor(t, "dana").Decide(ctx, swarmNS, name, focv1.VerdictApprove, ""); err != nil {
+	if _, err := approverFor(t, "dana").Decide(ctx, swarmNS, name, fleetopsv1.VerdictApprove, ""); err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(500 * time.Millisecond)
-	waitState(t, name, focv1.StateRejected)
+	waitState(t, name, fleetopsv1.StateRejected)
 	verifyAudit(t, h, audit.KindDecisionRefused, audit.KindRejected)
 }
 
@@ -412,8 +412,8 @@ func TestApprovalExpiry(t *testing.T) {
 		t.Fatal(err)
 	}
 	name := reqName(t, res)
-	waitState(t, name, focv1.StateExpired)
-	if _, err := approverFor(t, "dana").Decide(ctx, swarmNS, name, focv1.VerdictApprove, ""); err != nil {
+	waitState(t, name, fleetopsv1.StateExpired)
+	if _, err := approverFor(t, "dana").Decide(ctx, swarmNS, name, fleetopsv1.VerdictApprove, ""); err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(500 * time.Millisecond)
@@ -478,7 +478,7 @@ func TestPolicyRefusalsCreateNothing(t *testing.T) {
 
 func countRequests(t *testing.T) int {
 	t.Helper()
-	var l focv1.ApprovalRequestList
+	var l fleetopsv1.ApprovalRequestList
 	if err := admin.List(context.Background(), &l, client.InNamespace(swarmNS)); err != nil {
 		t.Fatal(err)
 	}

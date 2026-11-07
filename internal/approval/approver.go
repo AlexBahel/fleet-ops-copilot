@@ -27,12 +27,12 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
+	fleetopsv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
 )
 
 // Approver acts with a person's own credentials (their kubeconfig). It is
-// used by `foc approve` and `foc reject`; no copilot process holds these
+// used by `fleetops approve` and `fleetops reject`; no copilot process holds these
 // credentials.
 type Approver struct {
 	C        client.Client
@@ -64,35 +64,35 @@ func NewApprover(cfg *rest.Config) (*Approver, error) {
 // Outcome reports what Decide did.
 type Outcome struct {
 	Decision string
-	State    focv1.RequestState
+	State    fleetopsv1.RequestState
 	// Instruction is the command the approver must run themselves (activation).
 	Instruction string
 	Message     string
 }
 
 // Decide records the caller's verdict on a request. It never writes to
-// Swarmada. For an approved activation it waits for foc-approvals to accept
+// Swarmada. For an approved activation it waits for fleetops-approvals to accept
 // the decision and returns the exact command the approver runs with their own
 // credentials (Swarmada refuses activate to every ServiceAccount).
-func (a *Approver) Decide(ctx context.Context, ns, request string, verdict focv1.Verdict, comment string) (Outcome, error) {
+func (a *Approver) Decide(ctx context.Context, ns, request string, verdict fleetopsv1.Verdict, comment string) (Outcome, error) {
 	user, groups, err := a.Identity(ctx)
 	if err != nil {
 		return Outcome{}, err
 	}
-	var req focv1.ApprovalRequest
+	var req fleetopsv1.ApprovalRequest
 	if err := a.C.Get(ctx, client.ObjectKey{Namespace: ns, Name: request}, &req); err != nil {
 		return Outcome{}, err
 	}
-	d := &focv1.ApprovalDecision{
+	d := &fleetopsv1.ApprovalDecision{
 		ObjectMeta: metav1.ObjectMeta{GenerateName: request + "-", Namespace: ns, Labels: map[string]string{fleet.RequestLabel: request}},
-		Spec:       focv1.ApprovalDecisionSpec{RequestRef: request, Verdict: verdict, DecidedBy: user, DecidedByGroups: groups, Comment: comment},
+		Spec:       fleetopsv1.ApprovalDecisionSpec{RequestRef: request, Verdict: verdict, DecidedBy: user, DecidedByGroups: groups, Comment: comment},
 	}
 	if err := a.C.Create(ctx, d); err != nil {
 		return Outcome{}, fmt.Errorf("creating ApprovalDecision: %w", err)
 	}
 	out := Outcome{Decision: d.Name}
-	if verdict != focv1.VerdictApprove || req.Spec.Type != focv1.RequestActivateTask {
-		out.State, out.Message = req.Status.State, "decision recorded; foc-approvals will process it"
+	if verdict != fleetopsv1.VerdictApprove || req.Spec.Type != fleetopsv1.RequestActivateTask {
+		out.State, out.Message = req.Status.State, "decision recorded; fleetops-approvals will process it"
 		return out, nil
 	}
 	deadline := time.Now().Add(a.Timeout)
@@ -101,7 +101,7 @@ func (a *Approver) Decide(ctx context.Context, ns, request string, verdict focv1
 			return out, err
 		}
 		st := req.Status.State
-		if st == focv1.StateApproved && req.Status.DecisionRef == d.Name {
+		if st == fleetopsv1.StateApproved && req.Status.DecisionRef == d.Name {
 			out.State, out.Instruction = st, req.Status.Instruction
 			out.Message = "approved. The copilot does not activate; run this with your own credentials: " + req.Status.Instruction
 			return out, nil
@@ -111,7 +111,7 @@ func (a *Approver) Decide(ctx context.Context, ns, request string, verdict focv1
 			return out, nil
 		}
 		if time.Now().After(deadline) {
-			out.State, out.Message = st, "timed out waiting for foc-approvals to accept the decision"
+			out.State, out.Message = st, "timed out waiting for fleetops-approvals to accept the decision"
 			return out, nil
 		}
 		select {

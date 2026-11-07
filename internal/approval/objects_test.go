@@ -21,20 +21,20 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
+	fleetopsv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
 )
 
-func request(spec focv1.ApprovalRequestSpec) *focv1.ApprovalRequest {
+func request(spec fleetopsv1.ApprovalRequestSpec) *fleetopsv1.ApprovalRequest {
 	spec.RequestedFor, spec.SessionID = "sam", "s1"
-	return &focv1.ApprovalRequest{ObjectMeta: metav1.ObjectMeta{Name: "areq-1", Namespace: "warehouse-a"}, Spec: spec}
+	return &fleetopsv1.ApprovalRequest{ObjectMeta: metav1.ObjectMeta{Name: "areq-1", Namespace: "warehouse-a"}, Spec: spec}
 }
 
 // The builders are what the executor writes and what the web UI shows; they
 // must hold the draft flag, the zero auto-resume and the single annotation.
 func TestDraftTaskObject(t *testing.T) {
-	req := request(focv1.ApprovalRequestSpec{Type: focv1.RequestDraftTask, DraftTask: &focv1.DraftTaskParams{
-		TaskName: "stage-pallet-a", Purpose: "stage", Actions: []focv1.DraftAction{{Name: "go", Type: "Navigate", Zone: "warehouse-a", Priority: "Normal", RequiredCapabilities: []string{"navigation"}}},
+	req := request(fleetopsv1.ApprovalRequestSpec{Type: fleetopsv1.RequestDraftTask, DraftTask: &fleetopsv1.DraftTaskParams{
+		TaskName: "stage-pallet-a", Purpose: "stage", Actions: []fleetopsv1.DraftAction{{Name: "go", Type: "Navigate", Zone: "warehouse-a", Priority: "Normal", RequiredCapabilities: []string{"navigation"}}},
 	}})
 	o, err := DraftTaskObject(req, "pat")
 	if err != nil {
@@ -43,7 +43,7 @@ func TestDraftTaskObject(t *testing.T) {
 	if !o.Spec.Draft || o.Name != "stage-pallet-a" || o.Namespace != "warehouse-a" || o.Kind != "FleetTask" {
 		t.Fatalf("object %+v", o)
 	}
-	if o.Labels[fleet.CreatedByLabel] != "foc-approvals" || o.Labels[fleet.RequestLabel] != "areq-1" || o.Labels[fleet.SessionLabel] != "s1" {
+	if o.Labels[fleet.CreatedByLabel] != "fleetops-approvals" || o.Labels[fleet.RequestLabel] != "areq-1" || o.Labels[fleet.SessionLabel] != "s1" {
 		t.Fatalf("labels %v", o.Labels)
 	}
 	if o.Annotations["fleetops.alexbahel.github.io/approved-by"] != "pat" || o.Annotations["fleetops.alexbahel.github.io/requested-for"] != "sam" {
@@ -55,15 +55,15 @@ func TestDraftTaskObject(t *testing.T) {
 }
 
 func TestMaintenanceObject(t *testing.T) {
-	req := request(focv1.ApprovalRequestSpec{Type: focv1.RequestZoneMaintenance, ZoneMaintenance: &focv1.ZoneMaintenanceParams{ScopeType: "Zone", ZoneName: "aisle-b", Mode: "Graceful", Reason: "inspection"}})
+	req := request(fleetopsv1.ApprovalRequestSpec{Type: fleetopsv1.RequestZoneMaintenance, ZoneMaintenance: &fleetopsv1.ZoneMaintenanceParams{ScopeType: "Zone", ZoneName: "aisle-b", Mode: "Graceful", Reason: "inspection"}})
 	o := MaintenanceObject(req, "pat")
-	if o.Name != "foc-areq-1" || o.Spec.AutoResumeAfterMinutes != 0 || string(o.Spec.Mode) != "Graceful" || o.Spec.Scope.ZoneName != "aisle-b" || o.Kind != "ZoneMaintenance" {
+	if o.Name != "fleetops-areq-1" || o.Spec.AutoResumeAfterMinutes != 0 || string(o.Spec.Mode) != "Graceful" || o.Spec.Scope.ZoneName != "aisle-b" || o.Kind != "ZoneMaintenance" {
 		t.Fatalf("object %+v", o)
 	}
 }
 
 func TestZoneStopPatchAndActivationCommand(t *testing.T) {
-	req := request(focv1.ApprovalRequestSpec{Type: focv1.RequestZoneStop, ZoneStop: &focv1.ZoneStopParams{ZoneName: "aisle-b", Reason: "spill"}})
+	req := request(fleetopsv1.ApprovalRequestSpec{Type: fleetopsv1.RequestZoneStop, ZoneStop: &fleetopsv1.ZoneStopParams{ZoneName: "aisle-b", Reason: "spill"}})
 	b, err := ZoneStopPatch(req)
 	if err != nil {
 		t.Fatal(err)
@@ -71,7 +71,7 @@ func TestZoneStopPatchAndActivationCommand(t *testing.T) {
 	if string(b) != `{"metadata":{"annotations":{"swarmada.io/estop-triggered":"spill"}}}` {
 		t.Fatalf("patch %s", b)
 	}
-	if got := ActivationCommand("warehouse-a", "areq-1"); got != "foc activate areq-1 -n warehouse-a" {
+	if got := ActivationCommand("warehouse-a", "areq-1"); got != "fleetops activate areq-1 -n warehouse-a" {
 		t.Fatalf("command %s", got)
 	}
 	if ActivationPatch != `{"spec":{"draft":false}}` {

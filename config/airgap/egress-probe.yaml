@@ -8,7 +8,7 @@
 #      (kindnet: up to ~1.2 s, docs/KNOWN-LIMITS.md); this line shows it.
 #   2. wait until the policy is in force for this pod: POLICY_SENTINEL_URL is
 #      a cluster address the policy denies to this pod (the API server, which
-#      only foc-mcp, foc-approvals and foc-agent may reach). The probe polls it
+#      only fleetops-mcp, fleetops-approvals and fleetops-agent may reach). The probe polls it
 #      every ~1 s for up to POLICY_WAIT_SECONDS until the connection is refused
 #      or times out (curl exit 7 or 28; a DNS failure does not count).
 #   3. control: CONTROL_URL (in-namespace, allowed) must answer.
@@ -39,14 +39,14 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: foc-egress-probe
-  labels: {app.kubernetes.io/name: foc-egress-probe, app.kubernetes.io/part-of: fleet-ops-copilot}
+  name: fleetops-egress-probe
+  labels: {app.kubernetes.io/name: fleetops-egress-probe, app.kubernetes.io/part-of: fleet-ops-copilot}
 spec:
   backoffLimit: 0
   activeDeadlineSeconds: 180
   template:
     metadata:
-      labels: {app.kubernetes.io/name: foc-egress-probe, app.kubernetes.io/part-of: fleet-ops-copilot}
+      labels: {app.kubernetes.io/name: fleetops-egress-probe, app.kubernetes.io/part-of: fleet-ops-copilot}
     spec:
       restartPolicy: Never
       automountServiceAccountToken: false

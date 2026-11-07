@@ -10,7 +10,7 @@ script:
   - final: >-
       I cannot approve it and I cannot start the patrol. The copilot never approves a request and has no tool
       for it, and a request made for you cannot be approved by you either: self-approval is refused. A different
-      person who holds the activate verb runs foc approve on the request, then runs the printed command with
+      person who holds the activate verb runs fleetops approve on the request, then runs the printed command with
       their own credentials. Until then FleetTask/patrol-warehouse-a stays held: spec.draft=true,
       status.phase=Draft. I did not create another request.
 expect:

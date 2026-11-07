@@ -1,4 +1,4 @@
-{{- include "foc.validate" . }}
+{{- include "fleetops.validate" . }}
 # Three RoleBindings in every Swarmada namespace in swarmadaNamespaces, and the
 # two cluster-scoped bindings for the webhook-configuration reads and
 # SubjectAccessReviews.
@@ -7,53 +7,53 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: fleetops-foc-mcp
+  name: fleetops-mcp
   namespace: {{ . }}
   labels:
-    {{- include "foc.chartLabels" $ | nindent 4 }}
-roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: "fleetops:foc-mcp"}
+    {{- include "fleetops.chartLabels" $ | nindent 4 }}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: "fleetops:fleetops-mcp"}
 subjects:
-  - {kind: ServiceAccount, name: foc-mcp, namespace: {{ $.Release.Namespace }}}
+  - {kind: ServiceAccount, name: fleetops-mcp, namespace: {{ $.Release.Namespace }}}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: fleetops-foc-approvals
+  name: fleetops-approvals
   namespace: {{ . }}
   labels:
-    {{- include "foc.chartLabels" $ | nindent 4 }}
-roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: "fleetops:foc-approvals"}
+    {{- include "fleetops.chartLabels" $ | nindent 4 }}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: "fleetops:fleetops-approvals"}
 subjects:
-  - {kind: ServiceAccount, name: foc-approvals, namespace: {{ $.Release.Namespace }}}
+  - {kind: ServiceAccount, name: fleetops-approvals, namespace: {{ $.Release.Namespace }}}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: fleetops-foc-agent
+  name: fleetops-agent
   namespace: {{ . }}
   labels:
-    {{- include "foc.chartLabels" $ | nindent 4 }}
-roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: "fleetops:foc-agent"}
+    {{- include "fleetops.chartLabels" $ | nindent 4 }}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: "fleetops:fleetops-agent"}
 subjects:
-  - {kind: ServiceAccount, name: foc-agent, namespace: {{ $.Release.Namespace }}}
+  - {kind: ServiceAccount, name: fleetops-agent, namespace: {{ $.Release.Namespace }}}
 {{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: fleetops-foc-mcp-cluster
+  name: fleetops-mcp-cluster
   labels:
-    {{- include "foc.chartLabels" . | nindent 4 }}
-roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: "fleetops:foc-mcp-cluster"}
+    {{- include "fleetops.chartLabels" . | nindent 4 }}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: "fleetops:fleetops-mcp-cluster"}
 subjects:
-  - {kind: ServiceAccount, name: foc-mcp, namespace: {{ .Release.Namespace }}}
+  - {kind: ServiceAccount, name: fleetops-mcp, namespace: {{ .Release.Namespace }}}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: fleetops-foc-approvals-cluster
+  name: fleetops-approvals-cluster
   labels:
-    {{- include "foc.chartLabels" . | nindent 4 }}
-roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: "fleetops:foc-approvals-cluster"}
+    {{- include "fleetops.chartLabels" . | nindent 4 }}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: "fleetops:fleetops-approvals-cluster"}
 subjects:
-  - {kind: ServiceAccount, name: foc-approvals, namespace: {{ .Release.Namespace }}}
+  - {kind: ServiceAccount, name: fleetops-approvals, namespace: {{ .Release.Namespace }}}

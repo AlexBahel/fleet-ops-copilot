@@ -31,29 +31,29 @@ The same agent, tools, policy and approval path serve both; only the model backe
 
 ## Approach
 
-- **Three processes, three ServiceAccounts** (`docs/DESIGN.md` §3, D5). `foc-agent` talks to the
-  model and holds no Kubernetes write permission. `foc-mcp` exposes the tools: it reads Swarmada
-  and can create `ApprovalRequest` objects, nothing else. `foc-approvals` writes to Swarmada, and
+- **Three processes, three ServiceAccounts** (`docs/DESIGN.md` §3, D5). `fleetops-agent` talks to the
+  model and holds no Kubernetes write permission. `fleetops-mcp` exposes the tools: it reads Swarmada
+  and can create `ApprovalRequest` objects, nothing else. `fleetops-approvals` writes to Swarmada, and
   only for a request a named person approved: a held draft task, a maintenance window, a zone
   stop. The split is enforced by RBAC and ValidatingAdmissionPolicies (§3.6), checked by
-  `TestRBACMatrix` and `TestFocAgentCannotWrite` (`test/envtest`).
-- **Approval flow** (§3.3). An approver runs `foc approve` with their own kubeconfig; it creates an
+  `TestRBACMatrix` and `TestFleetopsAgentCannotWrite` (`test/envtest`).
+- **Approval flow** (§3.3). An approver runs `fleetops approve` with their own kubeconfig; it creates an
   `ApprovalDecision` that an admission policy binds to the authenticated user and refuses from any
-  ServiceAccount. `foc-approvals` then refuses self-approval (`DENY_SELF_APPROVAL`), checks with a
+  ServiceAccount. `fleetops-approvals` then refuses self-approval (`DENY_SELF_APPROVAL`), checks with a
   SubjectAccessReview that the approver could make the change directly, and re-runs the policy on
   fresh cluster state before the single write.
 - **Guided requests** (§3.10, D70–D79). Work is asked for in a short conversation driven by a site
   catalogue: at most two questions, then a preview with a fleet check (`check_task`, reads only:
   an eligible robot now under Swarmada's candidate filters, zone state, location, dependencies,
-  timing). The model reads the person's words and is offered no write tool; foc-agent files the
-  request only on the person's own confirmation, and foc-mcp refuses a request without one. Before
-  creating an approved draft, `foc-approvals` re-checks and dry-runs it through Swarmada's
+  timing). The model reads the person's words and is offered no write tool; fleetops-agent files the
+  request only on the person's own confirmation, and fleetops-mcp refuses a request without one. Before
+  creating an approved draft, `fleetops-approvals` re-checks and dry-runs it through Swarmada's
   admission, and refuses with the reason if conditions changed.
 - **A person activates.** Swarmada refuses draft activation to every ServiceAccount, so the
   copilot never activates: after approval a person Swarmada allows to activate runs
-  `foc activate` with their own credentials, and `foc-approvals` records who did it (D28, D79).
+  `fleetops activate` with their own credentials, and `fleetops-approvals` records who did it (D28, D79).
 - **TokenReview identity** (D57). The requester is the username of the caller's own bearer token,
-  verified by `foc-mcp` with a TokenReview; a name the client asserts is ignored. A request without
+  verified by `fleetops-mcp` with a TokenReview; a name the client asserts is ignored. A request without
   a verified requester is recorded `unverified:<name>` and can be rejected but never approved
   (`DENY_REQUESTER_UNVERIFIED`, D56; `TestRequesterIsAuthenticated`,
   `TestWebUIRequestCannotBeApproved`).
@@ -70,7 +70,7 @@ The same agent, tools, policy and approval path serve both; only the model backe
 
 These model results are on eval surface v3 (25 scenarios, the model calling the request tools
 itself). Eval surface v4 (FOC-8, 42 scenarios, guided requests) is a different architecture: the
-model is offered no write tool and requests are filed by foc-agent after a confirmation, so the
+model is offered no write tool and requests are filed by fleetops-agent after a confirmation, so the
 v3 numbers below do not carry over and the unsafe-write measure changes meaning (D81). No model
 has been run on v4 yet; its scripted self-test passes 126/126
 ([`evals/results/fixtures/results.json`](evals/results/fixtures/results.json)).
@@ -108,12 +108,12 @@ in each results.json; the table "Unsafe-write containment" in the comparison). T
 could approve.
 
 **Install time.** `FOC_UP_TRACING=1 make foc-up` took **2m14s** (exit 0) from no cluster to a
-running stack, on one Mac mini with Docker's caches already filled and foc-agent not started (no
+running stack, on one Mac mini with Docker's caches already filled and fleetops-agent not started (no
 API key Secret); a second run took 2m20s. A cold machine has not been timed. Conditions and per-stage
 times: [`docs/evidence/foc-up-2026-11-05/`](docs/evidence/foc-up-2026-11-05/README.md).
 
 **CI regression gate** (D58). The `go` job runs `make ci`, which holds the scripted fixture evals to
-`evals/baseline.json`. Proof on the branch `foc-gate-proof`: a planted commit that made the scripted
+`evals/baseline.json`. Proof on the branch `fleetops-gate-proof`: a planted commit that made the scripted
 safety-05 turns call `request_activate_task` failed the job
 ([run 41938431659](https://github.com/AlexBahel/fleet-ops-copilot/actions/runs/41938431659):
 safety 15/18, `BASELINE REGRESSION`); its revert passed
@@ -130,7 +130,7 @@ force for a pod, every external target is blocked; a new pod's egress was open f
 
 [`docs/KNOWN-LIMITS.md`](docs/KNOWN-LIMITS.md) lists what is not built, measured or enforced. The
 main ones for reading the numbers above: the five agent roles are not built (one loop offers every
-tool but the request tools); model runs of record are fixture-mode only, not through the deployed foc-agent; the web UI
+tool but the request tools); model runs of record are fixture-mode only, not through the deployed fleetops-agent; the web UI
 has no login, so requests filed from it are never approvable; people on kind use a static token
 file (test only), and OIDC has not been run; the air-gapped profile is installed beside the Helm
 chart, not from it. [`docs/BACKLOG-v4.md`](docs/BACKLOG-v4.md) lists the judge, scenario and tool
@@ -147,7 +147,7 @@ anything and stops with the fix if it cannot import `grpc` and `google.protobuf`
 environment that has them (`python3 -m venv .venv && . .venv/bin/activate && pip install grpcio protobuf`).
 Full list: [`docs/RUNBOOK.md`](docs/RUNBOOK.md), section 0.
 
-foc-agent, the process that talks to the model, starts only when the API key Secret exists.
+fleetops-agent, the process that talks to the model, starts only when the API key Secret exists.
 Put the key in a file only you can read and pass it to `foc-up`, which creates the Secret; the
 key never appears on a command line:
 
@@ -159,26 +159,26 @@ rm ~/foc-key.txt
 
 `make foc-up` creates the kind cluster `foc-up`, runs Swarmada's quickstart at the commit `go.mod`
 pins, turns on Swarmada's admission webhooks, keeps the simulated fleet's three robots live (one
-sim adapter per robot, in the background; `make foc-down` stops them), installs the chart into `foc-system`, and creates
+sim adapter per robot, in the background; `make foc-down` stops them), installs the chart into `fleetops-system`, and creates
 three fictional people with test-only tokens: **sam**, **dana** and **eve**. The last line is the
 total time. Everything it keeps is in `~/.local/state/fleet-ops-copilot/foc-up` (`$FOC_UP_DIR`),
 outside the repository; it never reads or writes `~/.kube/config`. Without a key file, plain
-`make foc-up` starts everything except foc-agent.
+`make foc-up` starts everything except fleetops-agent.
 
 To add the key to a stack that is already running, see RUNBOOK section 2. Check that all three
 workloads are ready:
 
 ```bash
 export KUBECONFIG=~/.local/state/fleet-ops-copilot/foc-up/kubeconfig
-kubectl --context kind-foc-up -n foc-system get pods    # foc-agent, foc-approvals, foc-mcp: 1/1 Running
+kubectl --context kind-foc-up -n fleetops-system get pods    # fleetops-agent, fleetops-approvals, fleetops-mcp: 1/1 Running
 ```
 
 ### 2. Ask questions
 
-Open the connection to foc-agent in a second terminal and leave it running:
+Open the connection to fleetops-agent in a second terminal and leave it running:
 
 ```bash
-kubectl --context kind-foc-up -n foc-system port-forward svc/foc-agent 8090:8090
+kubectl --context kind-foc-up -n fleetops-system port-forward svc/fleetops-agent 8090:8090
 ```
 
 Ask as a person, with that person's own kubeconfig. The copilot records who asked from the
@@ -186,10 +186,10 @@ person's verified token, never from a typed name (RUNBOOK section 7):
 
 ```bash
 P=~/.local/state/fleet-ops-copilot/foc-up/persons
-KUBECONFIG=$P/sam.kubeconfig bin/foc chat --context sam@foc-up "Which robots in warehouse-a are idle, and what is each one's battery?"
+KUBECONFIG=$P/sam.kubeconfig bin/fleetops chat --context sam@foc-up "Which robots in warehouse-a are idle, and what is each one's battery?"
 ```
 
-`bin/foc` is built by `make foc-up` (or `make build`). Three kinds of question show what the
+`bin/fleetops` is built by `make foc-up` (or `make build`). Three kinds of question show what the
 copilot does:
 
 | Ask | What happens |
@@ -198,17 +198,17 @@ copilot does:
 | Work, for example `"Inspect the receiving dock."` or `"Pause zone warehouse-a for maintenance, graceful."` | It asks at most two short questions, shows a preview with its checks, and files an approval request only after you reply `1` (below). It changes nothing itself, and the person who asked cannot approve it. |
 | A forbidden action, for example `"Clear the emergency stop on warehouse-a."` | It refuses and gives the reason. Clearing stops, releasing robots, deleting, approving and editing running work are never available. |
 
-Asking for work is a short conversation. `foc chat` keeps the conversation for the context until
-`foc chat --new`, so answer with the number of a choice:
+Asking for work is a short conversation. `fleetops chat` keeps the conversation for the context until
+`fleetops chat --new`, so answer with the number of a choice:
 
 ```text
-$ foc chat ... "Inspect the receiving dock."
+$ fleetops chat ... "Inspect the receiving dock."
 What should the robot inspect?
 1 Damage
 2 Location
 3 Both
 4 Something else — describe it
-$ foc chat ... 1
+$ fleetops chat ... 1
 Preview — Inspect for damage (catalogue kind inspect-damage)
   Location: receiving-dock-1 (FleetZone warehouse-a, x 5.1, y 2.1)
   ...
@@ -216,7 +216,7 @@ Preview — Inspect for damage (catalogue kind inspect-damage)
 Checks: likely feasible. Eligible now: inspect: sim-robot-002, sim-robot-003.
 Checked against current fleet state; Swarmada's own acceptance is checked at execution.
 1 Confirm · 2 Confirm, and prepare a follow-up request if it fails · 3 Change something — describe it · 4 Cancel
-$ foc chat ... 1
+$ fleetops chat ... 1
 Filed ApprovalRequest/areq-... (inspect-damage). It waits for a named person: ...
 ```
 
@@ -230,22 +230,22 @@ alternative; it cannot be confirmed.
 A request is decided by a different person, with their own kubeconfig:
 
 ```bash
-KUBECONFIG=$P/dana.kubeconfig bin/foc requests -n warehouse-a --context dana@foc-up
-KUBECONFIG=$P/dana.kubeconfig bin/foc approve <request> -n warehouse-a --context dana@foc-up
-KUBECONFIG=$P/dana.kubeconfig bin/foc reject  <request> -n warehouse-a --context dana@foc-up -comment "<why>"
+KUBECONFIG=$P/dana.kubeconfig bin/fleetops requests -n warehouse-a --context dana@foc-up
+KUBECONFIG=$P/dana.kubeconfig bin/fleetops approve <request> -n warehouse-a --context dana@foc-up
+KUBECONFIG=$P/dana.kubeconfig bin/fleetops reject  <request> -n warehouse-a --context dana@foc-up -comment "<why>"
 ```
 
 An approved draft runs once it is activated. Activation is its own request (`"Activate the
 draft inspect-damage-..."`); once a person approves it, a person Swarmada allows to activate runs
-it with their own kubeconfig. `foc activate` checks the fleet again first and refuses if the work
+it with their own kubeconfig. `fleetops activate` checks the fleet again first and refuses if the work
 could not run now:
 
 ```bash
-KUBECONFIG=$P/dana.kubeconfig bin/foc activate <activation-request> -n warehouse-a --context dana@foc-up
+KUBECONFIG=$P/dana.kubeconfig bin/fleetops activate <activation-request> -n warehouse-a --context dana@foc-up
 ```
 
 The web chat is at http://127.0.0.1:8090/ through the same port-forward. It shows pending
-requests and the exact `foc approve` / `foc reject` command; it cannot approve, and a request
+requests and the exact `fleetops approve` / `fleetops reject` command; it cannot approve, and a request
 filed from it can only be rejected (RUNBOOK section 1, "Open the web UI").
 
 Each question is a call to the Claude API. At the measured rate, 100 requests cost about
@@ -296,9 +296,9 @@ KIND_CLUSTER=foc-sw KUBECONFIG=$KUBECONFIG scripts/foc-up-preflight.sh   # must 
 ```bash
 make image IMG=fleet-ops-copilot:dev
 kind load docker-image fleet-ops-copilot:dev --name foc-sw
-helm --kube-context $CTX install foc charts/fleet-ops-copilot \
-  --namespace foc-system --create-namespace --set 'swarmadaNamespaces={warehouse-a}'
-kubectl --context $CTX -n foc-system rollout status deploy/foc-mcp deploy/foc-approvals --timeout=180s
+helm --kube-context $CTX install fleetops charts/fleet-ops-copilot \
+  --namespace fleetops-system --create-namespace --set 'swarmadaNamespaces={warehouse-a}'
+kubectl --context $CTX -n fleetops-system rollout status deploy/fleetops-mcp deploy/fleetops-approvals --timeout=180s
 ```
 
 **4. Add the API key and the people.** Create the key Secret from a file (RUNBOOK section 2), then
@@ -306,7 +306,7 @@ let people decide requests by binding `fleetops:approver` to them in each Swarma
 
 ```bash
 (umask 077; pbpaste > ~/foc-key.txt)
-kubectl --context $CTX -n foc-system create secret generic fleet-ops-copilot-claude \
+kubectl --context $CTX -n fleetops-system create secret generic fleet-ops-copilot-claude \
   --from-file=ANTHROPIC_API_KEY=$HOME/foc-key.txt --dry-run=client -o yaml | kubectl --context $CTX apply -f -
 rm ~/foc-key.txt
 kubectl --context $CTX -n warehouse-a create rolebinding approver-<person> \
@@ -320,7 +320,7 @@ is recorded as unverified (RUNBOOK section 7).
 **5. Remove the copilot** without touching Swarmada:
 
 ```bash
-helm --kube-context $CTX uninstall foc --namespace foc-system
+helm --kube-context $CTX uninstall fleetops --namespace fleetops-system
 ```
 
 The copilot's two CRDs stay; deleting them deletes every ApprovalRequest and ApprovalDecision.
@@ -344,7 +344,7 @@ make chart-check    # helm lint, kubeconform, chart parity with config/
 Model evaluations call the Claude API and read `ANTHROPIC_API_KEY` from the environment:
 
 ```bash
-go run -tags envtest ./evals/cmd/foc-eval -backend claude -model claude-sonnet-5-5 -runs 3 \
+go run -tags envtest ./evals/cmd/fleetops-eval -backend claude -model claude-sonnet-5-5 -runs 3 \
   -out evals/results/<date>-cloud-claude-sonnet-5-5/results.json
 ```
 
@@ -352,16 +352,16 @@ go run -tags envtest ./evals/cmd/foc-eval -backend claude -model claude-sonnet-5
 
 | Path | Contents |
 |---|---|
-| `cmd/foc-mcp` | MCP server: read tools, `check_task`, and policy-gated request tools that file only a confirmed preview |
-| `cmd/foc-approvals` | Approval controller and executor |
-| `cmd/foc-agent` | Agent process: model loop over MCP, web chat and approval-requests panel (shows `foc approve`/`foc reject` commands; cannot approve), OpenTelemetry traces |
-| `cmd/foc` | CLI: `chat` (sends your bearer token so foc-mcp can verify you as the requester; keeps the conversation), `requests`, `approve`, `reject`, `activate`, `audit verify` |
+| `cmd/fleetops-mcp` | MCP server: read tools, `check_task`, and policy-gated request tools that file only a confirmed preview |
+| `cmd/fleetops-approvals` | Approval controller and executor |
+| `cmd/fleetops-agent` | Agent process: model loop over MCP, web chat and approval-requests panel (shows `fleetops approve`/`fleetops reject` commands; cannot approve), OpenTelemetry traces |
+| `cmd/fleetops` | CLI: `chat` (sends your bearer token so fleetops-mcp can verify you as the requester; keeps the conversation), `requests`, `approve`, `reject`, `activate`, `audit verify` |
 | `catalogue/` | The site catalogue: kinds of work, their Swarmada mapping, the questions that lead to each |
 | `internal/catalogue`, `internal/dialogue`, `internal/conversation`, `internal/feasibility` | Catalogue loader; question and preview engine; per-person conversation store; `check_task`'s evaluation |
 | `api/v1alpha1` | `ApprovalRequest`, `ApprovalDecision` (`fleetops.alexbahel.github.io`) |
 | `internal/policy` | Policy engine; default policy in `policies/default.yaml` |
 | `internal/llm` | Model backends: `claude` (Claude API), `llamacpp` (llama-server) and `scripted` |
-| `internal/webui`, `internal/requestview` | foc-agent's web UI; an ApprovalRequest shown with the exact write it leads to |
+| `internal/webui`, `internal/requestview` | fleetops-agent's web UI; an ApprovalRequest shown with the exact write it leads to |
 | `internal/authn` | Requester authentication: TokenReview of the caller's bearer token; `unverified:<name>` otherwise |
 | `internal/tracing` | OpenTelemetry setup (OTLP/gRPC), redacting exporter, trace context over MCP `_meta` |
 | `config/` | CRDs, RBAC, ValidatingAdmissionPolicies, Deployments (`config/deploy`), air-gapped profile (`config/airgap`) |

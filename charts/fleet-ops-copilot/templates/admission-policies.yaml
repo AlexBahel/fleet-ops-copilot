@@ -1,16 +1,16 @@
-{{- include "foc.validate" . }}
+{{- include "fleetops.validate" . }}
 # ValidatingAdmissionPolicies (Kubernetes >= 1.30). RBAC cannot restrict a
 # create by field or a patch to one annotation; these policies do
-# (docs/DESIGN.md §3.6). ServiceAccount names assume namespace foc-system,
+# (docs/DESIGN.md §3.6). ServiceAccount names assume namespace fleetops-system,
 # which is why the chart refuses any other release namespace.
 ---
-# foc-approvals may only CREATE FleetTasks, and only as drafts labelled as its own.
+# fleetops-approvals may only CREATE FleetTasks, and only as drafts labelled as its own.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
-  name: fleetops-foc-approvals-drafts-only
+  name: fleetops-approvals-drafts-only
   labels:
-    {{- include "foc.chartLabels" . | nindent 4 }}
+    {{- include "fleetops.chartLabels" . | nindent 4 }}
 spec:
   failurePolicy: Fail
   matchConstraints:
@@ -20,34 +20,34 @@ spec:
         operations: ["CREATE", "UPDATE", "DELETE"]
         resources: ["fleettasks"]
   matchConditions:
-    - name: is-foc-approvals
-      expression: "request.userInfo.username == 'system:serviceaccount:foc-system:foc-approvals'"
+    - name: is-fleetops-approvals
+      expression: "request.userInfo.username == 'system:serviceaccount:fleetops-system:fleetops-approvals'"
   validations:
     - expression: "request.operation == 'CREATE'"
-      message: "foc-approvals may only create FleetTasks; it never changes or deletes one"
+      message: "fleetops-approvals may only create FleetTasks; it never changes or deletes one"
     - expression: "request.operation != 'CREATE' || (has(object.spec.draft) && object.spec.draft == true)"
-      message: "foc-approvals may only create a FleetTask with spec.draft: true"
-    - expression: "request.operation != 'CREATE' || (has(object.metadata.labels) && 'fleetops.alexbahel.github.io/created-by' in object.metadata.labels && object.metadata.labels['fleetops.alexbahel.github.io/created-by'] == 'foc-approvals')"
-      message: "a FleetTask created by foc-approvals must carry fleetops.alexbahel.github.io/created-by: foc-approvals"
+      message: "fleetops-approvals may only create a FleetTask with spec.draft: true"
+    - expression: "request.operation != 'CREATE' || (has(object.metadata.labels) && 'fleetops.alexbahel.github.io/created-by' in object.metadata.labels && object.metadata.labels['fleetops.alexbahel.github.io/created-by'] == 'fleetops-approvals')"
+      message: "a FleetTask created by fleetops-approvals must carry fleetops.alexbahel.github.io/created-by: fleetops-approvals"
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
-  name: fleetops-foc-approvals-drafts-only
+  name: fleetops-approvals-drafts-only
   labels:
-    {{- include "foc.chartLabels" . | nindent 4 }}
+    {{- include "fleetops.chartLabels" . | nindent 4 }}
 spec:
-  policyName: fleetops-foc-approvals-drafts-only
+  policyName: fleetops-approvals-drafts-only
   validationActions: ["Deny"]
 ---
-# foc-approvals may create a FleetAction only as a dry run: Swarmada's
+# fleetops-approvals may create a FleetAction only as a dry run: Swarmada's
 # admission answers and nothing is stored (R65, D76).
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
-  name: fleetops-foc-approvals-dry-run-only
+  name: fleetops-approvals-dry-run-only
   labels:
-    {{- include "foc.chartLabels" . | nindent 4 }}
+    {{- include "fleetops.chartLabels" . | nindent 4 }}
 spec:
   failurePolicy: Fail
   matchConstraints:
@@ -57,23 +57,23 @@ spec:
         operations: ["CREATE", "UPDATE", "DELETE"]
         resources: ["fleetactions"]
   matchConditions:
-    - name: is-foc-approvals
-      expression: "request.userInfo.username == 'system:serviceaccount:foc-system:foc-approvals'"
+    - name: is-fleetops-approvals
+      expression: "request.userInfo.username == 'system:serviceaccount:fleetops-system:fleetops-approvals'"
   validations:
     - expression: "request.operation == 'CREATE' && request.dryRun == true"
-      message: "foc-approvals may create a FleetAction only as a dry run; it never stores, changes or deletes one"
+      message: "fleetops-approvals may create a FleetAction only as a dry run; it never stores, changes or deletes one"
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
-  name: fleetops-foc-approvals-dry-run-only
+  name: fleetops-approvals-dry-run-only
   labels:
-    {{- include "foc.chartLabels" . | nindent 4 }}
+    {{- include "fleetops.chartLabels" . | nindent 4 }}
 spec:
-  policyName: fleetops-foc-approvals-dry-run-only
+  policyName: fleetops-approvals-dry-run-only
   validationActions: ["Deny"]
 ---
-# foc-approvals may only add swarmada.io/estop-triggered to a FleetZone that
+# fleetops-approvals may only add swarmada.io/estop-triggered to a FleetZone that
 # lacks it. Swarmada's FleetZone mutating webhook (mfleetzone.swarmada.io,
 # stampEstopActor in internal/webhook/estop_actor_defaulter.go) runs before
 # this policy and adds swarmada.io/estop-actor and the swarmada.io/estop-in-force
@@ -81,9 +81,9 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
-  name: fleetops-foc-approvals-zone-stop-only
+  name: fleetops-approvals-zone-stop-only
   labels:
-    {{- include "foc.chartLabels" . | nindent 4 }}
+    {{- include "fleetops.chartLabels" . | nindent 4 }}
 spec:
   failurePolicy: Fail
   matchConstraints:
@@ -93,43 +93,43 @@ spec:
         operations: ["CREATE", "UPDATE", "DELETE"]
         resources: ["fleetzones"]
   matchConditions:
-    - name: is-foc-approvals
-      expression: "request.userInfo.username == 'system:serviceaccount:foc-system:foc-approvals'"
+    - name: is-fleetops-approvals
+      expression: "request.userInfo.username == 'system:serviceaccount:fleetops-system:fleetops-approvals'"
   validations:
     - expression: "request.operation == 'UPDATE'"
-      message: "foc-approvals may only add the estop annotation to an existing FleetZone"
+      message: "fleetops-approvals may only add the estop annotation to an existing FleetZone"
     - expression: "request.operation != 'UPDATE' || object.spec == oldObject.spec"
-      message: "foc-approvals may not change FleetZone spec"
+      message: "fleetops-approvals may not change FleetZone spec"
     - expression: >-
         request.operation != 'UPDATE' ||
         (has(object.metadata.annotations) && 'swarmada.io/estop-triggered' in object.metadata.annotations &&
          !(has(oldObject.metadata.annotations) && 'swarmada.io/estop-triggered' in oldObject.metadata.annotations))
-      message: "foc-approvals may only add swarmada.io/estop-triggered where it is absent; it never changes or removes it"
+      message: "fleetops-approvals may only add swarmada.io/estop-triggered where it is absent; it never changes or removes it"
     - expression: >-
         request.operation != 'UPDATE' ||
         (object.metadata.annotations.all(k, k == 'swarmada.io/estop-triggered' || k == 'swarmada.io/estop-actor' ||
            (has(oldObject.metadata.annotations) && k in oldObject.metadata.annotations && oldObject.metadata.annotations[k] == object.metadata.annotations[k])) &&
          (!has(oldObject.metadata.annotations) || oldObject.metadata.annotations.all(k, k == 'swarmada.io/estop-actor' || k in object.metadata.annotations)))
-      message: "foc-approvals may not change any other annotation"
+      message: "fleetops-approvals may not change any other annotation"
     - expression: >-
         request.operation != 'UPDATE' ||
         (has(oldObject.metadata.labels) ? (has(object.metadata.labels) && object.metadata.labels == oldObject.metadata.labels) : !has(object.metadata.labels))
-      message: "foc-approvals may not change FleetZone labels"
+      message: "fleetops-approvals may not change FleetZone labels"
     - expression: >-
         request.operation != 'UPDATE' ||
         ((!has(object.metadata.finalizers) || object.metadata.finalizers.all(f, f == 'swarmada.io/estop-in-force' ||
             (has(oldObject.metadata.finalizers) && f in oldObject.metadata.finalizers))) &&
          (!has(oldObject.metadata.finalizers) || (has(object.metadata.finalizers) && oldObject.metadata.finalizers.all(f, f in object.metadata.finalizers))))
-      message: "foc-approvals may not change FleetZone finalizers, except the swarmada.io/estop-in-force finalizer Swarmada adds on a trigger"
+      message: "fleetops-approvals may not change FleetZone finalizers, except the swarmada.io/estop-in-force finalizer Swarmada adds on a trigger"
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
-  name: fleetops-foc-approvals-zone-stop-only
+  name: fleetops-approvals-zone-stop-only
   labels:
-    {{- include "foc.chartLabels" . | nindent 4 }}
+    {{- include "fleetops.chartLabels" . | nindent 4 }}
 spec:
-  policyName: fleetops-foc-approvals-zone-stop-only
+  policyName: fleetops-approvals-zone-stop-only
   validationActions: ["Deny"]
 ---
 # A decision is made by a person, names that person, and is never changed.
@@ -138,7 +138,7 @@ kind: ValidatingAdmissionPolicy
 metadata:
   name: fleetops-decisions
   labels:
-    {{- include "foc.chartLabels" . | nindent 4 }}
+    {{- include "fleetops.chartLabels" . | nindent 4 }}
 spec:
   failurePolicy: Fail
   matchConstraints:
@@ -165,7 +165,7 @@ kind: ValidatingAdmissionPolicyBinding
 metadata:
   name: fleetops-decisions
   labels:
-    {{- include "foc.chartLabels" . | nindent 4 }}
+    {{- include "fleetops.chartLabels" . | nindent 4 }}
 spec:
   policyName: fleetops-decisions
   validationActions: ["Deny"]
@@ -177,7 +177,7 @@ kind: ValidatingAdmissionPolicy
 metadata:
   name: fleetops-requests
   labels:
-    {{- include "foc.chartLabels" . | nindent 4 }}
+    {{- include "fleetops.chartLabels" . | nindent 4 }}
 spec:
   failurePolicy: Fail
   matchConstraints:
@@ -195,7 +195,7 @@ kind: ValidatingAdmissionPolicyBinding
 metadata:
   name: fleetops-requests
   labels:
-    {{- include "foc.chartLabels" . | nindent 4 }}
+    {{- include "fleetops.chartLabels" . | nindent 4 }}
 spec:
   policyName: fleetops-requests
   validationActions: ["Deny"]

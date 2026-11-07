@@ -14,19 +14,19 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Command foc-agent is the process that talks to the model (docs/DESIGN.md
-// §3, §3.5). It runs the agent loop against foc-mcp over MCP (streamable
+// Command fleetops-agent is the process that talks to the model (docs/DESIGN.md
+// §3, §3.5). It runs the agent loop against fleetops-mcp over MCP (streamable
 // HTTP), serves the web chat and the approval-requests panel, and exports
 // traces over OTLP when an endpoint is set.
 //
-// It runs as ServiceAccount foc-agent, which may only get and list
+// It runs as ServiceAccount fleetops-agent, which may only get and list
 // ApprovalRequests: it cannot write to Swarmada or to the copilot's own
 // resources, and it cannot decide a request. The page shows the command a
 // person runs to decide one.
 //
-//	foc-agent -backend claude   (ANTHROPIC_API_KEY; model from -model or FOC_CLAUDE_MODEL)
-//	foc-agent -backend llamacpp (-llama-url or FOC_LLAMACPP_URL)
-//	foc-agent -backend scripted -script steps.json   (fixed turns, for demos and tests)
+//	fleetops-agent -backend claude   (ANTHROPIC_API_KEY; model from -model or FOC_CLAUDE_MODEL)
+//	fleetops-agent -backend llamacpp (-llama-url or FOC_LLAMACPP_URL)
+//	fleetops-agent -backend scripted -script steps.json   (fixed turns, for demos and tests)
 package main
 
 import (
@@ -71,9 +71,9 @@ type config struct {
 
 func parseFlags(args []string) (config, error) {
 	var c config
-	fs := flag.NewFlagSet("foc-agent", flag.ContinueOnError)
+	fs := flag.NewFlagSet("fleetops-agent", flag.ContinueOnError)
 	fs.StringVar(&c.listen, "listen", ":8090", "HTTP address for the web UI, /healthz and /readyz")
-	fs.StringVar(&c.mcpURL, "mcp-url", "http://foc-mcp:8080/mcp", "foc-mcp streamable HTTP endpoint")
+	fs.StringVar(&c.mcpURL, "mcp-url", "http://fleetops-mcp:8080/mcp", "fleetops-mcp streamable HTTP endpoint")
 	fs.StringVar(&c.backend, "backend", "claude", "model backend: claude, llamacpp or scripted")
 	fs.StringVar(&c.model, "model", "", "claude: model id (default $FOC_CLAUDE_MODEL, else "+llm.DefaultClaudeModel+"); llamacpp: label of the served model (default "+llm.DefaultLlamaCppModel+")")
 	fs.StringVar(&c.effort, "effort", llm.DefaultClaudeEffort, "claude: output_config.effort")
@@ -204,7 +204,7 @@ func run(args []string) error {
 	defer stop()
 
 	red := redact.FromEnv()
-	tp, shutdownTracing, err := tracing.Setup(ctx, tracing.Config{Endpoint: c.otlp, ServiceName: "foc-agent", Redactor: red})
+	tp, shutdownTracing, err := tracing.Setup(ctx, tracing.Config{Endpoint: c.otlp, ServiceName: "fleetops-agent", Redactor: red})
 	if err != nil {
 		return err
 	}
@@ -222,10 +222,10 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	logger := log.New(os.Stderr, "foc-agent ", log.LstdFlags|log.LUTC)
+	logger := log.New(os.Stderr, "fleetops-agent ", log.LstdFlags|log.LUTC)
 	var cat *catalogue.Catalogue
 	if c.catalogue != "" {
-		// A catalogue that does not validate stops foc-agent (D70).
+		// A catalogue that does not validate stops fleetops-agent (D70).
 		if cat, err = catalogue.Load(c.catalogue); err != nil {
 			return err
 		}
@@ -260,7 +260,7 @@ func run(args []string) error {
 	if cat != nil {
 		catState = fmt.Sprintf("%s version %d sha256 %s", c.catalogue, cat.Version, cat.SHA256)
 	}
-	logger.Printf("listening on %s; backend %s; foc-mcp %s; namespaces %s; catalogue %s; tracing %s", c.listen, backendName, c.mcpURL, c.namespaces, catState, red.String(tracingState))
+	logger.Printf("listening on %s; backend %s; fleetops-mcp %s; namespaces %s; catalogue %s; tracing %s", c.listen, backendName, c.mcpURL, c.namespaces, catState, red.String(tracingState))
 	if err := hs.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}

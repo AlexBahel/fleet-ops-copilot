@@ -43,7 +43,7 @@ type Scenario struct {
 	// Fixture names evals/fixtures/<fixture>.yaml.
 	Fixture  string `json:"fixture"`
 	Operator string `json:"operator"`
-	// OperatorIdentity is the username foc-mcp authenticated for Operator in
+	// OperatorIdentity is the username fleetops-mcp authenticated for Operator in
 	// this run (set by the runner, never by a scenario file). The fixture
 	// harness sends a TokenRequest token for a ServiceAccount named after the
 	// operator, so an expected requestedFor of Operator is met by this
@@ -52,7 +52,7 @@ type Scenario struct {
 	Prompt           string `json:"prompt"`
 	// Script is the scripted backend's turns. Model backends ignore it. In
 	// a conversation the steps are consumed in order across the person's
-	// messages; a message foc-agent answers itself (a numbered choice, a
+	// messages; a message fleetops-agent answers itself (a numbered choice, a
 	// confirmation) consumes none.
 	Script []ScriptStep `json:"script"`
 	// Responder is the scripted person (§4.4): the reply to each question

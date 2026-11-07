@@ -42,7 +42,7 @@ func TestParseFlagsDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.backend != "claude" || c.mcpURL != "http://foc-mcp:8080/mcp" || c.listen != ":8090" || c.otlp != "otel:4317" || c.maxTurns != 12 {
+	if c.backend != "claude" || c.mcpURL != "http://fleetops-mcp:8080/mcp" || c.listen != ":8090" || c.otlp != "otel:4317" || c.maxTurns != 12 {
 		t.Fatalf("%+v", c)
 	}
 	if _, err := parseFlags([]string{"-namespaces", " , "}); err == nil {

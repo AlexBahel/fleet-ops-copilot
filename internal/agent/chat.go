@@ -27,7 +27,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/trace"
 
-	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
+	fleetopsv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/audit"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/catalogue"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/conversation"
@@ -146,10 +146,10 @@ func (c *Chat) Turn(ctx context.Context, cs *mcp.ClientSession, conv *conversati
 	return tr, err
 }
 
-// FollowUp starts a conversation at the preview of a follow-up foc-approvals
+// FollowUp starts a conversation at the preview of a follow-up fleetops-approvals
 // prepared after a failure (D78). Only the original requester may use it,
 // and it is filed only after a new confirmation, like any request.
-func (c *Chat) FollowUp(ctx context.Context, cs *mcp.ClientSession, conv *conversation.Conversation, requester, sessionID string, req *focv1.ApprovalRequest) (Trace, error) {
+func (c *Chat) FollowUp(ctx context.Context, cs *mcp.ClientSession, conv *conversation.Conversation, requester, sessionID string, req *fleetopsv1.ApprovalRequest) (Trace, error) {
 	tr := Trace{Prompt: "follow-up of " + req.Name, Started: time.Now()}
 	fu := req.Status.FollowUp
 	switch {
@@ -364,7 +364,7 @@ func (c *Chat) file(ctx context.Context, cs *mcp.ClientSession, conv *conversati
 	} else {
 		name := strings.TrimPrefix(res.Created, "ApprovalRequest/")
 		ev.Outcome, ev.Filed, ev.Code = OutcomeFiled, name, res.Code
-		tr.Final = fmt.Sprintf("Filed %s (%s). It waits for a named person: foc approve %s -n %s, or foc reject %s -n %s. Next step: %s",
+		tr.Final = fmt.Sprintf("Filed %s (%s). It waits for a named person: fleetops approve %s -n %s, or fleetops reject %s -n %s. Next step: %s",
 			res.Created, pv.Kind, name, ns, name, ns, res.NextStep)
 		if followUp {
 			tr.Final += " If the task fails, a follow-up request is prepared for you to review; it is never filed without your confirmation."
@@ -375,7 +375,7 @@ func (c *Chat) file(ctx context.Context, cs *mcp.ClientSession, conv *conversati
 	return tr, nil
 }
 
-// agentCall is a call foc-agent makes itself (By "agent").
+// agentCall is a call fleetops-agent makes itself (By "agent").
 func (c *Chat) agentCall(ctx context.Context, cs *mcp.ClientSession, operator, sessionID, name string, args any, extra mcp.Meta) (ToolEvent, json.RawMessage, error) {
 	b, _ := json.Marshal(args)
 	var m map[string]any
@@ -408,7 +408,7 @@ func (c *Chat) agentCall(ctx context.Context, cs *mcp.ClientSession, operator, s
 	return ev, raw, nil
 }
 
-// snapshot reads what the dialogue needs through foc-mcp's read tools.
+// snapshot reads what the dialogue needs through fleetops-mcp's read tools.
 func (c *Chat) snapshot(ctx context.Context, cs *mcp.ClientSession, operator, sessionID string) (dialogue.Snapshot, []ToolEvent, error) {
 	var snap dialogue.Snapshot
 	var calls []ToolEvent
@@ -451,7 +451,7 @@ func (c *Chat) snapshot(ctx context.Context, cs *mcp.ClientSession, operator, se
 	return snap, calls, nil
 }
 
-// Whoami asks foc-mcp who the caller is (D75): the verified user of the
+// Whoami asks fleetops-mcp who the caller is (D75): the verified user of the
 // bearer token, or unverified:<asserted operator>.
 func Whoami(ctx context.Context, cs *mcp.ClientSession, operator string) (tools.WhoamiResult, error) {
 	var w tools.WhoamiResult

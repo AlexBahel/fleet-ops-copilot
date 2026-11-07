@@ -32,7 +32,7 @@ import (
 
 	swarmv1 "github.com/swarmada/swarmada/api/v1"
 
-	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
+	fleetopsv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/audit"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/authn"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
@@ -61,7 +61,7 @@ type Service struct {
 	Engine           *policy.Engine
 	Audit            *audit.Writer
 	Events           *audit.EventSink // optional
-	Identity         string           // the principal foc-mcp runs as (spec.requestedBy)
+	Identity         string           // the principal fleetops-mcp runs as (spec.requestedBy)
 	DefaultNamespace string
 	Now              func() time.Time
 	// Tracer records a span per policy decision and, in internal/mcpserver,
@@ -356,7 +356,7 @@ func (s *Service) GetEvents(ctx context.Context, sess Session, in EventsInput) (
 func (s *Service) GetRequest(ctx context.Context, sess Session, in NameInput) (RequestView, error) {
 	ns := s.ns(in.Namespace)
 	s.readAudit(sess, "get_request", ns, "ApprovalRequest/"+in.Name)
-	var r focv1.ApprovalRequest
+	var r fleetopsv1.ApprovalRequest
 	if err := s.C.Get(ctx, client.ObjectKey{Namespace: ns, Name: in.Name}, &r); err != nil {
 		return RequestView{}, notFound("ApprovalRequest", ns, in.Name, err)
 	}

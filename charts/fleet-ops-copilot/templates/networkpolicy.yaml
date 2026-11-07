@@ -1,10 +1,10 @@
-{{- include "foc.validate" . }}
+{{- include "fleetops.validate" . }}
 {{- if .Values.networkPolicy.enabled }}
 # Cloud-profile NetworkPolicy (docs/DESIGN.md §3.7): default-deny ingress and
 # egress in the release namespace, then DNS for every pod, the API server for
-# foc-mcp, foc-approvals and foc-agent (which reads ApprovalRequests),
-# foc-agent -> foc-mcp, foc-agent -> the Claude API when CIDRs are given, and
-# egress to the OTLP collector from otlpEgress.to. No ingress to foc-agent's
+# fleetops-mcp, fleetops-approvals and fleetops-agent (which reads ApprovalRequests),
+# fleetops-agent -> fleetops-mcp, fleetops-agent -> the Claude API when CIDRs are given, and
+# egress to the OTLP collector from otlpEgress.to. No ingress to fleetops-agent's
 # web UI is allowed (R38: no Ingress; kubectl port-forward is normally not
 # subject to NetworkPolicy, depending on the CNI). Policies are additive: a pod may do what
 # any policy selecting it allows.
@@ -20,7 +20,7 @@ metadata:
   name: fleet-ops-copilot-default-deny
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "foc.chartLabels" . | nindent 4 }}
+    {{- include "fleetops.chartLabels" . | nindent 4 }}
 spec:
   podSelector: {}
   policyTypes: [Ingress, Egress]
@@ -31,7 +31,7 @@ metadata:
   name: fleet-ops-copilot-egress-dns
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "foc.chartLabels" . | nindent 4 }}
+    {{- include "fleetops.chartLabels" . | nindent 4 }}
 spec:
   podSelector: {}
   policyTypes: [Egress]
@@ -54,11 +54,11 @@ metadata:
   name: fleet-ops-copilot-egress-apiserver
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "foc.chartLabels" . | nindent 4 }}
+    {{- include "fleetops.chartLabels" . | nindent 4 }}
 spec:
   podSelector:
     matchExpressions:
-      - {key: app.kubernetes.io/name, operator: In, values: [foc-mcp, foc-approvals, foc-agent]}
+      - {key: app.kubernetes.io/name, operator: In, values: [fleetops-mcp, fleetops-approvals, fleetops-agent]}
   policyTypes: [Egress]
   egress:
     - to:
@@ -70,54 +70,54 @@ spec:
         - {protocol: TCP, port: {{ . }}}
         {{- end }}
 ---
-# foc-mcp accepts MCP connections from foc-agent (and any extra peers given).
+# fleetops-mcp accepts MCP connections from fleetops-agent (and any extra peers given).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: foc-mcp-ingress
+  name: fleetops-mcp-ingress
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "foc.chartLabels" . | nindent 4 }}
+    {{- include "fleetops.chartLabels" . | nindent 4 }}
 spec:
-  podSelector: {matchLabels: {app.kubernetes.io/name: foc-mcp}}
+  podSelector: {matchLabels: {app.kubernetes.io/name: fleetops-mcp}}
   policyTypes: [Ingress]
   ingress:
     - from:
-        - podSelector: {matchLabels: {app.kubernetes.io/name: foc-agent}}
+        - podSelector: {matchLabels: {app.kubernetes.io/name: fleetops-agent}}
         {{- with .Values.networkPolicy.mcpExtraIngressFrom }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
       ports:
         - {protocol: TCP, port: {{ .Values.mcp.port }}}
 ---
-# foc-agent may open connections to foc-mcp.
+# fleetops-agent may open connections to fleetops-mcp.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: foc-agent-egress-mcp
+  name: fleetops-agent-egress-mcp
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "foc.chartLabels" . | nindent 4 }}
+    {{- include "fleetops.chartLabels" . | nindent 4 }}
 spec:
-  podSelector: {matchLabels: {app.kubernetes.io/name: foc-agent}}
+  podSelector: {matchLabels: {app.kubernetes.io/name: fleetops-agent}}
   policyTypes: [Egress]
   egress:
     - to:
-        - podSelector: {matchLabels: {app.kubernetes.io/name: foc-mcp}}
+        - podSelector: {matchLabels: {app.kubernetes.io/name: fleetops-mcp}}
       ports:
         - {protocol: TCP, port: {{ .Values.mcp.port }}}
 {{- with .Values.networkPolicy.claudeApiEgress.cidrs }}
 ---
-# foc-agent -> Claude API.
+# fleetops-agent -> Claude API.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: foc-agent-egress-claude-api
+  name: fleetops-agent-egress-claude-api
   namespace: {{ $.Release.Namespace }}
   labels:
-    {{- include "foc.chartLabels" $ | nindent 4 }}
+    {{- include "fleetops.chartLabels" $ | nindent 4 }}
 spec:
-  podSelector: {matchLabels: {app.kubernetes.io/name: foc-agent}}
+  podSelector: {matchLabels: {app.kubernetes.io/name: fleetops-agent}}
   policyTypes: [Egress]
   egress:
     - to:
@@ -131,7 +131,7 @@ spec:
 {{- end }}
 {{- if .Values.tracing.backend.enabled }}
 ---
-# In-cluster trace backend (tracing.backend.enabled): foc-agent and foc-mcp ->
+# In-cluster trace backend (tracing.backend.enabled): fleetops-agent and fleetops-mcp ->
 # the Collector, the Collector -> Jaeger. Each hop needs the egress rule on the
 # sender and the ingress rule on the receiver, because the default-deny policy
 # selects every pod in the namespace. The Collector's egress policy is rendered
@@ -142,73 +142,73 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: foc-otel-collector-ingress
+  name: fleetops-otel-collector-ingress
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "foc.chartLabels" . | nindent 4 }}
+    {{- include "fleetops.chartLabels" . | nindent 4 }}
 spec:
-  podSelector: {matchLabels: {app.kubernetes.io/name: foc-otel-collector}}
+  podSelector: {matchLabels: {app.kubernetes.io/name: fleetops-otel-collector}}
   policyTypes: [Ingress]
   ingress:
     - from:
         - podSelector:
             matchExpressions:
-              - {key: app.kubernetes.io/name, operator: In, values: [foc-mcp, foc-agent]}
+              - {key: app.kubernetes.io/name, operator: In, values: [fleetops-mcp, fleetops-agent]}
       ports:
         - {protocol: TCP, port: 4317}
 ---
-# foc-mcp/foc-agent -> Collector. Only with networkPolicy.enabled: rendered
+# fleetops-mcp/fleetops-agent -> Collector. Only with networkPolicy.enabled: rendered
 # alone, this Egress policy would deny those pods every other destination
 # (API server, DNS). Beside config/airgap the same rule comes from
 # config/airgap/networkpolicy-tracing.yaml (D69).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: foc-otlp-egress-collector
+  name: fleetops-otlp-egress-collector
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "foc.chartLabels" . | nindent 4 }}
+    {{- include "fleetops.chartLabels" . | nindent 4 }}
 spec:
   podSelector:
     matchExpressions:
-      - {key: app.kubernetes.io/name, operator: In, values: [foc-mcp, foc-agent]}
+      - {key: app.kubernetes.io/name, operator: In, values: [fleetops-mcp, fleetops-agent]}
   policyTypes: [Egress]
   egress:
     - to:
-        - podSelector: {matchLabels: {app.kubernetes.io/name: foc-otel-collector}}
+        - podSelector: {matchLabels: {app.kubernetes.io/name: fleetops-otel-collector}}
       ports:
         - {protocol: TCP, port: 4317}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: foc-jaeger-ingress
+  name: fleetops-jaeger-ingress
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "foc.chartLabels" . | nindent 4 }}
+    {{- include "fleetops.chartLabels" . | nindent 4 }}
 spec:
-  podSelector: {matchLabels: {app.kubernetes.io/name: foc-jaeger}}
+  podSelector: {matchLabels: {app.kubernetes.io/name: fleetops-jaeger}}
   policyTypes: [Ingress]
   ingress:
     - from:
-        - podSelector: {matchLabels: {app.kubernetes.io/name: foc-otel-collector}}
+        - podSelector: {matchLabels: {app.kubernetes.io/name: fleetops-otel-collector}}
       ports:
         - {protocol: TCP, port: 4317}
 {{- end }}
 {{- with .Values.networkPolicy.otlpEgress.to }}
 ---
-# foc-agent and foc-mcp -> OTLP collector.
+# fleetops-agent and fleetops-mcp -> OTLP collector.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: fleet-ops-copilot-egress-otlp
   namespace: {{ $.Release.Namespace }}
   labels:
-    {{- include "foc.chartLabels" $ | nindent 4 }}
+    {{- include "fleetops.chartLabels" $ | nindent 4 }}
 spec:
   podSelector:
     matchExpressions:
-      - {key: app.kubernetes.io/name, operator: In, values: [foc-mcp, foc-agent]}
+      - {key: app.kubernetes.io/name, operator: In, values: [fleetops-mcp, fleetops-agent]}
   policyTypes: [Egress]
   egress:
     - to:
@@ -223,7 +223,7 @@ spec:
 ---
 # The Collector's egress, rendered whenever tracing.backend.enabled, with or
 # without networkPolicy.enabled: Jaeger's OTLP port in this namespace and
-# cluster DNS (to resolve foc-jaeger), nothing else. Without it, a namespace
+# cluster DNS (to resolve fleetops-jaeger), nothing else. Without it, a namespace
 # whose egress is otherwise denied (the air-gapped policy in config/airgap
 # allows every pod but llama-server DNS only) cuts the Collector off from
 # Jaeger once its connection is renewed: measured on kindnet, the policy
@@ -231,16 +231,16 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: foc-otel-collector-egress-jaeger
+  name: fleetops-otel-collector-egress-jaeger
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "foc.chartLabels" . | nindent 4 }}
+    {{- include "fleetops.chartLabels" . | nindent 4 }}
 spec:
-  podSelector: {matchLabels: {app.kubernetes.io/name: foc-otel-collector}}
+  podSelector: {matchLabels: {app.kubernetes.io/name: fleetops-otel-collector}}
   policyTypes: [Egress]
   egress:
     - to:
-        - podSelector: {matchLabels: {app.kubernetes.io/name: foc-jaeger}}
+        - podSelector: {matchLabels: {app.kubernetes.io/name: fleetops-jaeger}}
       ports:
         - {protocol: TCP, port: 4317}
     - to:

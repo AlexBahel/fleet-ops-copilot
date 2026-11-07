@@ -3,42 +3,42 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: fleetops-foc-mcp
+  name: fleetops-mcp
   namespace: warehouse-a
-roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: "fleetops:foc-mcp"}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: "fleetops:fleetops-mcp"}
 subjects:
-  - {kind: ServiceAccount, name: foc-mcp, namespace: foc-system}
+  - {kind: ServiceAccount, name: fleetops-mcp, namespace: fleetops-system}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: fleetops-foc-approvals
+  name: fleetops-approvals
   namespace: warehouse-a
-roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: "fleetops:foc-approvals"}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: "fleetops:fleetops-approvals"}
 subjects:
-  - {kind: ServiceAccount, name: foc-approvals, namespace: foc-system}
+  - {kind: ServiceAccount, name: fleetops-approvals, namespace: fleetops-system}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: fleetops-foc-agent
+  name: fleetops-agent
   namespace: warehouse-a
-roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: "fleetops:foc-agent"}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: "fleetops:fleetops-agent"}
 subjects:
-  - {kind: ServiceAccount, name: foc-agent, namespace: foc-system}
+  - {kind: ServiceAccount, name: fleetops-agent, namespace: fleetops-system}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: fleetops-foc-mcp-cluster
-roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: "fleetops:foc-mcp-cluster"}
+  name: fleetops-mcp-cluster
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: "fleetops:fleetops-mcp-cluster"}
 subjects:
-  - {kind: ServiceAccount, name: foc-mcp, namespace: foc-system}
+  - {kind: ServiceAccount, name: fleetops-mcp, namespace: fleetops-system}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: fleetops-foc-approvals-cluster
-roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: "fleetops:foc-approvals-cluster"}
+  name: fleetops-approvals-cluster
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: "fleetops:fleetops-approvals-cluster"}
 subjects:
-  - {kind: ServiceAccount, name: foc-approvals, namespace: foc-system}
+  - {kind: ServiceAccount, name: fleetops-approvals, namespace: fleetops-system}

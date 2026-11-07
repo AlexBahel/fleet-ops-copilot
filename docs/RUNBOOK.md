@@ -7,7 +7,7 @@ air-gapped profile in the chart) say so.
 
 Conventions: every `kubectl` and `helm` command names its context explicitly. The examples use a
 kind cluster `foc-<name>`, context `kind-foc-<name>`, a kubeconfig file that holds only that
-cluster (`$KUBECONFIG`), the copilot namespace `foc-system`, and the Swarmada namespace
+cluster (`$KUBECONFIG`), the copilot namespace `fleetops-system`, and the Swarmada namespace
 `warehouse-a`.
 
 ```bash
@@ -53,14 +53,14 @@ What it does, in order (each stage prints its elapsed time; the total is the las
    waits until every Robot is live (`Idle`, or `InProgress` on the quickstart's pending work). If the Robots go `Offline` later, run
    `CLUSTER=foc-up KUBECONFIG=$FOC_UP_DIR/kubeconfig hack/foc-sim-fleet.sh start` again.
 5. Builds the copilot image, loads it into the cluster, applies the CRDs and installs the chart
-   into `foc-system`; binds the people's roles in `warehouse-a`.
-6. Checks health: foc-mcp and foc-approvals rollouts, foc-mcp's `/healthz`, and, if the Secret
-   `fleet-ops-copilot-claude` exists, foc-agent. Without the Secret foc-agent does not start and
+   into `fleetops-system`; binds the people's roles in `warehouse-a`.
+6. Checks health: fleetops-mcp and fleetops-approvals rollouts, fleetops-mcp's `/healthz`, and, if the Secret
+   `fleet-ops-copilot-claude` exists, fleetops-agent. Without the Secret fleetops-agent does not start and
    the script says so. To create it from a key file you hold (nothing calls the model):
    `FOC_UP_ANTHROPIC_KEY_FILE=key.txt make foc-up`, or section 2.
 
 Then `make foc-live` runs the live approval paths with requests filed by sam's and dana's own
-tokens (verified requesters, section 7). It needs `bin/foc` (built by the target).
+tokens (verified requesters, section 7). It needs `bin/fleetops` (built by the target).
 
 ## 1. Install
 
@@ -89,26 +89,26 @@ a server-side dry run of a held draft.
 ```bash
 make image IMG=fleet-ops-copilot:dev
 kind load docker-image fleet-ops-copilot:dev --name foc-<name>
-helm --kube-context $CTX install foc charts/fleet-ops-copilot \
-  --namespace foc-system --create-namespace
-kubectl --context $CTX -n foc-system rollout status deploy/foc-mcp deploy/foc-approvals --timeout=180s
-# foc-agent starts once the API key Secret exists (section 2):
-kubectl --context $CTX -n foc-system rollout status deploy/foc-agent --timeout=180s
+helm --kube-context $CTX install fleetops charts/fleet-ops-copilot \
+  --namespace fleetops-system --create-namespace
+kubectl --context $CTX -n fleetops-system rollout status deploy/fleetops-mcp deploy/fleetops-approvals --timeout=180s
+# fleetops-agent starts once the API key Secret exists (section 2):
+kubectl --context $CTX -n fleetops-system rollout status deploy/fleetops-agent --timeout=180s
 ```
 
-The release namespace must be `foc-system`: the admission policies name the copilot's
+The release namespace must be `fleetops-system`: the admission policies name the copilot's
 ServiceAccounts in that namespace, and the chart refuses any other.
 
 Values worth setting (see `charts/fleet-ops-copilot/values.yaml`):
 
 | Value | Default | Purpose |
 |---|---|---|
-| `swarmadaNamespaces` | `[warehouse-a]` | Namespaces where foc-mcp and foc-approvals get RoleBindings. Every namespace in the policy file must be listed. |
+| `swarmadaNamespaces` | `[warehouse-a]` | Namespaces where fleetops-mcp and fleetops-approvals get RoleBindings. Every namespace in the policy file must be listed. |
 | `policy.content` | chart copy of `policies/default.yaml` | Site policy file (`--set-file policy.content=<file>`) |
 | `image.repository`, `image.tag` | `fleet-ops-copilot`, `dev` | Image |
 | `llm.cloud.apiKeySecretRef` | `fleet-ops-copilot-claude` / `ANTHROPIC_API_KEY` | Existing Secret holding the Claude API key (section 2) |
-| `agent.enabled` | `true` | foc-agent Deployment and Service (model loop and web UI) |
-| `tracing.otlpEndpoint` | empty (off) | OTLP/gRPC collector for foc-agent and foc-mcp traces |
+| `agent.enabled` | `true` | fleetops-agent Deployment and Service (model loop and web UI) |
+| `tracing.otlpEndpoint` | empty (off) | OTLP/gRPC collector for fleetops-agent and fleetops-mcp traces |
 | `tracing.backend.enabled` | `false` | Development trace backend (OpenTelemetry Collector + Jaeger) and its wiring; exclusive with `tracing.otlpEndpoint` (section 8) |
 | `networkPolicy.enabled` | `false` | Cloud-profile NetworkPolicy; needs `networkPolicy.apiServer.cidrs` |
 
@@ -119,40 +119,40 @@ or remove the objects `config/rbac`, `config/admission` and `config/deploy` crea
 
 ### Open the web UI
 
-foc-agent serves a chat and a list of ApprovalRequests. It cannot approve: each pending request
-shows the exact object or patch it leads to and the `foc approve` / `foc reject` command to run
+fleetops-agent serves a chat and a list of ApprovalRequests. It cannot approve: each pending request
+shows the exact object or patch it leads to and the `fleetops approve` / `fleetops reject` command to run
 with your own kubeconfig. The page has no login, so the name typed in it is recorded as the
-requester `unverified:<name>`, and foc-approvals refuses to approve any such request
+requester `unverified:<name>`, and fleetops-approvals refuses to approve any such request
 (`DENY_REQUESTER_UNVERIFIED`, R38): a request filed from the page can be rejected or left to
 expire, never approved. The Service is ClusterIP only and the chart renders no Ingress
 (`make chart-parity` refuses one); reach the page with a port-forward:
 
 ```bash
-kubectl --context $CTX -n foc-system port-forward svc/foc-agent 8090:8090
+kubectl --context $CTX -n fleetops-system port-forward svc/fleetops-agent 8090:8090
 # then open http://127.0.0.1:8090/
 ```
 
 ### Who is recorded as the requester (R39)
 
-foc-mcp records as `requestedFor` the username of the caller's own Kubernetes bearer token, which
+fleetops-mcp records as `requestedFor` the username of the caller's own Kubernetes bearer token, which
 it verifies with a TokenReview (its ServiceAccount holds `create` on `tokenreviews`). A name
 the client asserts is never trusted. Without a token, or when the API server does not accept it,
 the requester is `unverified:<name>` and the request can be rejected but never approved.
 
 To file a request that can be approved, chat from the command line with your own kubeconfig, through
-the same port-forward. `foc chat` sends your user's bearer token (static token, token file, or an
-exec plugin that returns one) to foc-agent, which forwards it to foc-mcp:
+the same port-forward. `fleetops chat` sends your user's bearer token (static token, token file, or an
+exec plugin that returns one) to fleetops-agent, which forwards it to fleetops-mcp:
 
 ```bash
-foc chat --context $CTX "put aisle B into maintenance after this wave"
+fleetops chat --context $CTX "put aisle B into maintenance after this wave"
 ```
 
 A kubeconfig user that authenticates with a client certificate (kind's default admin) has no bearer
-token, so its requests are unverified; `foc chat` says so. On a `make foc-up` cluster use a
-person's token kubeconfig: `KUBECONFIG=$FOC_UP_DIR/persons/sam.kubeconfig foc chat --context
-sam@foc-up "..."` (section 7). `foc chat` sends the token only over https or
-to a loopback address. foc-mcp never stores, logs or traces the token; it keeps a SHA-256 of it for 30
-seconds as a cache key. Between foc-agent and foc-mcp the token travels in the cluster over plain HTTP.
+token, so its requests are unverified; `fleetops chat` says so. On a `make foc-up` cluster use a
+person's token kubeconfig: `KUBECONFIG=$FOC_UP_DIR/persons/sam.kubeconfig fleetops chat --context
+sam@foc-up "..."` (section 7). `fleetops chat` sends the token only over https or
+to a loopback address. fleetops-mcp never stores, logs or traces the token; it keeps a SHA-256 of it for 30
+seconds as a cache key. Between fleetops-agent and fleetops-mcp the token travels in the cluster over plain HTTP.
 
 ### Grant approvers
 
@@ -165,24 +165,24 @@ kubectl --context $CTX -n warehouse-a create rolebinding approver-<person> \
 ```
 
 Approving also requires the Swarmada permission for the underlying change (for example
-`swarmada:fleet-manager`); foc-approvals checks it with a SubjectAccessReview and refuses the
+`swarmada:fleet-manager`); fleetops-approvals checks it with a SubjectAccessReview and refuses the
 decision otherwise. Approvers must be people: a ServiceAccount's decision is refused at admission.
 
 Activating an approved draft needs Swarmada's `activate` verb on `fleettasks` (and `patch`); any
-person who holds it may run `foc activate`, not only the approver (R69). Reading the fleet for its
+person who holds it may run `fleetops activate`, not only the approver (R69). Reading the fleet for its
 checks needs `get`/`list` on the Swarmada kinds; a read the person lacks is reported as not checked.
 
 ### Upgrade and policy changes
 
 ```bash
-helm --kube-context $CTX upgrade foc charts/fleet-ops-copilot -n foc-system \
+helm --kube-context $CTX upgrade fleetops charts/fleet-ops-copilot -n fleetops-system \
   --reuse-values --set-file policy.content=<policy.yaml>
 ```
 
 A change of policy text changes the `checksum/policy` annotation, so both Deployments restart.
 
 The site catalogue (section 9) is changed the same way, with `--set-file catalogue.content=<catalogue.yaml>`;
-restart foc-agent afterwards (`kubectl --context $CTX -n foc-system rollout restart deploy/foc-agent`),
+restart fleetops-agent afterwards (`kubectl --context $CTX -n fleetops-system rollout restart deploy/fleetops-agent`),
 which refuses to start on a catalogue that does not validate. The catalogue is part of the eval
 surface: run `make ci` with the new file in `catalogue/` before deploying it.
 Helm does not upgrade CRDs in `crds/`; after a CRD change, apply them yourself:
@@ -190,14 +190,14 @@ Helm does not upgrade CRDs in `crds/`; after a CRD change, apply them yourself:
 
 ### Uninstall
 
-`helm --kube-context $CTX uninstall foc -n foc-system` removes the workloads, RBAC and admission
+`helm --kube-context $CTX uninstall fleetops -n fleetops-system` removes the workloads, RBAC and admission
 policies. It leaves the CRDs and every ApprovalRequest and ApprovalDecision. The audit files are on
 `emptyDir` volumes and are lost with the pods: copy them first (section 4).
 
 ## 2. Rotate the API key (cloud profile)
 
 The key lives only in a Kubernetes Secret that the operator creates; the chart holds a reference
-(`llm.cloud.apiKeySecretRef`), never the value. foc-agent receives it as the `ANTHROPIC_API_KEY`
+(`llm.cloud.apiKeySecretRef`), never the value. fleetops-agent receives it as the `ANTHROPIC_API_KEY`
 environment variable and does not start without it. The model evaluations read
 `ANTHROPIC_API_KEY` from the shell environment instead.
 
@@ -205,7 +205,7 @@ Create or replace the Secret without putting the key on a command line or in she
 
 ```bash
 # key in a file readable only by you, for example created with: umask 077; pbpaste > key.txt
-kubectl --context $CTX -n foc-system create secret generic fleet-ops-copilot-claude \
+kubectl --context $CTX -n fleetops-system create secret generic fleet-ops-copilot-claude \
   --from-file=ANTHROPIC_API_KEY=key.txt --dry-run=client -o yaml \
   | kubectl --context $CTX apply -f -
 rm key.txt
@@ -217,10 +217,10 @@ Rotation order:
 2. Replace the Secret as above.
 3. Restart the process that reads it. Environment variables are read at start, so a running pod
    keeps the old key:
-   `kubectl --context $CTX -n foc-system rollout restart deploy/foc-agent`.
+   `kubectl --context $CTX -n fleetops-system rollout restart deploy/fleetops-agent`.
 4. Confirm a request succeeds, then revoke the old key in the Console.
 
-foc-mcp and foc-approvals pass audit lines through `internal/redact`, which masks the values of
+fleetops-mcp and fleetops-approvals pass audit lines through `internal/redact`, which masks the values of
 known secret environment variables and token patterns such as Anthropic API keys and bearer tokens
 (docs/DESIGN.md §3.8). If a key appears in a log, audit line or Event
 anyway, revoke it.
@@ -229,8 +229,8 @@ anyway, revoke it.
 
 | Profile | Model | Status on main |
 |---|---|---|
-| `cloud` | Claude via the Claude API | Chart value `llm.profile: cloud` (default). The chart runs foc-agent with `-backend=claude` (`internal/llm/claude.go`); it starts once the API key Secret exists (section 2). foc-agent has not yet run against the model on a cluster (docs/KNOWN-LIMITS.md); Sonnet 5.5 and Opus 5.5 were measured through `foc-eval` (`evals/results/comparison-2026-11-05.md`). |
-| `airgap` | Qwen2.5-7B-Instruct served by `llama-server` in the cluster | Plain manifests and make targets (`config/airgap/`, `hack/airgap.mk`) and the `llamacpp` backend (`internal/llm/llamacpp.go`); not templated in the chart. Run on single-node kind clusters with kindnet (`docs/evidence/airgap-2026-11-04/`, `docs/evidence/airgap-2026-11-05/`); the `llamacpp` backend ran one evaluation against Qwen2.5-7B-Instruct through `foc-eval` (`evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-05/`). foc-agent does not run with it yet (docs/KNOWN-LIMITS.md). `llm.profile: airgap` makes the chart render fail on purpose. |
+| `cloud` | Claude via the Claude API | Chart value `llm.profile: cloud` (default). The chart runs fleetops-agent with `-backend=claude` (`internal/llm/claude.go`); it starts once the API key Secret exists (section 2). fleetops-agent has not yet run against the model on a cluster (docs/KNOWN-LIMITS.md); Sonnet 5.5 and Opus 5.5 were measured through `fleetops-eval` (`evals/results/comparison-2026-11-05.md`). |
+| `airgap` | Qwen2.5-7B-Instruct served by `llama-server` in the cluster | Plain manifests and make targets (`config/airgap/`, `hack/airgap.mk`) and the `llamacpp` backend (`internal/llm/llamacpp.go`); not templated in the chart. Run on single-node kind clusters with kindnet (`docs/evidence/airgap-2026-11-04/`, `docs/evidence/airgap-2026-11-05/`); the `llamacpp` backend ran one evaluation against Qwen2.5-7B-Instruct through `fleetops-eval` (`evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-05/`). fleetops-agent does not run with it yet (docs/KNOWN-LIMITS.md). `llm.profile: airgap` makes the chart render fail on purpose. |
 
 Until the air-gapped profile is in the chart, it is installed beside the chart with these targets,
 in this order:
@@ -264,11 +264,11 @@ one. The files are on `emptyDir` volumes and are lost when a pod is replaced
 (docs/KNOWN-LIMITS.md, "Audit storage"): copy them before a restart, upgrade or uninstall.
 
 ```bash
-for p in foc-mcp foc-approvals; do
-  kubectl --context $CTX -n foc-system exec deploy/$p -- cat /var/lib/fleetops/audit/$p.jsonl > $p-audit.jsonl
+for p in fleetops-mcp fleetops-approvals; do
+  kubectl --context $CTX -n fleetops-system exec deploy/$p -- cat /var/lib/fleetops/audit/$p.jsonl > $p-audit.jsonl
 done
 make build
-bin/foc audit verify foc-approvals-audit.jsonl   # "<file>: N entries, chain intact" or the first bad entry
+bin/fleetops audit verify fleetops-approvals-audit.jsonl   # "<file>: N entries, chain intact" or the first bad entry
 ```
 
 Each line has `seq`, `time`, `kind` (for example `approved`, `executed`, `activation_observed`),
@@ -278,13 +278,13 @@ such as `DENY_DRAFT_GATE_ABSENT`), `message`, `detail`, `prev`, `hash`.
 The same history is visible as Events on each ApprovalRequest and in the requests themselves:
 
 ```bash
-bin/foc requests -n warehouse-a --context $CTX
+bin/fleetops requests -n warehouse-a --context $CTX
 kubectl --context $CTX -n warehouse-a describe approvalrequest <name>
 kubectl --context $CTX -n warehouse-a get events --field-selector involvedObject.kind=ApprovalRequest
 ```
 
 A zone stop the executor triggered is attributed in Swarmada's own safety audit log to
-`system:serviceaccount:foc-system:foc-approvals`; the approving person is recorded only in the
+`system:serviceaccount:fleetops-system:fleetops-approvals`; the approving person is recorded only in the
 copilot's request, Events and audit file (docs/DESIGN.md D33).
 
 ## 5. When the agent is wrong
@@ -296,7 +296,7 @@ their own Swarmada permissions.
 | Situation | What to do |
 |---|---|
 | Wrong explanation | Check the cited resource and field directly, for example `kubectl --context $CTX -n warehouse-a get robot <name> -o yaml`. Every claim should name a resource and field; a claim that does not is a defect. |
-| Wrong request, still `Pending` | `bin/foc reject <request> -n warehouse-a --context $CTX -comment "<why>"`. A request nobody decides expires after the policy TTL (default 30m). |
+| Wrong request, still `Pending` | `bin/fleetops reject <request> -n warehouse-a --context $CTX -comment "<why>"`. A request nobody decides expires after the policy TTL (default 30m). |
 | Wrong refusal | The answer and the audit line give the reason code. A site rule (namespaces, priorities, modes, limits) is changed in the policy file and rolled out with `helm upgrade` (section 1). The forbidden operations are compiled in and cannot be enabled. |
 | Draft approved by mistake | It is held (`spec.draft: true`); nothing runs until someone activates it. Do not run the activation command. A person with the permission deletes it: `kubectl --context $CTX -n warehouse-a delete fleettask <name>`. |
 | Maintenance window approved by mistake | Robots in scope are paused. A person ends the window by setting its `spec.desiredState: Completed` or deleting it; both resume the robots. |
@@ -360,8 +360,8 @@ configuration mounts it into the node and gives it to the API server (`--token-a
 
 ```bash
 KUBECONFIG=$FOC_UP_DIR/persons/sam.kubeconfig kubectl --context sam@foc-up auth whoami
-KUBECONFIG=$FOC_UP_DIR/persons/sam.kubeconfig bin/foc chat --context sam@foc-up "put aisle B into maintenance"
-KUBECONFIG=$FOC_UP_DIR/persons/dana.kubeconfig bin/foc approve <request> -n warehouse-a --context dana@foc-up
+KUBECONFIG=$FOC_UP_DIR/persons/sam.kubeconfig bin/fleetops chat --context sam@foc-up "put aisle B into maintenance"
+KUBECONFIG=$FOC_UP_DIR/persons/dana.kubeconfig bin/fleetops approve <request> -n warehouse-a --context dana@foc-up
 ```
 
 This is not an identity system: a static token never expires, cannot be revoked without
@@ -385,19 +385,19 @@ configure (managed clusters have their own OIDC integration; follow the provider
    The username the API server reports is what the copilot records as `requestedFor` and
    `decidedBy`; self-approval is refused by comparing them.
 3. People log in with an exec credential plugin in their kubeconfig (for example `kubelogin`),
-   which returns the ID token. `foc chat` sends the token an exec plugin returns, only over https
-   or to a loopback address; `foc approve` and `kubectl` use the same kubeconfig user.
-4. foc-mcp verifies the token with a TokenReview with the API server's default audiences. That has
+   which returns the ID token. `fleetops chat` sends the token an exec plugin returns, only over https
+   or to a loopback address; `fleetops approve` and `kubectl` use the same kubeconfig user.
+4. fleetops-mcp verifies the token with a TokenReview with the API server's default audiences. That has
    been tested with envtest's static tokens and TokenRequest tokens only, **not with an OIDC
    token** (docs/KNOWN-LIMITS.md). Try a request as a person and check `spec.requestedFor` on the
    ApprovalRequest before relying on it.
-5. ID tokens are short-lived. A long `foc chat` session may need a fresh token; foc-mcp caches a
+5. ID tokens are short-lived. A long `fleetops chat` session may need a fresh token; fleetops-mcp caches a
    review for 30 seconds by the token's SHA-256 and never stores the token.
 
 ## 8. Read the traces (optional backend)
 
-foc-agent and foc-mcp export one trace per operator request when they have an OTLP/gRPC endpoint:
-spans `foc.request`, `llm.chat` (tokens, latency), `tool.call`, `mcp.tool` and `policy.decide`,
+fleetops-agent and fleetops-mcp export one trace per operator request when they have an OTLP/gRPC endpoint:
+spans `fleetops.request`, `llm.chat` (tokens, latency), `tool.call`, `mcp.tool` and `policy.decide`,
 joined across MCP by W3C trace context (D54). No prompt, answer, tool argument or result text is in
 a span, and a redacting exporter masks configured secrets and token patterns before export.
 
@@ -406,23 +406,23 @@ development backend, an OpenTelemetry Collector in front of Jaeger v2 (in-memory
 default, D61):
 
 ```bash
-helm --kube-context $CTX upgrade --install foc charts/fleet-ops-copilot -n foc-system \
+helm --kube-context $CTX upgrade --install fleetops charts/fleet-ops-copilot -n fleetops-system \
   --reuse-values --set tracing.backend.enabled=true      # leave tracing.otlpEndpoint empty
-kubectl --context $CTX -n foc-system rollout status deploy/foc-otel-collector deploy/foc-jaeger
-kubectl --context $CTX -n foc-system port-forward svc/foc-jaeger 16686:16686
-# open http://127.0.0.1:16686/ , service foc-agent, operation foc.request
+kubectl --context $CTX -n fleetops-system rollout status deploy/fleetops-otel-collector deploy/fleetops-jaeger
+kubectl --context $CTX -n fleetops-system port-forward svc/fleetops-jaeger 16686:16686
+# open http://127.0.0.1:16686/ , service fleetops-agent, operation fleetops.request
 ```
 
 Both Services are ClusterIP and the UI has no login: reach it only through the port-forward.
 Traces live in the Jaeger pod's memory (the image's default of 100000 traces) and are lost when it
 restarts. The images (`otel/opentelemetry-collector`, `jaegertracing/jaeger`, pinned by digest in
 `values.yaml`) must be pullable by the nodes; they are not part of the air-gapped profile. With
-`networkPolicy.enabled` the chart opens exactly foc-mcp/foc-agent to the Collector and the
+`networkPolicy.enabled` the chart opens exactly fleetops-mcp/fleetops-agent to the Collector and the
 Collector to Jaeger. With the backend on, the Collector's own egress policy (Jaeger's OTLP port and
 cluster DNS only) is rendered also without `networkPolicy.enabled`, so the Collector can reach
-Jaeger beside the air-gapped policy of `config/airgap` (D68). foc-mcp/foc-agent → Collector is
+Jaeger beside the air-gapped policy of `config/airgap` (D68). fleetops-mcp/fleetops-agent → Collector is
 opened beside `config/airgap` by `config/airgap/networkpolicy-tracing.yaml`, which
-`make deploy-airgap` applies when `deploy/foc-otel-collector` exists (install the chart with the
+`make deploy-airgap` applies when `deploy/fleetops-otel-collector` exists (install the chart with the
 backend first), and in the chart only with `networkPolicy.enabled` (D69). Both rules are
 template-verified only, until the next cluster run. The backend ran on a `make foc-up` cluster
 on 2026-11-05 (`docs/evidence/airgap-2026-11-05/`), before D68 and D69.
@@ -435,16 +435,16 @@ Not run on a cluster yet: tested with the scripted backend, envtest and the fixt
 Work is asked for in a conversation (docs/DESIGN.md §3.10). The copilot asks at most two short
 questions, shows a preview, and files an `ApprovalRequest` only after the person replies `1`
 (confirm) or `2` (confirm, and prepare a follow-up request if the task fails). `3 <change>` changes
-the request and shows a new preview; `4` cancels. Nothing is filed without that reply: foc-mcp
+the request and shows a new preview; `4` cancels. Nothing is filed without that reply: fleetops-mcp
 refuses a request whose confirmed preview is missing or differs (`DENY_NOT_CONFIRMED`,
 `DENY_PREVIEW_MISMATCH`).
 
-**Conversations.** `foc chat` keeps the conversation per kubeconfig context and foc-agent URL in
-`$XDG_STATE_HOME/foc/conversations/` (default `~/.local/state/foc/conversations/`, mode 600);
-`foc chat --new` starts another. The web page keeps it in the page's memory; reload starts a new
-one. foc-agent holds conversations in memory for 30 minutes after the last message, bound to the
-requester foc-mcp verified: another person cannot continue one, even with its id. A foc-agent
-restart loses them; the chart runs one foc-agent replica and refuses more.
+**Conversations.** `fleetops chat` keeps the conversation per kubeconfig context and fleetops-agent URL in
+`$XDG_STATE_HOME/fleetops/conversations/` (default `~/.local/state/fleetops/conversations/`, mode 600);
+`fleetops chat --new` starts another. The web page keeps it in the page's memory; reload starts a new
+one. fleetops-agent holds conversations in memory for 30 minutes after the last message, bound to the
+requester fleetops-mcp verified: another person cannot continue one, even with its id. A fleetops-agent
+restart loses them; the chart runs one fleetops-agent replica and refuses more.
 
 **The preview's checks** (`check_task`, reads only): an eligible robot now under Swarmada's
 candidate filters that a read can evaluate, zone state (stops, maintenance, restrictions), the
@@ -461,25 +461,25 @@ A blocked preview names each blocker with an alternative and cannot be confirmed
 | `ZONE_STOPPED`, `NAMESPACE_STOPPED` | a stop is in force; Swarmada holds work there | a person clears the stop; the copilot cannot |
 | `WAYPOINT_NOT_FOUND`, `ZONE_NOT_FOUND` | the place does not exist | the preview lists what exists |
 
-**At execution.** Immediately before creating an approved draft, foc-approvals re-runs the checks
+**At execution.** Immediately before creating an approved draft, fleetops-approvals re-runs the checks
 and dry-runs the FleetTask and each member as a FleetAction through Swarmada's admission. If
 anything fails the request ends `Failed` with `DENY_CHECK_FAILED` or `DENY_SWARMADA_REFUSED` and the
-reason, and nothing is written; `foc requests` and the web UI show it. `status.executionChecks`
+reason, and nothing is written; `fleetops requests` and the web UI show it. `status.executionChecks`
 holds what was checked.
 
 **Activation.** A draft runs only after a separate activation request is approved and a person
 runs it with their own kubeconfig:
 
 ```bash
-KUBECONFIG=<your kubeconfig> foc activate <activation-request> -n warehouse-a [--context <ctx>]
+KUBECONFIG=<your kubeconfig> fleetops activate <activation-request> -n warehouse-a [--context <ctx>]
 ```
 
-`foc activate` refuses a ServiceAccount, a request that is not `Approved`, a task that is no longer
+`fleetops activate` refuses a ServiceAccount, a request that is not `Approved`, a task that is no longer
 a draft and a blocked check. Then it records the activation as an `ApprovalDecision` of type
 `Activation` naming you (the same admission policy as an approval admits only your own name), and
 sends the plain `spec.draft=false` patch; nothing is added to the FleetTask. Swarmada checks your
 `activate` verb. Recording needs `create` on `approvaldecisions` (the `fleetops:approver` role).
-foc-approvals links the record to the request when the task leaves Draft (`status.activatedBy`,
+fleetops-approvals links the record to the request when the task leaves Draft (`status.activatedBy`,
 `status.activationRef`).
 
 A plain `kubectl patch` still works for a person Swarmada allows to activate, with no
@@ -489,19 +489,19 @@ A plain `kubectl patch` still works for a person Swarmada allows to activate, wi
 kubectl --context <ctx> patch fleettask <task> -n warehouse-a --type merge -p '{"spec":{"draft":false}}'
 ```
 
-Swarmada checks the same `activate` verb. foc-approvals still marks the request `Executed`, and its
-message, `activation_observed` audit line and Event say "activated outside foc activate; activator
+Swarmada checks the same `activate` verb. fleetops-approvals still marks the request `Executed`, and its
+message, `activation_observed` audit line and Event say "activated outside fleetops activate; activator
 not recorded" (`status.activatedBy: unknown`).
 
-**Outcome and follow-up.** foc-approvals records the task's terminal phase on the DraftTask request
+**Outcome and follow-up.** fleetops-approvals records the task's terminal phase on the DraftTask request
 (`status.outcome`). With choice 2 at the preview, a failed task also gets `status.followUp`, a
-proposal only: `foc chat --follow-up <request>` opens it at a preview, and it is filed only after a
+proposal only: `fleetops chat --follow-up <request>` opens it at a preview, and it is filed only after a
 new confirmation.
 
 **The site catalogue** (`catalogue/warehouse-a.yaml`, chart `files/site-catalogue.yaml`) lists the
 kinds of work, their Swarmada mapping, defaults and the questions that lead to each; kinds Swarmada
 cannot report a result for say so in the preview (`resultReported: false`). "Something else"
-answers are written to foc-agent's audit file as `catalogue_review` entries, for deciding what to
-add: read them with `kubectl --context $CTX -n foc-system exec deploy/foc-agent -- cat /var/lib/fleetops/audit/foc-agent.jsonl`.
+answers are written to fleetops-agent's audit file as `catalogue_review` entries, for deciding what to
+add: read them with `kubectl --context $CTX -n fleetops-system exec deploy/fleetops-agent -- cat /var/lib/fleetops/audit/fleetops-agent.jsonl`.
 The file is on an emptyDir volume and is lost with the pod.
 

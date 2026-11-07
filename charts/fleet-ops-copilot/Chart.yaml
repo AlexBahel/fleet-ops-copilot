@@ -1,7 +1,7 @@
 apiVersion: v2
 name: fleet-ops-copilot
 description: >-
-  Fleet Ops Copilot for Swarmada: the foc-mcp tool server, the foc-approvals
+  Fleet Ops Copilot for Swarmada: the fleetops-mcp tool server, the fleetops-approvals
   controller, their ServiceAccounts and RBAC, the ApprovalRequest and
   ApprovalDecision CRDs, and the ValidatingAdmissionPolicies that narrow what
   the copilot may write.

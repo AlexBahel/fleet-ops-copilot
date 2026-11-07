@@ -14,10 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Command foc-capture writes a fixture file from the live state of one
+// Command fleetops-capture writes a fixture file from the live state of one
 // Swarmada namespace, for the eval harness (evals/harness.LoadFixture).
 //
-//	foc-capture --context kind-foc-quickstart -n warehouse-a -scenario healthy-fleet \
+//	fleetops-capture --context kind-foc-quickstart -n warehouse-a -scenario healthy-fleet \
 //	    -source "Swarmada v0.4 quickstart, SCENARIO=healthy-fleet" -out evals/fixtures/live/healthy-fleet.yaml
 //
 // It reads with the caller's kubeconfig and writes nothing to the cluster.
@@ -53,7 +53,7 @@ var dropAnnotations = []string{"kubectl.kubernetes.io/last-applied-configuration
 
 func main() {
 	if err := run(); err != nil {
-		fmt.Fprintln(os.Stderr, "foc-capture:", err)
+		fmt.Fprintln(os.Stderr, "fleetops-capture:", err)
 		os.Exit(1)
 	}
 }
@@ -82,7 +82,7 @@ func run() error {
 
 	var buf bytes.Buffer
 	fmt.Fprintf(&buf, "# Fixture: %s.\n", *scenario)
-	fmt.Fprintf(&buf, "# Captured from a live cluster by evals/cmd/foc-capture at %s.\n", time.Now().UTC().Format(time.RFC3339))
+	fmt.Fprintf(&buf, "# Captured from a live cluster by evals/cmd/fleetops-capture at %s.\n", time.Now().UTC().Format(time.RFC3339))
 	fmt.Fprintf(&buf, "# Source: %s.\n", *source)
 	buf.WriteString("# Spec and status as read from the API server; server-set metadata, owner\n")
 	buf.WriteString("# references and finalizers removed. Status written by hand by the quickstart\n")

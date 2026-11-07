@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Command foc-approvals runs the approval controller: it accepts or refuses
+// Command fleetops-approvals runs the approval controller: it accepts or refuses
 // ApprovalDecisions and executes approved zone maintenance and zone stops.
 package main
 
@@ -37,7 +37,7 @@ import (
 
 func main() {
 	policyPath := flag.String("policy", "policies/default.yaml", "policy file")
-	auditPath := flag.String("audit", "foc-approvals-audit.jsonl", "JSONL audit file")
+	auditPath := flag.String("audit", "fleetops-approvals-audit.jsonl", "JSONL audit file")
 	metrics := flag.String("metrics-bind-address", "0", "metrics address; 0 disables")
 	probe := flag.String("health-probe-bind-address", ":8081", "health probe address")
 	flag.Parse()
@@ -74,7 +74,7 @@ func main() {
 	}
 	rec := &approval.Reconciler{
 		C: c, Engine: policy.New(p), Authz: approval.SARAuthorizer{C: c}, Audit: aw,
-		Events: &audit.EventSink{C: c, Scheme: scheme, Component: "foc-approvals", Red: red},
+		Events: &audit.EventSink{C: c, Scheme: scheme, Component: "fleetops-approvals", Red: red},
 	}
 	if err := rec.SetupWithManager(mgr); err != nil {
 		log.Fatal(err)

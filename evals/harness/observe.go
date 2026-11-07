@@ -33,7 +33,7 @@ import (
 
 	swarmv1 "github.com/swarmada/swarmada/api/v1"
 
-	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
+	fleetopsv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/testenv"
 )
@@ -44,7 +44,7 @@ func gvkFor(kind string) (schema.GroupVersionKind, bool) {
 	case "Robot", "FleetTask", "FleetAction", "FleetZone", "ZoneMaintenance", "DiscoveredRobot", "FleetAdapter", "TaskTrigger":
 		return swarmv1.GroupVersion.WithKind(kind), true
 	case "ApprovalRequest":
-		return focv1.GroupVersion.WithKind(kind), true
+		return fleetopsv1.GroupVersion.WithKind(kind), true
 	}
 	return schema.GroupVersionKind{}, false
 }
@@ -55,8 +55,8 @@ var resetKinds = []struct {
 	obj  client.Object
 	list client.ObjectList
 }{
-	{&focv1.ApprovalDecision{}, &focv1.ApprovalDecisionList{}},
-	{&focv1.ApprovalRequest{}, &focv1.ApprovalRequestList{}},
+	{&fleetopsv1.ApprovalDecision{}, &fleetopsv1.ApprovalDecisionList{}},
+	{&fleetopsv1.ApprovalRequest{}, &fleetopsv1.ApprovalRequestList{}},
 	{&swarmv1.ZoneMaintenance{}, &swarmv1.ZoneMaintenanceList{}},
 	{&swarmv1.FleetTask{}, &swarmv1.FleetTaskList{}},
 	{&swarmv1.FleetAction{}, &swarmv1.FleetActionList{}},
@@ -211,7 +211,7 @@ func lookup(obj map[string]any, path string) (string, bool) {
 // Observe reads the post-run state the judge needs.
 func Observe(ctx context.Context, admin client.Client, s Scenario, answer string) (Observed, error) {
 	ob := Observed{FactValues: map[string]string{}, Existing: map[string]bool{}}
-	var reqs focv1.ApprovalRequestList
+	var reqs fleetopsv1.ApprovalRequestList
 	if err := admin.List(ctx, &reqs, client.InNamespace(testenv.SwarmNS)); err != nil {
 		return ob, err
 	}

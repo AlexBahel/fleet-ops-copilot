@@ -144,7 +144,7 @@ func TestZoneStopDisabled(t *testing.T) {
 func TestDecideApproval(t *testing.T) {
 	e := loadDefault(t)
 	person := Principal{Username: "dana", Groups: []string{"system:authenticated", "fleet-ops"}}
-	base := ApprovalCheck{Decider: person, DecidedBy: "dana", RequestedFor: "sam", RequestedBy: "system:serviceaccount:foc-system:foc-mcp", State: "Pending", DeciderAuthorized: true, Approve: true}
+	base := ApprovalCheck{Decider: person, DecidedBy: "dana", RequestedFor: "sam", RequestedBy: "system:serviceaccount:fleetops-system:fleetops-mcp", State: "Pending", DeciderAuthorized: true, Approve: true}
 	cases := []struct {
 		name   string
 		mutate func(*ApprovalCheck)
@@ -154,7 +154,7 @@ func TestDecideApproval(t *testing.T) {
 		{"person approves", func(*ApprovalCheck) {}, Allow, CodeApprovalAccepted},
 		{"person rejects without authority", func(c *ApprovalCheck) { c.Approve = false; c.DeciderAuthorized = false }, Allow, CodeApprovalAccepted},
 		{"service account by name", func(c *ApprovalCheck) {
-			c.Decider = Principal{Username: "system:serviceaccount:foc-system:foc-approvals"}
+			c.Decider = Principal{Username: "system:serviceaccount:fleetops-system:fleetops-approvals"}
 			c.DecidedBy = c.Decider.Username
 		}, Deny, CodeServiceAccountApprover},
 		{"service account by group", func(c *ApprovalCheck) {
@@ -191,7 +191,7 @@ func TestDecideApproval(t *testing.T) {
 func TestUnverifiedRequesterIsAHardInvariant(t *testing.T) {
 	e := loadDefault(t)
 	e.P.Approval.AllowSelfApproval = true
-	c := ApprovalCheck{Decider: Principal{Username: "dana"}, DecidedBy: "dana", RequestedFor: UnverifiedPrefix + "dana", RequestedBy: "system:serviceaccount:foc-system:foc-mcp", State: "Pending", DeciderAuthorized: true, Approve: true}
+	c := ApprovalCheck{Decider: Principal{Username: "dana"}, DecidedBy: "dana", RequestedFor: UnverifiedPrefix + "dana", RequestedBy: "system:serviceaccount:fleetops-system:fleetops-mcp", State: "Pending", DeciderAuthorized: true, Approve: true}
 	if d := e.DecideApproval(c); d.Code != CodeRequesterUnverified {
 		t.Fatalf("with allowSelfApproval: %s %s", d.Code, d.Message)
 	}
@@ -203,11 +203,11 @@ func TestUnverifiedRequesterIsAHardInvariant(t *testing.T) {
 func TestSelfApprovalCanBeAllowedOnlyForRequester(t *testing.T) {
 	e := loadDefault(t)
 	e.P.Approval.AllowSelfApproval = true
-	c := ApprovalCheck{Decider: Principal{Username: "dana"}, DecidedBy: "dana", RequestedFor: "dana", RequestedBy: "system:serviceaccount:foc-system:foc-mcp", State: "Pending", DeciderAuthorized: true, Approve: true}
+	c := ApprovalCheck{Decider: Principal{Username: "dana"}, DecidedBy: "dana", RequestedFor: "dana", RequestedBy: "system:serviceaccount:fleetops-system:fleetops-mcp", State: "Pending", DeciderAuthorized: true, Approve: true}
 	if d := e.DecideApproval(c); d.Effect != Allow {
 		t.Fatalf("dev self-approval: %s %s", d.Code, d.Message)
 	}
-	c.Decider = Principal{Username: "system:serviceaccount:foc-system:foc-mcp"}
+	c.Decider = Principal{Username: "system:serviceaccount:fleetops-system:fleetops-mcp"}
 	c.DecidedBy = c.Decider.Username
 	if d := e.DecideApproval(c); d.Code != CodeServiceAccountApprover {
 		t.Fatalf("copilot SA must stay refused: %s", d.Code)

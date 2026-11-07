@@ -36,7 +36,7 @@ import (
 
 	swarmv1 "github.com/swarmada/swarmada/api/v1"
 
-	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
+	fleetopsv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/agent"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/catalogue"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
@@ -141,7 +141,7 @@ func TestChatAnswersAndReportsPolicy(t *testing.T) {
 		t.Fatalf("%d %+v", code, out)
 	}
 	// No token: the typed name is passed on only as asserted, and the page is
-	// told it will be recorded unverified (foc-mcp marks it, R39).
+	// told it will be recorded unverified (fleetops-mcp marks it, R39).
 	if r.got[0] != "|jane@example.com|"+out.SessionID+"|stop aisle-b" || out.Requester != "unverified:jane@example.com" {
 		t.Fatalf("runner got %q", r.got[0])
 	}
@@ -155,7 +155,7 @@ func TestChatAnswersAndReportsPolicy(t *testing.T) {
 	}
 }
 
-// A caller's bearer token is forwarded to the runner (and so to foc-mcp,
+// A caller's bearer token is forwarded to the runner (and so to fleetops-mcp,
 // which verifies it); the operator name is then optional.
 func TestChatForwardsBearerToken(t *testing.T) {
 	r := &stubRunner{trace: agent.Trace{Final: "ok"}}
@@ -265,8 +265,8 @@ func TestHealthAndReadiness(t *testing.T) {
 	if res, body := get(t, ts.URL+"/readyz"); res.StatusCode != 200 {
 		t.Fatalf("readyz %d %s", res.StatusCode, body)
 	}
-	r.readyErr = errors.New("connecting to foc-mcp: refused")
-	if res, body := get(t, ts.URL+"/readyz"); res.StatusCode != 503 || !strings.Contains(body, "foc-mcp") {
+	r.readyErr = errors.New("connecting to fleetops-mcp: refused")
+	if res, body := get(t, ts.URL+"/readyz"); res.StatusCode != 503 || !strings.Contains(body, "fleetops-mcp") {
 		t.Fatalf("readyz with MCP down: %d %s", res.StatusCode, body)
 	}
 	r.readyErr = nil
@@ -309,7 +309,7 @@ func TestChatFilesRequestThatPanelShows(t *testing.T) {
 	}
 	zone := &swarmv1.FleetZone{ObjectMeta: metav1.ObjectMeta{Name: "aisle-b", Namespace: "warehouse-a"}}
 	c := fake.NewClientBuilder().WithScheme(fleet.NewScheme()).WithObjects(zone).Build()
-	svc := &tools.Service{C: c, Engine: policy.New(p), Identity: "system:serviceaccount:foc-system:foc-mcp", DefaultNamespace: "warehouse-a"}
+	svc := &tools.Service{C: c, Engine: policy.New(p), Identity: "system:serviceaccount:fleetops-system:fleetops-mcp", DefaultNamespace: "warehouse-a"}
 	cat, err := catalogue.Load("../../catalogue/warehouse-a.yaml")
 	if err != nil {
 		t.Fatal(err)
@@ -332,7 +332,7 @@ func TestChatFilesRequestThatPanelShows(t *testing.T) {
 	if code != 200 || out.Dialogue == nil || out.Dialogue.Outcome != "preview" || out.ConversationID == "" {
 		t.Fatalf("%d %+v", code, out)
 	}
-	var none focv1.ApprovalRequestList
+	var none fleetopsv1.ApprovalRequestList
 	if err := c.List(context.Background(), &none); err != nil || len(none.Items) != 0 {
 		t.Fatalf("filed before confirmation: %d %v", len(none.Items), err)
 	}
@@ -354,13 +354,13 @@ func TestChatFilesRequestThatPanelShows(t *testing.T) {
 	// Filed from the page, so the requester is unverified: the panel offers
 	// only rejection and says why (R38).
 	if v.Name != name || v.State != "Pending" || v.RequestedFor != "unverified:jane@example.com" || v.SessionID != out.SessionID ||
-		v.Approve != "" || v.Reject != "foc reject "+name+" -n warehouse-a" || !strings.Contains(v.Unapprovable, "DENY_REQUESTER_UNVERIFIED") {
+		v.Approve != "" || v.Reject != "fleetops reject "+name+" -n warehouse-a" || !strings.Contains(v.Unapprovable, "DENY_REQUESTER_UNVERIFIED") {
 		t.Fatalf("view %+v", v)
 	}
 	if v.Change.Body != `{"metadata":{"annotations":{"swarmada.io/estop-triggered":"spill in aisle B"}}}` || v.Change.Target != "FleetZone warehouse-a/aisle-b" {
 		t.Fatalf("change %+v", v.Change)
 	}
-	var decisions focv1.ApprovalDecisionList
+	var decisions fleetopsv1.ApprovalDecisionList
 	if err := c.List(context.Background(), &decisions); err != nil || len(decisions.Items) != 0 {
 		t.Fatalf("decisions %v %v", decisions.Items, err)
 	}
@@ -377,7 +377,7 @@ func TestConversationBoundToRequester(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := fake.NewClientBuilder().WithScheme(fleet.NewScheme()).Build()
-	svc := &tools.Service{C: c, Engine: policy.New(p), Identity: "system:serviceaccount:foc-system:foc-mcp", DefaultNamespace: "warehouse-a"}
+	svc := &tools.Service{C: c, Engine: policy.New(p), Identity: "system:serviceaccount:fleetops-system:fleetops-mcp", DefaultNamespace: "warehouse-a"}
 	cat, err := catalogue.Load("../../catalogue/warehouse-a.yaml")
 	if err != nil {
 		t.Fatal(err)

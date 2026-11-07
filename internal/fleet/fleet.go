@@ -32,7 +32,7 @@ import (
 
 	swarmv1 "github.com/swarmada/swarmada/api/v1"
 
-	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
+	fleetopsv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/policy"
 )
 
@@ -43,8 +43,8 @@ const (
 	EstopAnnotation = "swarmada.io/estop-triggered"
 	// SwarmadaGroup is the API group of every Swarmada kind.
 	SwarmadaGroup = "swarmada.io"
-	// CreatedByLabel marks objects the copilot created. The foc-mcp-drafts-only
-	// admission policy requires it on every FleetTask foc-mcp creates.
+	// CreatedByLabel marks objects the copilot created. The fleetops-mcp-drafts-only
+	// admission policy requires it on every FleetTask fleetops-mcp creates.
 	CreatedByLabel = "fleetops.alexbahel.github.io/created-by"
 	// SessionLabel links a copilot-created object to its session.
 	SessionLabel = "fleetops.alexbahel.github.io/session"
@@ -57,7 +57,7 @@ func NewScheme() *runtime.Scheme {
 	s := runtime.NewScheme()
 	utilruntime.Must(clientgoscheme.AddToScheme(s))
 	utilruntime.Must(swarmv1.AddToScheme(s))
-	utilruntime.Must(focv1.AddToScheme(s))
+	utilruntime.Must(fleetopsv1.AddToScheme(s))
 	return s
 }
 
@@ -135,13 +135,13 @@ func CountSessionDraftRequests(ctx context.Context, c client.Reader, ns, session
 	if session == "" {
 		return 0, nil
 	}
-	var list focv1.ApprovalRequestList
+	var list fleetopsv1.ApprovalRequestList
 	if err := c.List(ctx, &list, client.InNamespace(ns), client.MatchingLabels{SessionLabel: session}); err != nil {
 		return 0, err
 	}
 	n := 0
 	for _, r := range list.Items {
-		if r.Spec.Type == focv1.RequestDraftTask {
+		if r.Spec.Type == fleetopsv1.RequestDraftTask {
 			n++
 		}
 	}

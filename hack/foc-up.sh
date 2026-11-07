@@ -15,7 +15,7 @@
 #      adapter per robot, in the background; RobotClass simbot-v1 as a
 #      labelled demo workaround), every Robot live (R73);
 #   5. the image built on the host and loaded into the cluster;
-#   6. the Helm chart installed into foc-system;
+#   6. the Helm chart installed into fleetops-system;
 #   7. the people's RoleBindings and token kubeconfigs;
 #   8. health checks.
 #
@@ -35,7 +35,7 @@
 #   FOC_UP_IMAGE             copilot image (default fleet-ops-copilot:dev)
 #   FOC_UP_TRACING=1         install the chart's optional Collector + Jaeger and export traces to it
 #   FOC_UP_ANTHROPIC_KEY_FILE  file holding the Claude API key: becomes Secret fleet-ops-copilot-claude (not read otherwise;
-#                            without it foc-agent does not start, and this script says so; nothing calls the API)
+#                            without it fleetops-agent does not start, and this script says so; nothing calls the API)
 #   FOC_UP_DRY_RUN=1         print every command that would change anything, run none of them. Reads nothing
 #                            from a cluster. Still creates FOC_UP_DIR with the tokens and the rendered kind
 #                            configuration, and reports missing tools instead of stopping.
@@ -56,7 +56,7 @@ scenario="${FOC_UP_SCENARIO:-healthy-fleet}"
 node_image="${FOC_UP_NODE_IMAGE:-kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5}"
 img="${FOC_UP_IMAGE:-fleet-ops-copilot:dev}"
 ctx="kind-$CLUSTER"
-ns=foc-system
+ns=fleetops-system
 swarm_ns="${SWARMADA_NAMESPACE:-warehouse-a}"
 foc_outside_repo foc-up.sh "$dir" "$repo"
 mkdir -p "$dir/logs"
@@ -240,7 +240,7 @@ tracing_args=()
 if [[ "${FOC_UP_TRACING:-0}" == 1 ]]; then tracing_args=(--set tracing.backend.enabled=true); fi
 # CRDs first: Helm does not upgrade them, and a re-run should.
 x k apply --server-side --force-conflicts -f "$repo/charts/fleet-ops-copilot/crds/"
-x h upgrade --install foc "$repo/charts/fleet-ops-copilot" --namespace "$ns" --create-namespace \
+x h upgrade --install fleetops "$repo/charts/fleet-ops-copilot" --namespace "$ns" --create-namespace \
   --set "swarmadaNamespaces={$swarm_ns}" ${tracing_args[@]+"${tracing_args[@]}"}
 
 # ---- 5. people -------------------------------------------------------------------
@@ -249,22 +249,22 @@ x "$repo/hack/kind-people.sh" bind "$ctx" "$swarm_ns"
 
 # ---- 6. health -------------------------------------------------------------------
 stage "health checks"
-x k -n "$ns" rollout status deploy/foc-mcp deploy/foc-approvals --timeout=180s
+x k -n "$ns" rollout status deploy/fleetops-mcp deploy/fleetops-approvals --timeout=180s
 if [[ "$DRY" == 1 ]]; then
-  echo "  [dry-run] foc-mcp /healthz through the Service proxy; foc-agent rollout if Secret fleet-ops-copilot-claude exists;"
+  echo "  [dry-run] fleetops-mcp /healthz through the Service proxy; fleetops-agent rollout if Secret fleet-ops-copilot-claude exists;"
   echo "  [dry-run] tracing backend rollouts if FOC_UP_TRACING=1"
 else
-  k get --raw "/api/v1/namespaces/$ns/services/foc-mcp:mcp/proxy/healthz" >/dev/null \
-    || fail "foc-mcp /healthz did not answer through the Service proxy"
-  echo "  foc-mcp /healthz ok"
+  k get --raw "/api/v1/namespaces/$ns/services/fleetops-mcp:mcp/proxy/healthz" >/dev/null \
+    || fail "fleetops-mcp /healthz did not answer through the Service proxy"
+  echo "  fleetops-mcp /healthz ok"
   if k -n "$ns" get secret fleet-ops-copilot-claude >/dev/null 2>&1; then
-    k -n "$ns" rollout status deploy/foc-agent --timeout=180s
+    k -n "$ns" rollout status deploy/fleetops-agent --timeout=180s
   else
-    echo "  foc-agent not waited for: Secret fleet-ops-copilot-claude (key ANTHROPIC_API_KEY) does not exist in $ns,"
+    echo "  fleetops-agent not waited for: Secret fleet-ops-copilot-claude (key ANTHROPIC_API_KEY) does not exist in $ns,"
     echo "  so the pod stays in CreateContainerConfigError. Create it (docs/RUNBOOK.md section 2) or rerun with FOC_UP_ANTHROPIC_KEY_FILE."
   fi
   if [[ "${FOC_UP_TRACING:-0}" == 1 ]]; then
-    k -n "$ns" rollout status deploy/foc-otel-collector deploy/foc-jaeger --timeout=180s
+    k -n "$ns" rollout status deploy/fleetops-otel-collector deploy/fleetops-jaeger --timeout=180s
   fi
 fi
 
@@ -288,12 +288,12 @@ cat <<EOT
   export KUBECONFIG=$KUBECONFIG
   kubectl --context $ctx -n $ns get pods
   people (test only, static tokens): $dir/persons/{sam,dana,eve}.kubeconfig  (context <person>@$CLUSTER)
-  file a verified request:  kubectl --context $ctx -n $ns port-forward svc/foc-agent 8090:8090
-                            KUBECONFIG=$dir/persons/sam.kubeconfig bin/foc chat --context sam@$CLUSTER "..."
+  file a verified request:  kubectl --context $ctx -n $ns port-forward svc/fleetops-agent 8090:8090
+                            KUBECONFIG=$dir/persons/sam.kubeconfig bin/fleetops chat --context sam@$CLUSTER "..."
   verified-requester live run:  make foc-live
 EOT
 if [[ "${FOC_UP_TRACING:-0}" == 1 ]]; then
-  echo "  traces:  kubectl --context $ctx -n $ns port-forward svc/foc-jaeger 16686:16686   (http://127.0.0.1:16686/)"
+  echo "  traces:  kubectl --context $ctx -n $ns port-forward svc/fleetops-jaeger 16686:16686   (http://127.0.0.1:16686/)"
 fi
 echo "  sim fleet (3 adapters, background): PIDs $dir/sim-fleet/pids, logs $dir/logs/sim-adapter-*.log"
 echo "  tear down:  make foc-down"

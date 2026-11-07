@@ -6,9 +6,9 @@
 | `approval-flow.d2` | `approval-flow.svg` | A draft `FleetTask` from request to execution, then its activation, which the approver performs with their own credentials |
 
 Solid boxes are built. The dashed box is the NetworkPolicy: in the chart, off by default, never
-applied to a cluster. Dashed edges are optional (traces) or not wired by any manifest (foc-agent to
+applied to a cluster. Dashed edges are optional (traces) or not wired by any manifest (fleetops-agent to
 llama-server). The air-gapped profile is plain manifests (`config/airgap/`, `make deploy-airgap`),
-not in the chart. foc-agent's agent roles (Router ... Reporter) are not built: one loop offers
+not in the chart. fleetops-agent's agent roles (Router ... Reporter) are not built: one loop offers
 every tool.
 
 The diagrams summarise `docs/DESIGN.md` §3; where they differ, the design document is correct.

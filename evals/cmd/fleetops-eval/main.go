@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Command foc-eval runs the evaluation scenarios against fixture states in a
+// Command fleetops-eval runs the evaluation scenarios against fixture states in a
 // test API server and writes results.json plus one trace line per run.
 //
 // -backend scripted (the CI regression gate) exits non-zero if any run fails.
@@ -72,7 +72,7 @@ func main() {
 	out := flag.String("out", "evals/results/fixtures/results.json", "results file")
 	traces := flag.String("traces", "", "trace file (default: traces.jsonl next to -out)")
 	policyPath := flag.String("policy", "policies/default.yaml", "policy file")
-	cataloguePath := flag.String("catalogue", "catalogue/warehouse-a.yaml", "site catalogue foc-agent reads (D70); its SHA-256 is recorded")
+	cataloguePath := flag.String("catalogue", "catalogue/warehouse-a.yaml", "site catalogue fleetops-agent reads (D70); its SHA-256 is recorded")
 	backend := flag.String("backend", "scripted", "backend: scripted, claude or llamacpp")
 	model := flag.String("model", "", "claude: model id (default "+llm.DefaultClaudeModel+"); llamacpp: label for the served model (default "+llm.DefaultLlamaCppModel+")")
 	llamaURL := flag.String("llama-url", "", "llamacpp: base URL (default: $"+llm.EnvLlamaCppURL+")")
@@ -81,10 +81,10 @@ func main() {
 	updateBaseline := flag.Bool("update-baseline", false, "scripted: rewrite the -baseline file from this run (every run must pass)")
 	only := flag.String("only", "", "comma-separated scenario ids to run (default: all)")
 	liveCtx := flag.String("live-context", "", "run against this kubeconfig context instead of envtest (state is not loaded; see harness.LiveTarget)")
-	liveMCP := flag.String("live-mcp-url", "", "with -live-context: foc-mcp streamable HTTP endpoint")
-	otlp := flag.String("otlp-endpoint", "", "OTLP/gRPC collector (host:port, http:// or https://): trace each run as services foc-eval-agent and foc-eval-mcp; the trace ID goes into results.json and traces.jsonl. Empty: no tracing")
+	liveMCP := flag.String("live-mcp-url", "", "with -live-context: fleetops-mcp streamable HTTP endpoint")
+	otlp := flag.String("otlp-endpoint", "", "OTLP/gRPC collector (host:port, http:// or https://): trace each run as services fleetops-eval-agent and fleetops-eval-mcp; the trace ID goes into results.json and traces.jsonl. Empty: no tracing")
 	llamaCtx := flag.String("llama-context", "", "llamacpp: kubeconfig context of the cluster running llama-server; its Deployment, pod log and node are recorded")
-	llamaNS := flag.String("llama-namespace", "foc-system", "llamacpp: namespace of the llama-server Deployment")
+	llamaNS := flag.String("llama-namespace", "fleetops-system", "llamacpp: namespace of the llama-server Deployment")
 	llamaDeploy := flag.String("llama-deployment", "llama-server", "llamacpp: name of the llama-server Deployment and its container")
 	var pr harness.Pricing
 	flag.Float64Var(&pr.InputPerMTok, "price-input", 0, "claude: USD per million input tokens")
@@ -348,7 +348,7 @@ func run(c runConfig) error {
 		for _, t := range []struct {
 			service string
 			dst     *trace.Tracer
-		}{{"foc-eval-agent", &r.AgentTracer}, {"foc-eval-mcp", &r.MCPTracer}} {
+		}{{"fleetops-eval-agent", &r.AgentTracer}, {"fleetops-eval-mcp", &r.MCPTracer}} {
 			tp, shutdown, err := tracing.Setup(ctx, tracing.Config{Endpoint: c.otlp, ServiceName: t.service, Redactor: red})
 			if err != nil {
 				return err
@@ -362,7 +362,7 @@ func run(c runConfig) error {
 			}()
 			*t.dst = tracing.Tracer(tp)
 		}
-		fmt.Printf("tracing: OTLP %s (services foc-eval-agent, foc-eval-mcp)\n", red.String(c.otlp))
+		fmt.Printf("tracing: OTLP %s (services fleetops-eval-agent, fleetops-eval-mcp)\n", red.String(c.otlp))
 	}
 	srs, err := r.Run(ctx, scs)
 	if err != nil {
@@ -373,7 +373,7 @@ func run(c runConfig) error {
 	envInfo := map[string]string{"swarmadaSpec": spec, "swarmadaCommit": rev, "swarmadaResolution": swarmadaResolution(), "apiServer": "envtest", "copilotCommit": sha, "copilotTreeDirty": fmt.Sprint(dirty)}
 	kind := "envtest kube-apiserver "
 	if live != nil {
-		kind = "live cluster (Swarmada controllers and the deployed foc-mcp; state from the scenario's quickstart run, not loaded from the fixture) kube-apiserver "
+		kind = "live cluster (Swarmada controllers and the deployed fleetops-mcp; state from the scenario's quickstart run, not loaded from the fixture) kube-apiserver "
 		envInfo["fixtures"] = "not loaded: the namespace's live state is used"
 	}
 	if cs, err := kubernetes.NewForConfig(adminCfg); err == nil {
@@ -383,12 +383,12 @@ func run(c runConfig) error {
 	}
 	mergeInto(envInfo, c.envExtra)
 	if c.otlp != "" {
-		envInfo["tracing"] = "OTLP/gRPC export on (services foc-eval-agent, foc-eval-mcp)"
+		envInfo["tracing"] = "OTLP/gRPC export on (services fleetops-eval-agent, fleetops-eval-mcp)"
 	}
 	res := harness.Summarize(c.name, runs, envInfo, srs, c.latencyScope)
 	res.BackendSettings = c.settings
-	// The tool list as the harness's foc-mcp serves it (R46): with
-	// -live-context the deployed foc-mcp serves its own, from its flags.
+	// The tool list as the harness's fleetops-mcp serves it (R46): with
+	// -live-context the deployed fleetops-mcp serves its own, from its flags.
 	digest, err := mcpserver.ToolsDigest(ctx, mcpserver.New(&tools.Service{Engine: policy.New(pol), DefaultNamespace: testenv.SwarmNS}), agent.ProposeMCPTool(cat))
 	if err != nil {
 		return err

@@ -40,25 +40,25 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
-// chat sends one message to foc-agent's /api/chat with the caller's own
-// bearer token from their kubeconfig, so foc-mcp records the authenticated
+// chat sends one message to fleetops-agent's /api/chat with the caller's own
+// bearer token from their kubeconfig, so fleetops-mcp records the authenticated
 // person as the requester (R39). A kubeconfig user with no bearer token (for
 // example a client certificate) sends none, and any request is then
 // unverified and can never be approved.
 func chat(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("chat", flag.ContinueOnError)
-	agent := fs.String("agent", "http://127.0.0.1:8090", "foc-agent URL (kubectl port-forward svc/foc-agent 8090:8090)")
+	agent := fs.String("agent", "http://127.0.0.1:8090", "fleetops-agent URL (kubectl port-forward svc/fleetops-agent 8090:8090)")
 	kctx := fs.String("context", "", "kubeconfig context whose user's token is sent (default: the current context)")
 	operator := fs.String("operator", "", "name shown in the request if the token is not verified")
-	session := fs.String("session", "", "session id to continue (printed by a previous foc chat)")
+	session := fs.String("session", "", "session id to continue (printed by a previous fleetops chat)")
 	newConv := fs.Bool("new", false, "start a new conversation instead of continuing the one kept for this context")
-	followUp := fs.String("follow-up", "", "start a conversation at the preview of the follow-up foc-approvals prepared for this ApprovalRequest")
+	followUp := fs.String("follow-up", "", "start a conversation at the preview of the follow-up fleetops-approvals prepared for this ApprovalRequest")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	msg := strings.TrimSpace(strings.Join(fs.Args(), " "))
 	if msg == "" && *followUp == "" {
-		return errors.New("usage: foc chat [-agent URL] [--context NAME] [-operator NAME] [-session ID] [-new] [-follow-up REQUEST] MESSAGE")
+		return errors.New("usage: fleetops chat [-agent URL] [--context NAME] [-operator NAME] [-session ID] [-new] [-follow-up REQUEST] MESSAGE")
 	}
 	if err := tokenSafeURL(*agent); err != nil {
 		return err
@@ -90,7 +90,7 @@ func chat(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	}
 	defer func() { _ = res.Body.Close() }()
 	if !*sent {
-		_, _ = fmt.Fprintln(stderr, "foc: this kubeconfig user has no bearer token (client certificate?); the request is unverified and any request it files can never be approved")
+		_, _ = fmt.Fprintln(stderr, "fleetops: this kubeconfig user has no bearer token (client certificate?); the request is unverified and any request it files can never be approved")
 	}
 	var out struct {
 		SessionID      string `json:"sessionId"`
@@ -104,7 +104,7 @@ func chat(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		} `json:"toolCalls"`
 	}
 	if err := json.NewDecoder(res.Body).Decode(&out); err != nil {
-		return fmt.Errorf("foc-agent: HTTP %d: %w", res.StatusCode, err)
+		return fmt.Errorf("fleetops-agent: HTTP %d: %w", res.StatusCode, err)
 	}
 	for _, c := range out.ToolCalls {
 		line := "  tool " + c.Name
@@ -118,21 +118,21 @@ func chat(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	}
 	if out.ConversationID != "" {
 		if err := saveConversation(key, out.ConversationID); err != nil {
-			_, _ = fmt.Fprintf(stderr, "foc: could not keep the conversation id: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "fleetops: could not keep the conversation id: %v\n", err)
 		}
 	}
 	if out.Notice != "" {
-		_, _ = fmt.Fprintln(stderr, "foc: "+out.Notice)
+		_, _ = fmt.Fprintln(stderr, "fleetops: "+out.Notice)
 	}
 	if out.Error != "" {
-		return fmt.Errorf("foc-agent: %s", out.Error)
+		return fmt.Errorf("fleetops-agent: %s", out.Error)
 	}
 	_, _ = fmt.Fprintf(stdout, "%s\n(session %s)\n", out.Answer, out.SessionID)
 	return nil
 }
 
 // conversationKey names the kept conversation of a kubeconfig context and a
-// foc-agent URL (D75): another context, or another foc-agent, starts its own.
+// fleetops-agent URL (D75): another context, or another fleetops-agent, starts its own.
 func conversationKey(kctx, agent string) string {
 	if kctx == "" {
 		if raw, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(clientcmd.NewDefaultClientConfigLoadingRules(), nil).RawConfig(); err == nil {
@@ -142,8 +142,8 @@ func conversationKey(kctx, agent string) string {
 	return fmt.Sprintf("%x", sha256.Sum256([]byte(kctx+"\x00"+agent)))[:32]
 }
 
-// conversationFile is under the user's state directory: $XDG_STATE_HOME/foc,
-// else ~/.local/state/foc. The id is only useful to its owner (foc-agent
+// conversationFile is under the user's state directory: $XDG_STATE_HOME/fleetops,
+// else ~/.local/state/fleetops. The id is only useful to its owner (fleetops-agent
 // checks the requester), and the file is mode 600.
 func conversationFile(key string) (string, error) {
 	dir := os.Getenv("XDG_STATE_HOME")
@@ -154,7 +154,7 @@ func conversationFile(key string) (string, error) {
 		}
 		dir = filepath.Join(home, ".local", "state")
 	}
-	return filepath.Join(dir, "foc", "conversations", key), nil
+	return filepath.Join(dir, "fleetops", "conversations", key), nil
 }
 
 func loadConversation(key string) string {
@@ -202,7 +202,7 @@ func tokenSafeURL(raw string) error {
 // bearerTransport wraps the default transport with the kubeconfig user's
 // bearer-token authentication (static token, token file, or exec plugin
 // that returns a token) and reports whether a token was attached. Any other
-// Authorization (a basic-auth password) is removed, never sent to foc-agent.
+// Authorization (a basic-auth password) is removed, never sent to fleetops-agent.
 func bearerTransport(cfg *rest.Config) (http.RoundTripper, *bool, error) {
 	sent := new(bool)
 	inner := roundTripFunc(func(r *http.Request) (*http.Response, error) {

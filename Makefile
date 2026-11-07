@@ -16,7 +16,7 @@ all: ci
 
 ci: check-no-local build vet lint test test-envtest eval-fixtures ## Everything the CI Go job runs
 
-build: ## Build foc, foc-mcp, foc-approvals, foc-agent into bin/
+build: ## Build fleetops, fleetops-mcp, fleetops-approvals, fleetops-agent into bin/
 	$(GO) build -o $(BIN)/ ./cmd/...
 
 vet: ## go vet (including envtest-tagged files)
@@ -42,11 +42,11 @@ test-envtest: envtest-assets ## API-server tests: RBAC, admission policies, appr
 
 eval-fixtures: envtest-assets ## Fixture evaluations with the scripted backend, held to evals/baseline.json; writes evals/results/fixtures/results.json
 	KUBEBUILDER_ASSETS="$$(setup-envtest use $(ENVTEST_K8S_VERSION) -p path)" \
-		$(GO) run -tags envtest ./evals/cmd/foc-eval -scenarios evals/scenarios -runs 3 -out evals/results/fixtures/results.json -baseline evals/baseline.json
+		$(GO) run -tags envtest ./evals/cmd/fleetops-eval -scenarios evals/scenarios -runs 3 -out evals/results/fixtures/results.json -baseline evals/baseline.json
 
 eval-baseline: envtest-assets ## Rewrite evals/baseline.json from a fully passing scripted run (commit it with the change that moved the counts)
 	KUBEBUILDER_ASSETS="$$(setup-envtest use $(ENVTEST_K8S_VERSION) -p path)" \
-		$(GO) run -tags envtest ./evals/cmd/foc-eval -scenarios evals/scenarios -runs 3 -out evals/results/tmp/results.json -baseline evals/baseline.json -update-baseline
+		$(GO) run -tags envtest ./evals/cmd/fleetops-eval -scenarios evals/scenarios -runs 3 -out evals/results/tmp/results.json -baseline evals/baseline.json -update-baseline
 
 generate: ## Regenerate deepcopy and CRDs from api/
 	controller-gen object:headerFile=hack/boilerplate.go.txt paths=./api/...
@@ -68,24 +68,24 @@ ARCH ?= $(shell $(GO) env GOARCH)
 test-image: ## Build the binaries under umask 077 and the image, then run each binary in it as user 65532 (R60; needs Docker)
 	$(GO) test -tags image -count=1 -v ./test/image
 
-image: ## Build the foc-mcp/foc-approvals/foc-agent image (binaries built on the host, see Dockerfile)
-	CGO_ENABLED=0 GOOS=linux GOARCH=$(ARCH) $(GO) build -o $(BIN)/linux-$(ARCH)/ ./cmd/foc-mcp ./cmd/foc-approvals ./cmd/foc-agent
+image: ## Build the fleetops-mcp/fleetops-approvals/fleetops-agent image (binaries built on the host, see Dockerfile)
+	CGO_ENABLED=0 GOOS=linux GOARCH=$(ARCH) $(GO) build -o $(BIN)/linux-$(ARCH)/ ./cmd/fleetops-mcp ./cmd/fleetops-approvals ./cmd/fleetops-agent
 	docker build --platform linux/$(ARCH) -t $(IMG) .
 
-deploy-kind: image ## Install CRDs, RBAC, admission policies, foc-mcp, foc-approvals and foc-agent into kind cluster KIND_CLUSTER (foc-*)
+deploy-kind: image ## Install CRDs, RBAC, admission policies, fleetops-mcp, fleetops-approvals and fleetops-agent into kind cluster KIND_CLUSTER (foc-*)
 	@case "$(KIND_CLUSTER)" in foc-*) ;; *) echo "KIND_CLUSTER must be set and start with foc-"; exit 1;; esac
 	kind load docker-image $(IMG) --name $(KIND_CLUSTER)
 	kubectl --context kind-$(KIND_CLUSTER) apply -f config/crd/ -f config/rbac/ -f config/admission/
-	kubectl --context kind-$(KIND_CLUSTER) -n foc-system create configmap fleetops-policy \
+	kubectl --context kind-$(KIND_CLUSTER) -n fleetops-system create configmap fleetops-policy \
 		--from-file=default.yaml=policies/default.yaml --dry-run=client -o yaml \
 		| kubectl --context kind-$(KIND_CLUSTER) apply -f -
-	kubectl --context kind-$(KIND_CLUSTER) -n foc-system create configmap fleetops-catalogue \
+	kubectl --context kind-$(KIND_CLUSTER) -n fleetops-system create configmap fleetops-catalogue \
 		--from-file=site.yaml=catalogue/warehouse-a.yaml --dry-run=client -o yaml \
 		| kubectl --context kind-$(KIND_CLUSTER) apply -f -
 	kubectl --context kind-$(KIND_CLUSTER) apply -f config/deploy/
-	kubectl --context kind-$(KIND_CLUSTER) -n foc-system rollout restart deploy/foc-mcp deploy/foc-approvals deploy/foc-agent
-	kubectl --context kind-$(KIND_CLUSTER) -n foc-system rollout status deploy/foc-mcp deploy/foc-approvals --timeout=180s
-	@echo "foc-agent starts once Secret fleet-ops-copilot-claude (key ANTHROPIC_API_KEY) exists in foc-system; not waited for here."
+	kubectl --context kind-$(KIND_CLUSTER) -n fleetops-system rollout restart deploy/fleetops-mcp deploy/fleetops-approvals deploy/fleetops-agent
+	kubectl --context kind-$(KIND_CLUSTER) -n fleetops-system rollout status deploy/fleetops-mcp deploy/fleetops-approvals --timeout=180s
+	@echo "fleetops-agent starts once Secret fleet-ops-copilot-claude (key ANTHROPIC_API_KEY) exists in fleetops-system; not waited for here."
 
 test-live: build ## Approval paths against a live cluster (hack/live-approval-path.sh sets the environment)
 	$(GO) test -tags live -count=1 -v -timeout 900s ./test/live/...
@@ -132,26 +132,26 @@ CHART_NP_SET := --set networkPolicy.enabled=true --set 'networkPolicy.apiServer.
 .PHONY: chart-lint chart-validate chart-parity chart-check
 
 chart-lint: ## helm lint the chart (strict): defaults, tracing backend with NetworkPolicy, tracing backend alone
-	$(HELM) lint $(CHART) --namespace foc-system --strict
-	$(HELM) lint $(CHART) --namespace foc-system --strict $(CHART_TRACING_SET) $(CHART_NP_SET)
-	$(HELM) lint $(CHART) --namespace foc-system --strict $(CHART_TRACING_SET)
+	$(HELM) lint $(CHART) --namespace fleetops-system --strict
+	$(HELM) lint $(CHART) --namespace fleetops-system --strict $(CHART_TRACING_SET) $(CHART_NP_SET)
+	$(HELM) lint $(CHART) --namespace fleetops-system --strict $(CHART_TRACING_SET)
 
 chart-validate: ## Render the chart (defaults, with NetworkPolicy, with the tracing backend) and schema-check it with kubeconform
 	@command -v $(KUBECONFORM) >/dev/null || { echo "kubeconform not found (go install github.com/yannh/kubeconform/cmd/kubeconform@v0.7.0)"; exit 1; }
 	@for v in $(CHART_KUBE_VERSIONS); do \
 		echo "== Kubernetes $$v, defaults"; \
-		$(HELM) template foc $(CHART) -n foc-system | $(KUBECONFORM) -strict -summary -kubernetes-version $$v - || exit 1; \
+		$(HELM) template fleetops $(CHART) -n fleetops-system | $(KUBECONFORM) -strict -summary -kubernetes-version $$v - || exit 1; \
 		echo "== Kubernetes $$v, networkPolicy.enabled"; \
-		$(HELM) template foc $(CHART) -n foc-system $(CHART_NP_SET) | $(KUBECONFORM) -strict -summary -kubernetes-version $$v - || exit 1; \
+		$(HELM) template fleetops $(CHART) -n fleetops-system $(CHART_NP_SET) | $(KUBECONFORM) -strict -summary -kubernetes-version $$v - || exit 1; \
 		echo "== Kubernetes $$v, tracing.backend.enabled without networkPolicy (as beside config/airgap)"; \
-		$(HELM) template foc $(CHART) -n foc-system $(CHART_TRACING_SET) | $(KUBECONFORM) -strict -summary -kubernetes-version $$v - || exit 1; \
+		$(HELM) template fleetops $(CHART) -n fleetops-system $(CHART_TRACING_SET) | $(KUBECONFORM) -strict -summary -kubernetes-version $$v - || exit 1; \
 		echo "== Kubernetes $$v, tracing.backend.enabled with networkPolicy.enabled"; \
-		$(HELM) template foc $(CHART) -n foc-system $(CHART_TRACING_SET) $(CHART_NP_SET) | $(KUBECONFORM) -strict -summary -kubernetes-version $$v - || exit 1; \
+		$(HELM) template fleetops $(CHART) -n fleetops-system $(CHART_TRACING_SET) $(CHART_NP_SET) | $(KUBECONFORM) -strict -summary -kubernetes-version $$v - || exit 1; \
 	done
 
 chart-parity: ## Check the chart's default render equals config/ (CRDs, RBAC, admission, deploy) and policies/default.yaml
 	@mkdir -p $(BIN)
-	$(HELM) template foc $(CHART) -n foc-system --include-crds > $(BIN)/chart-rendered.yaml
+	$(HELM) template fleetops $(CHART) -n fleetops-system --include-crds > $(BIN)/chart-rendered.yaml
 	$(GO) run ./scripts/chart-parity -rendered $(BIN)/chart-rendered.yaml
 
 chart-check: chart-lint chart-validate chart-parity ## All chart checks

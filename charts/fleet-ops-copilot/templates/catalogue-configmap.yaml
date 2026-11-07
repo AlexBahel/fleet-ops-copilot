@@ -1,6 +1,6 @@
-{{- include "foc.validate" . }}
+{{- include "fleetops.validate" . }}
 {{- if .Values.agent.enabled }}
-# The site catalogue, read by foc-agent (docs/DESIGN.md §3.10.1, D70).
+# The site catalogue, read by fleetops-agent (docs/DESIGN.md §3.10.1, D70).
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -8,8 +8,8 @@ metadata:
   name: fleetops-catalogue
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "foc.chartLabels" . | nindent 4 }}
+    {{- include "fleetops.chartLabels" . | nindent 4 }}
 data:
   site.yaml: |
-    {{- include "foc.catalogue" . | nindent 4 }}
+    {{- include "fleetops.catalogue" . | nindent 4 }}
 {{- end }}

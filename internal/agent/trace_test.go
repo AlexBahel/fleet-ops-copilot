@@ -92,7 +92,7 @@ func TestLoopTraceAcrossMCPAndPolicy(t *testing.T) {
 	}
 	zone := &swarmv1.FleetZone{ObjectMeta: metav1.ObjectMeta{Name: "aisle-b", Namespace: "warehouse-a"}}
 	c := fake.NewClientBuilder().WithScheme(fleet.NewScheme()).WithObjects(zone).Build()
-	svc := &tools.Service{C: c, Engine: policy.New(p), Identity: "system:serviceaccount:foc-system:foc-mcp", DefaultNamespace: "warehouse-a", Tracer: tr}
+	svc := &tools.Service{C: c, Engine: policy.New(p), Identity: "system:serviceaccount:fleetops-system:fleetops-mcp", DefaultNamespace: "warehouse-a", Tracer: tr}
 	ctx := context.Background()
 	cs, closeFn, err := Connect(ctx, mcpserver.New(svc))
 	if err != nil {
@@ -168,7 +168,7 @@ func TestLoopTraceAcrossMCPAndPolicy(t *testing.T) {
 			t.Fatal("tool span not under the request span")
 		}
 		if _, ok := server[s.SpanContext.SpanID().String()]; !ok {
-			t.Fatalf("no foc-mcp span under tool span %v", s.Attributes)
+			t.Fatalf("no fleetops-mcp span under tool span %v", s.Attributes)
 		}
 		tools[attrs(s.Attributes)[tracing.AttrToolName].AsString()] = s
 	}

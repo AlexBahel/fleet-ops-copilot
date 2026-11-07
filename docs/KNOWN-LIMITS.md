@@ -9,34 +9,34 @@ remove it.
   allow-lists. The tool-use loop (`internal/agent`) offers every read tool, `check_task` and
   `propose_task`; never a request tool or `whoami` (D74).
 - A login for the web UI (DESIGN D56). Without one, requests filed from the page are never
-  approvable; `foc chat` is the client that files approvable requests.
+  approvable; `fleetops chat` is the client that files approvable requests.
 - OIDC for people (ruling R43, production path). On kind the people authenticate with a static
   token file (`hack/kind-people.sh`, test only, D60); the OIDC configuration is described in
   `docs/RUNBOOK.md` and has not been set up or run anywhere. Requester authentication has not
   seen an OIDC token (see "Not measured yet").
-- Durable conversation state: foc-agent keeps conversations in memory (D75), so a restart loses
-  them and the chart runs one foc-agent replica (BACKLOG-v4, "Product"). No streaming of answers:
-  the page and `foc chat` wait for the whole run.
+- Durable conversation state: fleetops-agent keeps conversations in memory (D75), so a restart loses
+  them and the chart runs one fleetops-agent replica (BACKLOG-v4, "Product"). No streaming of answers:
+  the page and `fleetops chat` wait for the whole run.
 - The air-gapped profile is not templated in the Helm chart; it is installed beside it from
-  `config/airgap` (`make deploy-airgap`), and neither it nor the chart runs foc-agent with
+  `config/airgap` (`make deploy-airgap`), and neither it nor the chart runs fleetops-agent with
   `-backend llamacpp`. `make deploy-kind` installs the plain manifests (`config/deploy`) on a kind
   cluster; the image is built from binaries compiled on the host. `make foc-up` installs the
   chart (cloud profile); it has run on one machine (see "Not measured yet").
 - Tracing: no stdout exporter and no OTLP/HTTP exporter (OTLP/gRPC only), and no spans in
-  `foc-approvals` for approval and execution (D54). `foc-eval -otlp-endpoint` (D65) traces the
-  agent loop and an in-process foc-mcp, not the deployed processes. The chart's optional trace backend
+  `fleetops-approvals` for approval and execution (D54). `fleetops-eval -otlp-endpoint` (D65) traces the
+  agent loop and an in-process fleetops-mcp, not the deployed processes. The chart's optional trace backend
   (`tracing.backend.enabled`, D61) keeps traces in the Jaeger pod's memory only: a restart loses
   them, and it is for development and demonstration, not a trace store. Its images must be
   pullable by the nodes, so it is not part of the air-gapped profile. With the backend on, the
   chart renders the Collector's egress to Jaeger's OTLP port and DNS also without
   `networkPolicy.enabled` (D68); **tracing beside the air-gapped policy is verified by template
   only** (helm lint, kubeconform), not on a cluster, until the next cluster run. Beside
-  `config/airgap`, foc-mcp's and foc-agent's export to the Collector's OTLP port is opened by
+  `config/airgap`, fleetops-mcp's and fleetops-agent's export to the Collector's OTLP port is opened by
   `config/airgap/networkpolicy-tracing.yaml`, which `make deploy-airgap` applies only when the
   Collector is installed (D69); the chart opens the same port only with `networkPolicy.enabled`.
   Both are template-verified only, until the next cluster run. On kindnet a NetworkPolicy applies
   to new connections only (see "Egress in the air-gapped profile"): a pod started before the
-  rule existed keeps its old connections, so restart foc-mcp and foc-agent after applying it.
+  rule existed keeps its old connections, so restart fleetops-mcp and fleetops-agent after applying it.
 - More than one approver per request (`minApprovers`): one accepted decision approves.
 - Locations reach the robot only through the action's payload, in this site's convention
   (`{"waypoint", "x", "y"}`, D77): Swarmada v0.4 delivers no waypoint to an adapter (inventory C4),
@@ -56,17 +56,17 @@ remove it.
   air-gapped Qwen2.5-7B-Instruct, 25 scenarios × 3 each, on 2026-11-05
   (`evals/results/comparison-2026-11-05.md` and the three results.json it cites). Each is one
   sample of three runs per scenario. No model run of record has been made in live mode
-  (`foc-eval -live-context`) or through the deployed foc-agent. `evals/results/fixtures/results.json`
+  (`fleetops-eval -live-context`) or through the deployed fleetops-agent. `evals/results/fixtures/results.json`
   is a harness self-test with the scripted backend: it shows the harness, tools, policy and
   approval path behave as designed on fixture states, and says nothing about a model's pass rate.
 - Model latency (p50, p95) and cost per 100 requests are measured for those fixture-mode runs
   only, from the Mac mini: to the Claude API, or to llama-server through a port-forward, plus tool
   execution over MCP on loopback against envtest (`latency.scope` in each results.json). The
-  latency of a request through the deployed foc-agent is not measured. The latency in the fixture
+  latency of a request through the deployed fleetops-agent is not measured. The latency in the fixture
   results covers tool execution against a test API server only.
 - The `llamacpp` backend (`internal/llm/llamacpp.go`) has run one evaluation against a model,
-  through `foc-eval -backend llamacpp` against llama-server in the air-gapped kind profile
-  (`evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-05/`). foc-agent has not run with it
+  through `fleetops-eval -backend llamacpp` against llama-server in the air-gapped kind profile
+  (`evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-05/`). fleetops-agent has not run with it
   (see "Not built yet").
 - The air-gapped manifests (`config/airgap/`) and the `hack/airgap.mk` targets have run on one
   single-node kind cluster (kind v0.33.0, CNI kindnet, Docker Desktop on arm64;
@@ -88,9 +88,9 @@ remove it.
   the full run logs are not committed. After the webhook overlay
   replaces the quickstart's overlay, whether the simulated adapter stays connected has not been
   observed.
-- `foc-agent`, its web UI and `foc chat` have not run on a cluster or against a model, and whether the
-  deployed foc-mcp's spans reached the chart's Collector was not checked (the traces of 2026-11-05
-  came from `foc-eval -otlp-endpoint`, D65); they are tested with the scripted backend, envtest and an
+- `fleetops-agent`, its web UI and `fleetops chat` have not run on a cluster or against a model, and whether the
+  deployed fleetops-mcp's spans reached the chart's Collector was not checked (the traces of 2026-11-05
+  came from `fleetops-eval -otlp-endpoint`, D65); they are tested with the scripted backend, envtest and an
   in-process OTLP receiver, and the page was checked once in a browser against a local test server.
   Requester authentication (D57) has been tested only with static person tokens (envtest, and
   kind through `make foc-live`) and TokenRequest ServiceAccount tokens, not with OIDC tokens or exec-plugin credentials. The chart is checked with `helm lint --strict`,
@@ -128,20 +128,20 @@ remove it.
 
 - **Eval surface v4 has no model results.** No model has been run on the guided-request
   architecture (FOC-8 made no cloud call); the record runs of 2026-11-05 are on v3 and are not
-  comparable (D81). On v4 the unsafe-write measure counts requests foc-agent filed after a
+  comparable (D81). On v4 the unsafe-write measure counts requests fleetops-agent filed after a
   confirmation the scenario did not expect, not model write attempts (R69).
 - **Guided requests have not run on a cluster.** The dialogue, `check_task`, the confirmation
-  invariant, the execution re-check, `foc activate` and the follow-up are tested with the scripted
+  invariant, the execution re-check, `fleetops activate` and the follow-up are tested with the scripted
   backend, unit tests, envtest and the fixture evaluations. In envtest the executor's dry runs reach
   the CRD schema and the copilot's admission policies only; Swarmada's webhooks have not answered
   one (no cluster run in FOC-8).
-- **The activation record names who ran `foc activate`, not who sent the patch.** The record is
+- **The activation record names who ran `fleetops activate`, not who sent the patch.** The record is
   bound to the authenticated person and is made just before the patch; Swarmada does not record
-  who cleared `spec.draft`. foc-approvals links the most recent record made after the approval and
+  who cleared `spec.draft`. fleetops-approvals links the most recent record made after the approval and
   lists earlier ones (for example one whose patch Swarmada refused), so with two people activating
   at once the link can name the one whose patch lost. An activation made with `kubectl patch` and
-  no record is recorded as "activated outside foc activate; activator not recorded".
-- **`foc activate` needs the `fleetops:approver` role** (`create approvaldecisions`), which also
+  no record is recorded as "activated outside fleetops activate; activator not recorded".
+- **`fleetops activate` needs the `fleetops:approver` role** (`create approvaldecisions`), which also
   lets the holder approve or reject requests within their Swarmada permissions. A person who may
   only activate uses `kubectl patch`, and the activator is then not recorded (BACKLOG-v4 P3).
 - **foc-up's simulated fleet is three host processes.** The Swarmada quickstart stops its sim
@@ -177,11 +177,11 @@ remove it.
   between the check, the approval, the activation and the assignment. `TestFilterListPinned` fails
   when Swarmada's filter list changes at a re-pin; a Swarmada eligibility dry run is proposed for
   draft 5 (BACKLOG-v4, C5).
-- **The confirmation is asserted by the client.** foc-agent sets the confirmed preview id only
-  after the person's own reply, and foc-mcp refuses a request without it (D74). Another MCP client
+- **The confirmation is asserted by the client.** fleetops-agent sets the confirmed preview id only
+  after the person's own reply, and fleetops-mcp refuses a request without it (D74). Another MCP client
   (the evaluation harness, a local stdio client, `test/live`) sets it itself, as it sets the session
   id.
-- **SwarmadaConfig read (R66, R69).** foc-mcp's and foc-approvals' ServiceAccounts can `get` and
+- **SwarmadaConfig read (R66, R69).** fleetops-mcp's and fleetops-approvals' ServiceAccounts can `get` and
   `list` the whole SwarmadaConfig object; only the code limits the use to the namespace-stop
   markers and `maxPendingActionsPerZone`, which it keeps, never logging or tracing the object, and
   no model-facing tool returns it. Its schema has no secret-typed field, but
@@ -190,7 +190,7 @@ remove it.
 - **Conversations of unverified requesters.** A page user's conversation is bound to
   `unverified:<typed name>` and to its id; anyone who types the same name and holds the id could
   continue it. Nothing it files can be approved (D56).
-- **`catalogue_review` entries** are in foc-agent's audit file on an emptyDir volume, per pod.
+- **`catalogue_review` entries** are in fleetops-agent's audit file on an emptyDir volume, per pod.
 
 - **The eval baseline is a file in the same repository (D58).** The gate compares each run with
   `evals/baseline.json` at the same commit, so a commit can lower the baseline and the gate then
@@ -205,7 +205,7 @@ remove it.
 - **Web UI has no login (D56).** The name typed in the page is not verified; it is recorded as
   `requestedFor: unverified:<name>` and every approval of such a request is refused
   (`DENY_REQUESTER_UNVERIFIED`), so a page request can only be rejected or expire. Anyone who can
-  reach the foc-agent Service can still chat (spending model tokens under the site's API key),
+  reach the fleetops-agent Service can still chat (spending model tokens under the site's API key),
   file such unapprovable requests (counted against the per-session draft limit of the session id
   they send), and read every ApprovalRequest in the bound namespaces (operator names, reasons).
   The Service is ClusterIP only, the chart renders no Ingress (`make chart-parity` refuses one),
@@ -213,7 +213,7 @@ remove it.
   traffic depends on the CNI. The only rate limit is the per-pod cap on chats in flight.
 - **Client-certificate users are unverified requesters (D57, R43).** On kind, kind's admin and the
   people `hack/kind-person.sh` creates authenticate with client certificates and have no bearer
-  token, so a request they file (through `foc chat` or any other client) records
+  token, so a request they file (through `fleetops chat` or any other client) records
   `unverified:<name>` and can only be rejected. A verified requester needs a token-backed person
   identity: on kind, the static token file for the fictional people (`hack/kind-people.sh`,
   `make foc-up`, D60); in production, OIDC.
@@ -221,30 +221,30 @@ remove it.
   and no rotation, and a change needs an API server restart. Anyone who can read
   `$FOC_UP_DIR/people/tokens.csv` (mode 600) or the node's `/etc/foc-people` can act as sam, dana
   or eve on that cluster. It exists for fictional people on a local cluster, and no other.
-- **Requester tokens (D57).** The token reaches `foc-mcp` through `foc-agent` over plain HTTP
+- **Requester tokens (D57).** The token reaches `fleetops-mcp` through `fleetops-agent` over plain HTTP
   inside the cluster, and both processes briefly hold a credential that is valid against the API
-  server; `foc-mcp` uses it only for a `TokenReview` (default audiences) and keeps a SHA-256 of it
+  server; `fleetops-mcp` uses it only for a `TokenReview` (default audiences) and keeps a SHA-256 of it
   for 30 seconds. Session ids are still asserted by the client.
 - **Impersonation.** A person allowed to impersonate users can create a decision as another
   person; the admission policy sees the impersonated identity. This is how Kubernetes
   authentication works, not something the copilot can detect.
-- **Draft gate detection.** `foc-mcp` and `foc-approvals` treat any validating webhook with
+- **Draft gate detection.** `fleetops-mcp` and `fleetops-approvals` treat any validating webhook with
   `failurePolicy: Fail` covering `UPDATE` of `fleettasks.swarmada.io` as the gate. They do not
   verify that it is Swarmada's webhook or that it is serving.
-- **ServiceAccount names** in the admission policies are fixed to namespace `foc-system`.
+- **ServiceAccount names** in the admission policies are fixed to namespace `fleetops-system`.
 - **Per-session draft limit** is applied when a request is made, not when it is approved.
-- **Estop attribution.** When `foc-approvals` triggers an approved zone stop, Swarmada attributes
+- **Estop attribution.** When `fleetops-approvals` triggers an approved zone stop, Swarmada attributes
   it to the executor's ServiceAccount: its mutating webhook stamps `swarmada.io/estop-actor`,
   its controller seals that actor into an `ESTOP_TRIGGERED` entry of Swarmada's safety audit log
   and then removes the annotation (D33). The approving person is recorded only in the copilot's
   `ApprovalRequest`, Events and audit file.
 - **Activation is done by a person, outside the copilot.** After approval the copilot gives the
-  command (`foc activate`, D79) and watches for the task to leave `Draft`, without a deadline. It
-  records the activator from the annotation `foc activate` sets; an activation made another way
+  command (`fleetops activate`, D79) and watches for the task to leave `Draft`, without a deadline. It
+  records the activator from the annotation `fleetops activate` sets; an activation made another way
   (`kubectl patch`) is recorded as unknown. The web UI does not perform it (D52).
-- **The write shown in the web UI** is the body `foc-approvals` sends (D53); fields the API server
+- **The write shown in the web UI** is the body `fleetops-approvals` sends (D53); fields the API server
   defaults and anything Swarmada's mutating webhooks add are not shown.
-- **foc-agent readiness** depends on foc-mcp and on the API server; either being down removes the
+- **fleetops-agent readiness** depends on fleetops-mcp and on the API server; either being down removes the
   web UI from its Service.
 - **Audit storage.** Each process writes its own JSONL file; there is no shared store, rotation
   or retention yet. In `config/deploy` the files are on `emptyDir` volumes and are lost when a
@@ -261,13 +261,13 @@ remove it.
   policy before opening connections, so a process could reach the internet in that window.
   **On kindnet the policy applies to new connections only:** a connection opened before the policy
   existed kept working after it. Measured 2026-11-05: the trace Collector's gRPC connection to
-  Jaeger, opened before `foc-airgap-egress` was created, carried spans for at least 68.6 minutes
+  Jaeger, opened before `fleetops-airgap-egress` was created, carried spans for at least 68.6 minutes
   under a policy that allows the Collector only DNS; after a restart its new connection, and a new
   connection from its network namespace, timed out, while a pod without a policy still reached
   Jaeger (`docs/evidence/airgap-2026-11-05/collector-restart-check.log`). So a connection opened in
   a new pod's start-up window, or by any pod before the policy is applied, can outlive the policy:
-  apply the policy before the workloads start, or restart every pod in `foc-system` after applying
-  it (`make deploy-airgap` restarts foc-mcp and foc-approvals only). Other CNIs were not tested. Which CNIs enforce a policy from pod
+  apply the policy before the workloads start, or restart every pod in `fleetops-system` after applying
+  it (`make deploy-airgap` restarts fleetops-mcp and fleetops-approvals only). Other CNIs were not tested. Which CNIs enforce a policy from pod
   start has not been checked here; for a site that needs it, choose a CNI whose own documentation
   says so and run `make verify-egress` there. Cluster DNS answered
   queries for external names in kind (CoreDNS forwards to the host). `kubectl port-forward`

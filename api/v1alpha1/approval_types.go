@@ -109,7 +109,7 @@ type Repeat struct {
 	Times int32 `json:"times"`
 }
 
-// DraftTaskParams is the FleetTask foc-approvals creates, held as a draft,
+// DraftTaskParams is the FleetTask fleetops-approvals creates, held as a draft,
 // after a named person approves.
 type DraftTaskParams struct {
 	// TaskName is the FleetTask name in the request's namespace.
@@ -203,7 +203,7 @@ type PreviewRecord struct {
 	// not what the robot found (class (b) kinds).
 	ResultReported  bool            `json:"resultReported"`
 	FailureHandling FailureHandling `json:"failureHandling"`
-	// ConfirmedAt is when foc-mcp received the confirmation.
+	// ConfirmedAt is when fleetops-mcp received the confirmation.
 	// +optional
 	ConfirmedAt *metav1.Time `json:"confirmedAt,omitempty"`
 }
@@ -239,7 +239,7 @@ type PolicyRecord struct {
 	Message string `json:"message,omitempty"`
 }
 
-// ApprovalRequestSpec is written once by foc-mcp and never changed.
+// ApprovalRequestSpec is written once by fleetops-mcp and never changed.
 // +kubebuilder:validation:XValidation:rule="self == oldSelf",message="spec is immutable"
 // +kubebuilder:validation:XValidation:rule="(self.type == 'DraftTask') == has(self.draftTask)",message="draftTask is set exactly when type is DraftTask"
 // +kubebuilder:validation:XValidation:rule="(self.type == 'ActivateTask') == has(self.activateTask)",message="activateTask is set exactly when type is ActivateTask"
@@ -304,7 +304,7 @@ type TargetRef struct {
 	Name       string `json:"name"`
 }
 
-// ApprovalRequestStatus is written only by foc-approvals.
+// ApprovalRequestStatus is written only by fleetops-approvals.
 type ApprovalRequestStatus struct {
 	// +optional
 	State RequestState `json:"state,omitempty"`
@@ -334,7 +334,7 @@ type ApprovalRequestStatus struct {
 	// +optional
 	ExecutionChecks *ChecksRecord `json:"executionChecks,omitempty"`
 	// ActivatedBy is the person who activated the draft: spec.decidedBy of
-	// the Activation ApprovalDecision foc activate created (ActivationRef);
+	// the Activation ApprovalDecision fleetops activate created (ActivationRef);
 	// "unknown" when the draft left Draft with no such record (D79).
 	// +optional
 	ActivatedBy string `json:"activatedBy,omitempty"`
@@ -413,7 +413,7 @@ type DecisionType string
 const (
 	// DecisionVerdict is a person's approve or reject (the default).
 	DecisionVerdict DecisionType = "Verdict"
-	// DecisionActivation records that a person ran foc activate for an
+	// DecisionActivation records that a person ran fleetops activate for an
 	// approved ActivateTask request (D79). It decides nothing.
 	DecisionActivation DecisionType = "Activation"
 )

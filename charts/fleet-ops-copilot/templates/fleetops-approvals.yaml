@@ -1,37 +1,37 @@
-{{- include "foc.validate" . }}
-# foc-approvals: approval controller and executor. Writes to Swarmada only for
+{{- include "fleetops.validate" . }}
+# fleetops-approvals: approval controller and executor. Writes to Swarmada only for
 # a request a named person approved. The audit file is on an emptyDir volume
 # and does not survive a pod restart (docs/KNOWN-LIMITS.md, "Audit storage").
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: foc-approvals
+  name: fleetops-approvals
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "foc.workloadLabels" (dict "name" "foc-approvals" "root" .) | nindent 4 }}
+    {{- include "fleetops.workloadLabels" (dict "name" "fleetops-approvals" "root" .) | nindent 4 }}
 spec:
   replicas: {{ .Values.approvals.replicas }}
   selector:
-    matchLabels: {app.kubernetes.io/name: foc-approvals}
+    matchLabels: {app.kubernetes.io/name: fleetops-approvals}
   template:
     metadata:
       labels:
-        {{- include "foc.workloadLabels" (dict "name" "foc-approvals" "root" .) | nindent 8 }}
+        {{- include "fleetops.workloadLabels" (dict "name" "fleetops-approvals" "root" .) | nindent 8 }}
       annotations:
         # Restart on a policy change (helm upgrade).
-        checksum/policy: {{ include "foc.policy" . | sha256sum }}
+        checksum/policy: {{ include "fleetops.policy" . | sha256sum }}
     spec:
-      serviceAccountName: foc-approvals
+      serviceAccountName: fleetops-approvals
       securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
       containers:
-        - name: foc-approvals
-          image: {{ include "foc.image" . }}
+        - name: fleetops-approvals
+          image: {{ include "fleetops.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: [/usr/local/bin/foc-approvals]
+          command: [/usr/local/bin/fleetops-approvals]
           args:
             - -policy=/etc/fleetops/policy/default.yaml
-            - -audit={{ .Values.audit.dir }}/foc-approvals.jsonl
+            - -audit={{ .Values.audit.dir }}/fleetops-approvals.jsonl
             - -health-probe-bind-address=:{{ .Values.approvals.probePort }}
           ports: [{name: probes, containerPort: {{ .Values.approvals.probePort }}}]
           {{- with .Values.approvals.resources }}

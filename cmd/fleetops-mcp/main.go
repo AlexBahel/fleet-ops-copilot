@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Command foc-mcp serves the copilot's tools over MCP (streamable HTTP or stdio).
+// Command fleetops-mcp serves the copilot's tools over MCP (streamable HTTP or stdio).
 //
 // The requester of every call is the username of the caller's bearer token
 // (Authorization header), verified with a TokenReview; without a verified
@@ -64,11 +64,11 @@ func defaultIdentity() string {
 
 func run() error {
 	policyPath := flag.String("policy", "policies/default.yaml", "policy file")
-	auditPath := flag.String("audit", "foc-mcp-audit.jsonl", "JSONL audit file")
+	auditPath := flag.String("audit", "fleetops-mcp-audit.jsonl", "JSONL audit file")
 	namespace := flag.String("namespace", "warehouse-a", "default Swarmada namespace")
 	listen := flag.String("listen", ":8080", "HTTP listen address for streamable MCP")
 	stdio := flag.Bool("stdio", false, "serve MCP on stdin/stdout instead of HTTP")
-	identity := flag.String("identity", defaultIdentity(), "principal foc-mcp runs as (spec.requestedBy); defaults from POD_NAMESPACE and SERVICE_ACCOUNT")
+	identity := flag.String("identity", defaultIdentity(), "principal fleetops-mcp runs as (spec.requestedBy); defaults from POD_NAMESPACE and SERVICE_ACCOUNT")
 	otlp := flag.String("otlp-endpoint", tracing.EndpointFromEnv(), "OTLP/gRPC collector for tool and policy-decision spans (host:port, http:// or https://); empty disables tracing")
 	flag.Parse()
 	if *identity == "" {
@@ -82,7 +82,7 @@ func run() error {
 	red := redact.FromEnv()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	tp, shutdownTracing, err := tracing.Setup(ctx, tracing.Config{Endpoint: *otlp, ServiceName: "foc-mcp", Redactor: red})
+	tp, shutdownTracing, err := tracing.Setup(ctx, tracing.Config{Endpoint: *otlp, ServiceName: "fleetops-mcp", Redactor: red})
 	if err != nil {
 		return err
 	}
@@ -107,7 +107,7 @@ func run() error {
 	}
 	svc := &tools.Service{
 		C: c, Engine: policy.New(p), Audit: aw, Identity: *identity, DefaultNamespace: *namespace,
-		Events: &audit.EventSink{C: c, Scheme: scheme, Component: "foc-mcp", Red: red},
+		Events: &audit.EventSink{C: c, Scheme: scheme, Component: "fleetops-mcp", Red: red},
 		Tracer: tracing.Tracer(tp),
 		Authn:  &authn.TokenReviewer{C: c},
 	}
@@ -125,7 +125,7 @@ func run() error {
 		defer cancel()
 		_ = hs.Shutdown(sctx)
 	}()
-	log.Printf("foc-mcp %s listening on %s/mcp as %s", mcpserver.Version, *listen, *identity)
+	log.Printf("fleetops-mcp %s listening on %s/mcp as %s", mcpserver.Version, *listen, *identity)
 	if err := hs.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}

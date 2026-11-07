@@ -18,8 +18,8 @@ limitations under the License.
 // likely to run: an eligible robot now, zone state, location, dependencies,
 // timing (docs/DESIGN.md §3.10.4, D73). It never says "guaranteed": the
 // adapter's own per-instance check, and everything that changes between now
-// and dispatch, are outside what a read can see. foc-mcp (check_task),
-// foc-approvals (the execution re-check) and foc activate share it.
+// and dispatch, are outside what a read can see. fleetops-mcp (check_task),
+// fleetops-approvals (the execution re-check) and fleetops activate share it.
 package feasibility
 
 import (
@@ -32,7 +32,7 @@ import (
 
 	swarmv1 "github.com/swarmada/swarmada/api/v1"
 
-	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
+	fleetopsv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 )
 
 // Verdicts. There is deliberately no stronger one.
@@ -169,7 +169,7 @@ type Snapshot struct {
 	Actions      []swarmv1.FleetAction
 	Config       Config
 	// NotChecked lists reads that failed (for example a person without list
-	// permission running foc activate).
+	// permission running fleetops activate).
 	NotChecked []string
 }
 
@@ -179,8 +179,8 @@ type Proposal struct {
 	Task         *swarmv1.FleetTask
 	Creating     bool
 	ActivateTask string
-	Maintenance  *focv1.ZoneMaintenanceParams
-	ZoneStop     *focv1.ZoneStopParams
+	Maintenance  *fleetopsv1.ZoneMaintenanceParams
+	ZoneStop     *fleetopsv1.ZoneStopParams
 }
 
 // Finding is one blocker or warning.
@@ -212,13 +212,13 @@ type Report struct {
 }
 
 // Records converts the checks for an ApprovalRequest.
-func (r Report) Records() []focv1.CheckRecord {
-	out := make([]focv1.CheckRecord, 0, len(r.Checks)+len(r.NotChecked))
+func (r Report) Records() []fleetopsv1.CheckRecord {
+	out := make([]fleetopsv1.CheckRecord, 0, len(r.Checks)+len(r.NotChecked))
 	for _, c := range r.Checks {
-		out = append(out, focv1.CheckRecord{Name: c.Name, Outcome: c.Outcome, Code: c.Code, Detail: c.Detail})
+		out = append(out, fleetopsv1.CheckRecord{Name: c.Name, Outcome: c.Outcome, Code: c.Code, Detail: c.Detail})
 	}
 	for _, n := range r.NotChecked {
-		out = append(out, focv1.CheckRecord{Name: n, Outcome: NotChecked})
+		out = append(out, fleetopsv1.CheckRecord{Name: n, Outcome: NotChecked})
 	}
 	return out
 }
@@ -839,7 +839,7 @@ func (e *eval) eligibility(member string, a swarmv1.FleetActionSpec, explained b
 	}
 }
 
-func (e *eval) maintenance(p *focv1.ZoneMaintenanceParams) {
+func (e *eval) maintenance(p *fleetopsv1.ZoneMaintenanceParams) {
 	if p.ScopeType == "Zone" || p.ScopeType == "" {
 		if _, ok := e.zones[p.ZoneName]; !ok {
 			e.block(CodeZoneNotFound, "", "FleetZone %s does not exist in %s", p.ZoneName, e.s.Namespace)
@@ -863,7 +863,7 @@ func (e *eval) maintenance(p *focv1.ZoneMaintenanceParams) {
 	}
 }
 
-func (e *eval) zoneStop(p *focv1.ZoneStopParams) {
+func (e *eval) zoneStop(p *fleetopsv1.ZoneStopParams) {
 	z, ok := e.zones[p.ZoneName]
 	if !ok {
 		e.block(CodeZoneNotFound, "", "FleetZone %s does not exist in %s", p.ZoneName, e.s.Namespace)

@@ -28,14 +28,14 @@ import (
 
 	swarmv1 "github.com/swarmada/swarmada/api/v1"
 
-	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
+	fleetopsv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
 )
 
-func activationWorld(state focv1.RequestState, withRobot bool) client.Client {
-	req := &focv1.ApprovalRequest{ObjectMeta: metav1.ObjectMeta{Name: "areq-act", Namespace: "warehouse-a"},
-		Spec:   focv1.ApprovalRequestSpec{Type: focv1.RequestActivateTask, ActivateTask: &focv1.ActivateTaskParams{TaskName: "move-1"}},
-		Status: focv1.ApprovalRequestStatus{State: state}}
+func activationWorld(state fleetopsv1.RequestState, withRobot bool) client.Client {
+	req := &fleetopsv1.ApprovalRequest{ObjectMeta: metav1.ObjectMeta{Name: "areq-act", Namespace: "warehouse-a"},
+		Spec:   fleetopsv1.ApprovalRequestSpec{Type: fleetopsv1.RequestActivateTask, ActivateTask: &fleetopsv1.ActivateTaskParams{TaskName: "move-1"}},
+		Status: fleetopsv1.ApprovalRequestStatus{State: state}}
 	task := &swarmv1.FleetTask{ObjectMeta: metav1.ObjectMeta{Name: "move-1", Namespace: "warehouse-a"},
 		Spec: swarmv1.FleetTaskSpec{Draft: true, Actions: []swarmv1.FleetTaskAction{{Name: "go", Action: swarmv1.FleetActionSpec{Type: "Navigate", Zone: "warehouse-a", RequiredCapabilities: []string{"navigation"}}}}}}
 	zone := &swarmv1.FleetZone{ObjectMeta: metav1.ObjectMeta{Name: "warehouse-a", Namespace: "warehouse-a"}}
@@ -56,12 +56,12 @@ func who(user string, groups ...string) func(context.Context) (string, []string,
 	return func(context.Context) (string, []string, error) { return user, groups, nil }
 }
 
-// D79: foc activate checks first, records the activation as an
+// D79: fleetops activate checks first, records the activation as an
 // ApprovalDecision of type Activation, then sends the plain spec.draft=false
 // patch; the FleetTask gains no annotation.
 func TestActivate(t *testing.T) {
 	ctx := context.Background()
-	c := activationWorld(focv1.StateApproved, true)
+	c := activationWorld(fleetopsv1.StateApproved, true)
 	var out bytes.Buffer
 	if err := activate(ctx, activator{C: c, Identity: who("dana"), Host: "https://127.0.0.1:6443"}, "warehouse-a", "areq-act", "", &out); err != nil {
 		t.Fatalf("%v\n%s", err, out.String())
@@ -73,7 +73,7 @@ func TestActivate(t *testing.T) {
 	if task.Spec.Draft || len(task.Annotations) != 0 {
 		t.Fatalf("task draft=%v annotations=%v: only spec.draft may change", task.Spec.Draft, task.Annotations)
 	}
-	var ds focv1.ApprovalDecisionList
+	var ds fleetopsv1.ApprovalDecisionList
 	if err := c.List(ctx, &ds); err != nil {
 		t.Fatal(err)
 	}
@@ -98,9 +98,9 @@ func TestActivateRefuses(t *testing.T) {
 		id   func(context.Context) (string, []string, error)
 		want string
 	}{
-		"service account": {activationWorld(focv1.StateApproved, true), who("system:serviceaccount:foc-system:foc-approvals", "system:serviceaccounts"), "ServiceAccount"},
-		"not approved":    {activationWorld(focv1.StatePending, true), who("dana"), "not Approved"},
-		"blocked check":   {activationWorld(focv1.StateApproved, false), who("dana"), "a check is blocked"},
+		"service account": {activationWorld(fleetopsv1.StateApproved, true), who("system:serviceaccount:fleetops-system:fleetops-approvals", "system:serviceaccounts"), "ServiceAccount"},
+		"not approved":    {activationWorld(fleetopsv1.StatePending, true), who("dana"), "not Approved"},
+		"blocked check":   {activationWorld(fleetopsv1.StateApproved, false), who("dana"), "a check is blocked"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var out bytes.Buffer
@@ -113,7 +113,7 @@ func TestActivateRefuses(t *testing.T) {
 			if !task.Spec.Draft {
 				t.Fatal("activated anyway")
 			}
-			var ds focv1.ApprovalDecisionList
+			var ds fleetopsv1.ApprovalDecisionList
 			if err := tc.c.List(ctx, &ds); err != nil || len(ds.Items) != 0 {
 				t.Fatalf("refused, yet recorded %v (%v)", ds.Items, err)
 			}

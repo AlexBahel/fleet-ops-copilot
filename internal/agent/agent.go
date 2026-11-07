@@ -59,10 +59,10 @@ Never substitute a parameter the operator asked for; if a value is not allowed, 
 // ToolEvent is one executed tool call.
 type ToolEvent struct {
 	Name string `json:"name"`
-	// By is "agent" for a call foc-agent made itself (a fleet snapshot for
+	// By is "agent" for a call fleetops-agent made itself (a fleet snapshot for
 	// the dialogue, check_task for a preview, the request filed after a
-	// confirmation, whoami), "local" for a tool foc-agent handles in process
-	// (propose_task), and empty for a model's call to foc-mcp.
+	// confirmation, whoami), "local" for a tool fleetops-agent handles in process
+	// (propose_task), and empty for a model's call to fleetops-mcp.
 	By         string          `json:"by,omitempty"`
 	Args       json.RawMessage `json:"args"`
 	Result     json.RawMessage `json:"result,omitempty"`
@@ -104,7 +104,7 @@ type TurnRecord struct {
 	Stalled bool `json:"stalled,omitempty"`
 }
 
-// LocalTool is a tool foc-agent handles itself. Call returns the content
+// LocalTool is a tool fleetops-agent handles itself. Call returns the content
 // given to the model, or, when stop is non-empty, the text that ends the
 // turn (a question or a preview the engine rendered).
 type LocalTool struct {
@@ -118,9 +118,9 @@ type Loop struct {
 	Session  *mcp.ClientSession
 	MaxTurns int
 	// Offer says whether a served tool is offered to the model; nil offers
-	// all. foc-agent offers no request_* tool and not whoami (D74).
+	// all. fleetops-agent offers no request_* tool and not whoami (D74).
 	Offer func(name string) bool
-	// Local tools are handled by the caller, not foc-mcp.
+	// Local tools are handled by the caller, not fleetops-mcp.
 	Local []LocalTool
 	// Tracer records one span per request, model call and tool call
 	// (internal/tracing). nil records nothing.
@@ -339,7 +339,7 @@ func Connect(ctx context.Context, srv *mcp.Server) (*mcp.ClientSession, func(), 
 	if err != nil {
 		return nil, nil, err
 	}
-	cs, err := mcp.NewClient(&mcp.Implementation{Name: "foc-agent", Version: mcpserver.Version}, nil).Connect(ctx, ct, nil)
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "fleetops-agent", Version: mcpserver.Version}, nil).Connect(ctx, ct, nil)
 	if err != nil {
 		_ = ss.Close()
 		return nil, nil, err

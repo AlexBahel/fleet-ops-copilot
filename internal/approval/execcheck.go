@@ -32,7 +32,7 @@ import (
 
 	swarmv1 "github.com/swarmada/swarmada/api/v1"
 
-	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
+	fleetopsv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/audit"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/feasibility"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
@@ -46,10 +46,10 @@ import (
 // only there). It returns the record and, when the write must not happen,
 // the refusal. A transient error (no answer from the API server) is
 // returned as err, so the request is retried.
-func (r *Reconciler) recheckDraft(ctx context.Context, req *focv1.ApprovalRequest, t *swarmv1.FleetTask) (*focv1.ChecksRecord, *policy.Decision, error) {
+func (r *Reconciler) recheckDraft(ctx context.Context, req *fleetopsv1.ApprovalRequest, t *swarmv1.FleetTask) (*fleetopsv1.ChecksRecord, *policy.Decision, error) {
 	now := r.now()
 	rep := feasibility.Evaluate(feasibility.Proposal{Task: t, Creating: true}, feasibility.Load(ctx, r.C, req.Namespace, now))
-	rec := &focv1.ChecksRecord{Verdict: rep.Verdict, CheckedAt: metav1.NewTime(now.UTC().Truncate(time.Second)), Checks: rep.Records()}
+	rec := &fleetopsv1.ChecksRecord{Verdict: rep.Verdict, CheckedAt: metav1.NewTime(now.UTC().Truncate(time.Second)), Checks: rep.Records()}
 	if rep.Verdict == feasibility.Blocked {
 		var why []string
 		for _, b := range rep.Blockers {
@@ -63,10 +63,10 @@ func (r *Reconciler) recheckDraft(ctx context.Context, req *focv1.ApprovalReques
 		err := r.C.Create(ctx, obj, client.DryRunAll)
 		switch {
 		case err == nil:
-			rec.DryRuns = append(rec.DryRuns, focv1.CheckRecord{Name: name, Outcome: feasibility.Passed, Detail: "accepted by the API server (dry run; nothing stored)"})
+			rec.DryRuns = append(rec.DryRuns, fleetopsv1.CheckRecord{Name: name, Outcome: feasibility.Passed, Detail: "accepted by the API server (dry run; nothing stored)"})
 			return nil
 		case isRefusal(err):
-			rec.DryRuns = append(rec.DryRuns, focv1.CheckRecord{Name: name, Outcome: feasibility.BlockedOut, Code: string(policy.CodeSwarmadaRefused), Detail: err.Error()})
+			rec.DryRuns = append(rec.DryRuns, fleetopsv1.CheckRecord{Name: name, Outcome: feasibility.BlockedOut, Code: string(policy.CodeSwarmadaRefused), Detail: err.Error()})
 			refusals = append(refusals, name+": "+err.Error())
 			return nil
 		default:
@@ -101,12 +101,12 @@ func isRefusal(err error) bool {
 }
 
 // refuseExecution moves an approved request to Failed without a write.
-func (r *Reconciler) refuseExecution(ctx context.Context, req *focv1.ApprovalRequest, rec *focv1.ChecksRecord, d policy.Decision) error {
+func (r *Reconciler) refuseExecution(ctx context.Context, req *fleetopsv1.ApprovalRequest, rec *fleetopsv1.ChecksRecord, d policy.Decision) error {
 	r.log(audit.Entry{Kind: audit.KindExecutionFailed, Actor: req.Status.DecidedBy, Namespace: req.Namespace, Object: "ApprovalRequest/" + req.Name,
 		SessionID: req.Spec.SessionID, Code: string(d.Code), Message: d.Message})
 	r.event(ctx, req, corev1.EventTypeWarning, "ExecutionRefused", d.Message)
-	return r.setStatus(ctx, req, func(s *focv1.ApprovalRequestStatus) {
-		s.State, s.ExecutionChecks = focv1.StateFailed, rec
+	return r.setStatus(ctx, req, func(s *fleetopsv1.ApprovalRequestStatus) {
+		s.State, s.ExecutionChecks = fleetopsv1.StateFailed, rec
 		s.Message = "approved, but not executed: " + string(d.Code) + ": " + d.Message
 	})
 }
@@ -134,7 +134,7 @@ func terminalTask(p swarmv1.FleetTaskPhase) bool {
 // observeOutcome records a drafted task's terminal result once, and with
 // PrepareFollowUp after a failure, a follow-up proposal that is never filed
 // without a new preview and confirmation (D78).
-func (r *Reconciler) observeOutcome(ctx context.Context, req *focv1.ApprovalRequest) error {
+func (r *Reconciler) observeOutcome(ctx context.Context, req *fleetopsv1.ApprovalRequest) error {
 	var t swarmv1.FleetTask
 	if err := r.C.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: req.Status.Target.Name}, &t); err != nil {
 		return client.IgnoreNotFound(err)
@@ -142,7 +142,7 @@ func (r *Reconciler) observeOutcome(ctx context.Context, req *focv1.ApprovalRequ
 	if t.Labels[fleet.RequestLabel] != req.Name || !terminalTask(t.Status.Phase) {
 		return nil
 	}
-	out := &focv1.Outcome{Phase: string(t.Status.Phase), ObservedAt: metav1.NewTime(r.now().UTC().Truncate(time.Second))}
+	out := &fleetopsv1.Outcome{Phase: string(t.Status.Phase), ObservedAt: metav1.NewTime(r.now().UTC().Truncate(time.Second))}
 	for _, a := range t.Status.Actions {
 		if a.Phase != swarmv1.ActionPhaseFailed {
 			continue
@@ -156,10 +156,10 @@ func (r *Reconciler) observeOutcome(ctx context.Context, req *focv1.ApprovalRequ
 		}
 		break
 	}
-	var fu *focv1.FollowUp
-	if t.Status.Phase == swarmv1.FleetTaskPhaseFailed && req.Spec.Preview != nil && req.Spec.Preview.FailureHandling == focv1.FailurePrepareFollowUp && req.Spec.DraftTask != nil {
-		fu = &focv1.FollowUp{Kind: req.Spec.Preview.Kind, DraftTask: req.Spec.DraftTask.DeepCopy(),
-			Summary: fmt.Sprintf("the same %s as %s, as a new draft; start it with foc chat --follow-up %s", req.Spec.Preview.Kind, req.Name, req.Name)}
+	var fu *fleetopsv1.FollowUp
+	if t.Status.Phase == swarmv1.FleetTaskPhaseFailed && req.Spec.Preview != nil && req.Spec.Preview.FailureHandling == fleetopsv1.FailurePrepareFollowUp && req.Spec.DraftTask != nil {
+		fu = &fleetopsv1.FollowUp{Kind: req.Spec.Preview.Kind, DraftTask: req.Spec.DraftTask.DeepCopy(),
+			Summary: fmt.Sprintf("the same %s as %s, as a new draft; start it with fleetops chat --follow-up %s", req.Spec.Preview.Kind, req.Name, req.Name)}
 	}
 	msg := fmt.Sprintf("FleetTask/%s ended %s", t.Name, t.Status.Phase)
 	if out.FailedMember != "" {
@@ -175,5 +175,5 @@ func (r *Reconciler) observeOutcome(ctx context.Context, req *focv1.ApprovalRequ
 		typ = corev1.EventTypeWarning
 	}
 	r.event(ctx, req, typ, "TaskOutcome", msg)
-	return r.setStatus(ctx, req, func(s *focv1.ApprovalRequestStatus) { s.Outcome, s.FollowUp = out, fu })
+	return r.setStatus(ctx, req, func(s *fleetopsv1.ApprovalRequestStatus) { s.Outcome, s.FollowUp = out, fu })
 }

@@ -231,11 +231,11 @@ for has no field · (c) needs a Swarmada change.
 
 ## 5. What a pre-check can see from reads (input to `check_task`)
 
-foc-mcp's ServiceAccount reads Robots, FleetTasks, FleetActions, FleetZones, ZoneMaintenances,
+fleetops-mcp's ServiceAccount reads Robots, FleetTasks, FleetActions, FleetZones, ZoneMaintenances,
 DiscoveredRobots, FleetAdapters, RobotClasses and TaskTriggers (DESIGN §3.6). From these it can
 evaluate filters 1–8, 11, 12, the resume window, the deletion exclusion, filter 9 except the contract
 range and `SafetyStream`, and filter 10 except the namespace stop and reported stops. The namespace
-stop and the per-zone Pending cap need `SwarmadaConfig`, which foc-mcp cannot read today. The
+stop and the per-zone Pending cap need `SwarmadaConfig`, which fleetops-mcp cannot read today. The
 adapter's per-instance `validate_action` is not observable by any client before assignment (C5). A
 dry-run `create` reaches Swarmada's FleetTask and FleetAction webhooks (both `sideEffects: None`); the
 FleetTask dry run checks flow, bindings and producer contracts, and only a FleetAction dry run per

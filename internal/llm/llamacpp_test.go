@@ -147,12 +147,12 @@ func TestNewLlamaCppFromEnv(t *testing.T) {
 			t.Errorf("%q accepted", bad)
 		}
 	}
-	t.Setenv(EnvLlamaCppURL, "http://llama-server.foc-system.svc:8080/")
+	t.Setenv(EnvLlamaCppURL, "http://llama-server.fleetops-system.svc:8080/")
 	l, err := NewLlamaCpp("", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if l.BaseURL != "http://llama-server.foc-system.svc:8080" || l.Model != DefaultLlamaCppModel ||
+	if l.BaseURL != "http://llama-server.fleetops-system.svc:8080" || l.Model != DefaultLlamaCppModel ||
 		l.Temperature != DefaultLlamaCppTemperature || l.Name() != "llamacpp:"+DefaultLlamaCppModel {
 		t.Fatalf("%+v", l)
 	}

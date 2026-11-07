@@ -239,7 +239,7 @@ func TestKindPeopleRefuses(t *testing.T) {
 	for _, c := range []struct {
 		name, ctx, kubeconfig, want string
 	}{
-		{"context not foc", "kind-prod", e.dedicated(t), "CONTEXT must be kind-foc-*"},
+		{"context not fleetops", "kind-prod", e.dedicated(t), "CONTEXT must be kind-foc-*"},
 		{"docker-desktop", "docker-desktop", e.dedicated(t), "CONTEXT must be kind-foc-*"},
 		{"default kubeconfig", "kind-foc-test-1", filepath.Join(e.home, ".kube", "config"), "resolves to ~/.kube/config"},
 		{"kubeconfig unset", "kind-foc-test-1", "", "KUBECONFIG must be set"},
@@ -338,8 +338,8 @@ func TestFocUpDryRunPlan(t *testing.T) {
 		"apply -k " + filepath.Join(work, "swarmada", "config", "controlstream-tls"), "foc-up-preflight.sh",
 		"hack/foc-sim-fleet.sh start",
 		"make -C", "kind load docker-image fleet-ops-copilot:dev --name foc-test-1",
-		"upgrade --install foc", "tracing.backend.enabled=true", "kind-people.sh bind kind-foc-test-1 warehouse-a",
-		"rollout status deploy/foc-mcp deploy/foc-approvals", "dry run finished",
+		"upgrade --install fleetops", "tracing.backend.enabled=true", "kind-people.sh bind kind-foc-test-1 warehouse-a",
+		"rollout status deploy/fleetops-mcp deploy/fleetops-approvals", "dry run finished",
 	}
 	at := 0
 	for _, want := range order {

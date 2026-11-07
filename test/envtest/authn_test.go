@@ -31,7 +31,7 @@ import (
 
 	swarmv1 "github.com/swarmada/swarmada/api/v1"
 
-	focv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
+	fleetopsv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/llm"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/mcpserver"
@@ -39,7 +39,7 @@ import (
 	"github.com/AlexBahel/fleet-ops-copilot/internal/tools"
 )
 
-// fileStop calls request_zone_stop on foc-mcp over streamable HTTP with the
+// fileStop calls request_zone_stop on fleetops-mcp over streamable HTTP with the
 // given bearer token and _meta operator, and returns the request's name and
 // spec.requestedFor.
 func fileStop(t *testing.T, url, token, operator, zone string) (string, string) {
@@ -62,20 +62,20 @@ func fileStop(t *testing.T, url, token, operator, zone string) (string, string) 
 	var out tools.RequestResult
 	_ = json.Unmarshal(b, &out)
 	name := reqName(t, out)
-	var r focv1.ApprovalRequest
+	var r fleetopsv1.ApprovalRequest
 	if err := admin.Get(ctx, client.ObjectKey{Namespace: swarmNS, Name: name}, &r); err != nil {
 		t.Fatal(err)
 	}
 	return name, r.Spec.RequestedFor
 }
 
-// waitRefused waits until foc-approvals lists decision in refusedDecisions
+// waitRefused waits until fleetops-approvals lists decision in refusedDecisions
 // and returns the request.
-func waitRefused(t *testing.T, name, decision string) *focv1.ApprovalRequest {
+func waitRefused(t *testing.T, name, decision string) *fleetopsv1.ApprovalRequest {
 	t.Helper()
 	deadline := time.Now().Add(20 * time.Second)
 	for {
-		var r focv1.ApprovalRequest
+		var r fleetopsv1.ApprovalRequest
 		if err := admin.Get(context.Background(), client.ObjectKey{Namespace: swarmNS, Name: name}, &r); err != nil {
 			t.Fatal(err)
 		}
@@ -99,7 +99,7 @@ func zoneStopped(t *testing.T, zone string) bool {
 	return ok
 }
 
-// R39 on a real API server: foc-mcp verifies the caller's bearer token with
+// R39 on a real API server: fleetops-mcp verifies the caller's bearer token with
 // a TokenReview (RBAC: create tokenreviews) and records the authenticated
 // username as requestedFor; the _meta operator name has no effect.
 func TestRequesterIsAuthenticated(t *testing.T) {
@@ -114,12 +114,12 @@ func TestRequesterIsAuthenticated(t *testing.T) {
 	if requester != "sam" {
 		t.Fatalf("requestedFor %q, want sam (the forged operator name must have no effect)", requester)
 	}
-	out, err := approverFor(t, "sam").Decide(ctx, swarmNS, name, focv1.VerdictApprove, "")
+	out, err := approverFor(t, "sam").Decide(ctx, swarmNS, name, fleetopsv1.VerdictApprove, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	r := waitRefused(t, name, out.Decision)
-	if r.Status.State != focv1.StatePending || !strings.Contains(r.Status.Message, "asked for this change") || zoneStopped(t, "authn-zone-1") {
+	if r.Status.State != fleetopsv1.StatePending || !strings.Contains(r.Status.Message, "asked for this change") || zoneStopped(t, "authn-zone-1") {
 		t.Fatalf("self-approval: state %q message %q", r.Status.State, r.Status.Message)
 	}
 	if !strings.Contains(string(f.h.auditBuf.Bytes()), `"DENY_SELF_APPROVAL"`) {
@@ -127,10 +127,10 @@ func TestRequesterIsAuthenticated(t *testing.T) {
 	}
 
 	// (2) a different verified person, dana, can approve it.
-	if _, err := approverFor(t, "dana").Decide(ctx, swarmNS, name, focv1.VerdictApprove, ""); err != nil {
+	if _, err := approverFor(t, "dana").Decide(ctx, swarmNS, name, fleetopsv1.VerdictApprove, ""); err != nil {
 		t.Fatal(err)
 	}
-	waitState(t, name, focv1.StateExecuted)
+	waitState(t, name, fleetopsv1.StateExecuted)
 	if !zoneStopped(t, "authn-zone-1") {
 		t.Fatal("approved stop not executed")
 	}
@@ -142,7 +142,7 @@ func TestRequesterIsAuthenticated(t *testing.T) {
 	if requester2 != "unverified:dana" {
 		t.Fatalf("requestedFor %q, want unverified:dana", requester2)
 	}
-	out2, err := approverFor(t, "eve").Decide(ctx, swarmNS, name2, focv1.VerdictApprove, "")
+	out2, err := approverFor(t, "eve").Decide(ctx, swarmNS, name2, fleetopsv1.VerdictApprove, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,13 +168,13 @@ func TestRequesterIsAuthenticated(t *testing.T) {
 	}
 }
 
-// (4) Through foc-agent: a chat that carries the person's token (foc chat)
+// (4) Through fleetops-agent: a chat that carries the person's token (fleetops chat)
 // is filed for that person; the page's chat (no token) stays unverified and
 // unapprovable (TestWebUIRequestCannotBeApproved covers the refusal).
-func TestFocAgentForwardsTheCallersToken(t *testing.T) {
+func TestFleetopsAgentForwardsTheCallersToken(t *testing.T) {
 	f := newUIFixture(t, []string{swarmNS})
 	ensureZone(t, "authn-zone-5")
-	step := func(zone string) []llm.Step { return []llm.Step{proposeStop(zone, "from foc chat")} }
+	step := func(zone string) []llm.Step { return []llm.Step{proposeStop(zone, "from fleetops chat")} }
 	name := f.chatAs(t, env.PersonToken("sam"), "dana", "stop authn-zone-5", step("authn-zone-5")...)
 	if v := f.views(t)[name]; v.RequestedFor != "sam" || v.Approve == "" || v.Unapprovable != "" {
 		t.Fatalf("token chat view %+v", v)

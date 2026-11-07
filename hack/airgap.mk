@@ -19,7 +19,7 @@ MODEL_SUMS   ?=
 MODEL_FILES  ?= qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf qwen2.5-7b-instruct-q4_k_m-00002-of-00002.gguf
 
 KIND_NODE     = $(KIND_CLUSTER)-control-plane
-AIRGAP_NS     = foc-system
+AIRGAP_NS     = fleetops-system
 KCTL          = kubectl --context kind-$(KIND_CLUSTER)
 
 define require_foc_cluster
@@ -49,7 +49,7 @@ load-llama-model: ## Copy the GGUF shards from MODEL_DIR into /models on the kin
 	docker exec $(KIND_NODE) chmod -R a+rX /models
 	docker exec -i $(KIND_NODE) sh -c 'cd /models && sha256sum -c -' < "$(MODEL_SUMS)"
 
-deploy-airgap: ## Apply llama-server and the egress NetworkPolicies to kind cluster KIND_CLUSTER (foc-*), plus the OTLP rule if the chart's trace backend is installed; restarts foc-mcp/foc-approvals
+deploy-airgap: ## Apply llama-server and the egress NetworkPolicies to kind cluster KIND_CLUSTER (foc-*), plus the OTLP rule if the chart's trace backend is installed; restarts fleetops-mcp/fleetops-approvals
 	$(require_foc_cluster)
 	@mkdir -p $(BIN)/airgap
 	$(KCTL) apply -f config/airgap/llama-storage-hostpath.yaml -f config/airgap/llama-server.yaml
@@ -61,41 +61,41 @@ deploy-airgap: ## Apply llama-server and the egress NetworkPolicies to kind clus
 	sed -e "s|192\.0\.2\.10/32|$$ep/32|" -e "s|192\.0\.2\.11/32|$$svc/32|" config/airgap/networkpolicy.yaml > $(BIN)/airgap/networkpolicy.rendered.yaml; \
 	if grep -q 'cidr: 192\.0\.2\.' $(BIN)/airgap/networkpolicy.rendered.yaml; then echo "placeholder address left in the rendered policy"; exit 1; fi; \
 	$(KCTL) apply -f $(BIN)/airgap/networkpolicy.rendered.yaml
-	@# With the chart's trace backend: foc-mcp/foc-agent -> Collector OTLP (D69).
-	@if $(KCTL) -n $(AIRGAP_NS) get deploy/foc-otel-collector >/dev/null 2>&1; then \
+	@# With the chart's trace backend: fleetops-mcp/fleetops-agent -> Collector OTLP (D69).
+	@if $(KCTL) -n $(AIRGAP_NS) get deploy/fleetops-otel-collector >/dev/null 2>&1; then \
 		$(KCTL) apply -f config/airgap/networkpolicy-tracing.yaml; \
-	else echo "no foc-otel-collector in $(AIRGAP_NS) (tracing.backend.enabled off): networkpolicy-tracing.yaml not applied"; fi
+	else echo "no fleetops-otel-collector in $(AIRGAP_NS) (tracing.backend.enabled off): networkpolicy-tracing.yaml not applied"; fi
 	@# Established API connections can outlive a wrong address; new pods cannot.
-	@if $(KCTL) -n $(AIRGAP_NS) get deploy/foc-mcp deploy/foc-approvals >/dev/null 2>&1; then \
-		$(KCTL) -n $(AIRGAP_NS) rollout restart deploy/foc-mcp deploy/foc-approvals && \
-		$(KCTL) -n $(AIRGAP_NS) rollout status deploy/foc-mcp deploy/foc-approvals --timeout=180s; \
-	else echo "foc-mcp/foc-approvals not deployed (make deploy-kind): API access under the policy not exercised"; fi
+	@if $(KCTL) -n $(AIRGAP_NS) get deploy/fleetops-mcp deploy/fleetops-approvals >/dev/null 2>&1; then \
+		$(KCTL) -n $(AIRGAP_NS) rollout restart deploy/fleetops-mcp deploy/fleetops-approvals && \
+		$(KCTL) -n $(AIRGAP_NS) rollout status deploy/fleetops-mcp deploy/fleetops-approvals --timeout=180s; \
+	else echo "fleetops-mcp/fleetops-approvals not deployed (make deploy-kind): API access under the policy not exercised"; fi
 
-verify-egress: ## Egress probe Job in foc-system: records egress at pod start, waits until the policy is in force, then passes only if every external target is blocked and the in-namespace control works
+verify-egress: ## Egress probe Job in fleetops-system: records egress at pod start, waits until the policy is in force, then passes only if every external target is blocked and the in-namespace control works
 	$(require_foc_cluster)
-	$(KCTL) -n $(AIRGAP_NS) delete job foc-egress-probe --ignore-not-found --wait
+	$(KCTL) -n $(AIRGAP_NS) delete job fleetops-egress-probe --ignore-not-found --wait
 	$(KCTL) -n $(AIRGAP_NS) apply -f config/airgap/egress-probe.yaml
 	@ok=0; for i in $$(seq 1 60); do \
-		s="$$($(KCTL) -n $(AIRGAP_NS) get job foc-egress-probe -o jsonpath='{.status.succeeded}')"; \
-		f="$$($(KCTL) -n $(AIRGAP_NS) get job foc-egress-probe -o jsonpath='{.status.failed}')"; \
+		s="$$($(KCTL) -n $(AIRGAP_NS) get job fleetops-egress-probe -o jsonpath='{.status.succeeded}')"; \
+		f="$$($(KCTL) -n $(AIRGAP_NS) get job fleetops-egress-probe -o jsonpath='{.status.failed}')"; \
 		if [ "$$s" = 1 ]; then ok=1; break; fi; \
 		if [ -n "$$f" ] && [ "$$f" != 0 ]; then break; fi; sleep 3; done; \
-	$(KCTL) -n $(AIRGAP_NS) logs job/foc-egress-probe; \
+	$(KCTL) -n $(AIRGAP_NS) logs job/fleetops-egress-probe; \
 	if [ $$ok = 1 ]; then echo "verify-egress: PASS (after the policy was in force: external blocked, control reachable; the at-start line is not counted)"; else echo "verify-egress: FAIL"; exit 1; fi
 
 verify-egress-baseline: ## Same probe in a namespace WITHOUT the policy: must report open egress (shows the probe detects it from this network)
 	$(require_foc_cluster)
-	$(KCTL) create namespace foc-egress-baseline --dry-run=client -o yaml | $(KCTL) apply -f -
-	$(KCTL) -n foc-egress-baseline delete job foc-egress-probe --ignore-not-found --wait
-	sed -e 's|value: "http://llama-server:8080/health"|value: ""|' -e 's|value: "https://kubernetes.default.svc:443/healthz"|value: ""|' config/airgap/egress-probe.yaml | $(KCTL) -n foc-egress-baseline apply -f -
+	$(KCTL) create namespace fleetops-egress-baseline --dry-run=client -o yaml | $(KCTL) apply -f -
+	$(KCTL) -n fleetops-egress-baseline delete job fleetops-egress-probe --ignore-not-found --wait
+	sed -e 's|value: "http://llama-server:8080/health"|value: ""|' -e 's|value: "https://kubernetes.default.svc:443/healthz"|value: ""|' config/airgap/egress-probe.yaml | $(KCTL) -n fleetops-egress-baseline apply -f -
 	@# No control and no policy sentinel: no policy here, so no wait (R40).
 	@res=unfinished; for i in $$(seq 1 60); do \
-		s="$$($(KCTL) -n foc-egress-baseline get job foc-egress-probe -o jsonpath='{.status.succeeded}')"; \
-		f="$$($(KCTL) -n foc-egress-baseline get job foc-egress-probe -o jsonpath='{.status.failed}')"; \
+		s="$$($(KCTL) -n fleetops-egress-baseline get job fleetops-egress-probe -o jsonpath='{.status.succeeded}')"; \
+		f="$$($(KCTL) -n fleetops-egress-baseline get job fleetops-egress-probe -o jsonpath='{.status.failed}')"; \
 		if [ "$$s" = 1 ]; then res=blocked; break; fi; \
 		if [ -n "$$f" ] && [ "$$f" != 0 ]; then res=open; break; fi; sleep 3; done; \
-	$(KCTL) -n foc-egress-baseline logs job/foc-egress-probe; \
-	$(KCTL) delete namespace foc-egress-baseline --wait=false; \
+	$(KCTL) -n fleetops-egress-baseline logs job/fleetops-egress-probe; \
+	$(KCTL) delete namespace fleetops-egress-baseline --wait=false; \
 	case $$res in \
 		open) echo "baseline: egress is open without the policy, as expected; the probe can detect it";; \
 		blocked) echo "baseline INCONCLUSIVE: egress is also blocked without the policy (no route from this host, or the CNI blocks it anyway)"; exit 1;; \
