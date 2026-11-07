@@ -196,7 +196,7 @@ func (c *Chat) engine(operator string) *dialogue.Engine {
 	if c.Audit != nil {
 		e.Review = func(r dialogue.ReviewEntry) {
 			_, _ = c.Audit.Append(audit.Entry{Kind: audit.KindCatalogueReview, Actor: operator, Message: r.Text,
-				Detail: map[string]any{"interpretation": r.Interpretation, "kind": r.Kind, "steps": r.Steps, "reason": r.Reason}})
+				Detail: map[string]any{"interpretation": r.Interpretation, "kind": r.Kind, "steps": r.Steps, "reason": r.Reason, "finding": r.Finding}})
 		}
 	}
 	return e

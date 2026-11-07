@@ -221,12 +221,21 @@ func (e *Engine) Propose(st *State, in Input, snap Snapshot) Outcome {
 		}
 		return e.somethingElse(st, *in.SomethingElse, snap)
 	}
+	// A "something else" description the model answered with a plain kind
+	// is still an interpreted answer: it is logged like one (D72).
+	reading := st.SomethingElse != nil && st.SomethingElse.Text != "" && st.SomethingElse.Interpretation == ""
 	if st.Ask == "" {
 		st.Ask = in.Ask
 	}
 	if in.Kind != "" {
 		if _, ok := e.Cat.KindByName(in.Kind); ok && slices.Contains(e.Cat.AsksFor(in.Kind), st.Ask) {
 			st.Kind = in.Kind
+		}
+	}
+	if reading && st.Kind != "" {
+		st.SomethingElse.Interpretation = Known
+		if e.Review != nil {
+			e.Review(ReviewEntry{Text: st.SomethingElse.Text, Interpretation: Known, Kind: st.Kind})
 		}
 	}
 	return e.next(st, snap)

@@ -340,3 +340,28 @@ func TestParseReply(t *testing.T) {
 		t.Errorf("change text %q", rest)
 	}
 }
+
+// D72: a "something else" description that the model answers with a plain
+// kind (not a somethingElse reading) is logged for catalogue review too;
+// seen with Sonnet 5.5 on the foc-up stack, 2026-11-07.
+func TestSomethingElseAnsweredWithAKindIsLogged(t *testing.T) {
+	var logged []ReviewEntry
+	e := &Engine{Cat: cat(t), Review: func(r ReviewEntry) { logged = append(logged, r) }}
+	st := newState("Inspect receiving-dock-1.")
+	e.Propose(st, Input{Ask: "inspect", Fields: map[string]string{"location": "receiving-dock-1"}}, snap)
+	if _, need, ok := e.Answer(st, 4, "check P-1042 for damage", snap); !ok || !need {
+		t.Fatalf("answer 4 with a description: ok=%v needModel=%v", ok, need)
+	}
+	o := e.Propose(st, Input{Ask: "inspect", Kind: "inspect-damage"}, snap)
+	if o.Proposal == nil || o.Proposal.Kind != "inspect-damage" {
+		t.Fatalf("outcome %+v", o)
+	}
+	if len(logged) != 1 || logged[0].Text != "check P-1042 for damage" || logged[0].Interpretation != Known || logged[0].Kind != "inspect-damage" {
+		t.Fatalf("review log %+v", logged)
+	}
+	// A later message of the same request is not logged again.
+	e.Propose(st, Input{Ask: "inspect", Kind: "inspect-damage"}, snap)
+	if len(logged) != 1 {
+		t.Fatalf("logged twice: %+v", logged)
+	}
+}
