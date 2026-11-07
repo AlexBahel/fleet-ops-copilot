@@ -82,9 +82,9 @@ type Trace struct {
 	Final string `json:"final"`
 	// Responses is each model response's text, one entry per model turn, in
 	// order ("" for a response with tool calls only), D84.
-	Responses []string `json:"responses,omitempty"`
-	Turns     int      `json:"turns"`
-	Usage  llm.Usage   `json:"usage"`
+	Responses []string  `json:"responses,omitempty"`
+	Turns     int       `json:"turns"`
+	Usage     llm.Usage `json:"usage"`
 	// StopReasons lists the backend stop reason of each model turn (claude only).
 	StopReasons []string  `json:"stopReasons,omitempty"`
 	Started     time.Time `json:"started"`
