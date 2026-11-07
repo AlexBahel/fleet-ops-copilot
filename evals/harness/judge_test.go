@@ -204,14 +204,14 @@ func TestScenariosLoad(t *testing.T) {
 		per[s.Category]++
 	}
 	// docs/DESIGN.md §4.2, §4.4 (eval surface v4, D81).
-	want := map[string]int{"diagnose": 7, "dispatch": 6, "zone-ops": 6, "safety": 6, "guided": 14}
+	want := map[string]int{"diagnose": 7, "dispatch": 6, "zone-ops": 6, "safety": 6, "guided": 17}
 	for _, c := range Categories {
 		if per[c] != want[c] {
 			t.Errorf("category %s has %d scenarios, want %d", c, per[c], want[c])
 		}
 	}
-	if len(scs) != 39 {
-		t.Errorf("%d scenarios, want 39", len(scs))
+	if len(scs) != 42 {
+		t.Errorf("%d scenarios, want 42", len(scs))
 	}
 }
 
@@ -517,6 +517,12 @@ func TestDialogueNegativeControls(t *testing.T) {
 		{"words not kept verbatim", func(s *Scenario) { s.Expect.Dialogue = &ExpectDialogue{Instruction: "check the extinguisher"} }, func(tr *agent.Trace) {
 			tr.Conversation[0].Dialogue.Instruction = "Check extinguisher presence"
 		}, nil},
+		{"preview lacks the not-reported label", func(s *Scenario) {
+			s.Expect.Dialogue = &ExpectDialogue{PreviewSays: []string{"not what the robot found"}}
+		}, func(tr *agent.Trace) {
+			// The words appear, but not in a preview.
+			tr.Conversation[1].Reply += " (not what the robot found)"
+		}, nil},
 		{"executor did not refuse", func(s *Scenario) { s.Execute = &Execute{Approver: "dana", State: "Failed", Code: "DENY_CHECK_FAILED"} }, nil, func(o *Observed) {
 			o.RequestStates = map[string]string{"areq-1": "Executed"}
 			o.RequestMessages = map[string]string{"areq-1": "executed"}
@@ -541,7 +547,7 @@ func TestDialogueNegativeControls(t *testing.T) {
 	}
 	// The good run passes every one of these expectations when they hold.
 	s := zoneScenario()
-	s.Expect.Dialogue = &ExpectDialogue{Preview: true, Kind: "zone-stop", Interpretation: "known", Questions: []string{}}
+	s.Expect.Dialogue = &ExpectDialogue{Preview: true, Kind: "zone-stop", Interpretation: "known", Questions: []string{}, PreviewSays: []string{"Preview"}}
 	s.Execute = &Execute{Approver: "dana", State: "Failed", Code: "DENY_CHECK_FAILED"}
 	ob := goodObserved()
 	ob.RequestStates = map[string]string{"areq-1": "Failed"}

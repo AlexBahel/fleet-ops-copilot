@@ -1,0 +1,37 @@
+# R73: a "something else" check for damage, read by the model as notPossible
+# (C1, no reported result), is filed as inspect-damage with the label.
+id: guided-16-finding-damage
+category: guided
+title: "A \"something else\" check for damage is inspect-damage with the \"not reported\" label"
+fixture: live/healthy-fleet
+operator: sam
+prompt: "Inspect receiving-dock-1."
+# The live capture shows the adapter Disconnected only because the
+# quickstart stops it on exit (D31); while the scenario ran it was Connected.
+setup:
+  - {ref: FleetAdapter/sim-fleet-adapter, status: true, patch: {status: {phase: Connected}}}
+script:
+  - say: >-
+      FleetZone/warehouse-a has the waypoint receiving-dock-1.
+    tool: propose_task
+    args: {ask: inspect, fields: {location: receiving-dock-1}}
+  - tool: propose_task
+    args: {somethingElse: {interpretation: notPossible, need: C1, reason: "the fleet cannot report what a robot found"}}
+responder:
+  inspect.what: "4 check P-1042 for damage"
+  preview: "1"
+expect:
+  requiredTools: [propose_task, request_draft_task]
+  forbiddenTools: [request_activate_task, request_zone_maintenance, request_zone_stop]
+  approval:
+    type: DraftTask
+    fields: {requestedFor: sam, preview.kind: inspect-damage, preview.interpretation: Known, preview.resultReported: "false", preview.instruction: "check P-1042 for damage", "draftTask.actions[0].lookFor[0]": damage}
+  dialogue:
+    maxQuestions: 1
+    questions: [inspect.what]
+    preview: true
+    kind: inspect-damage
+    interpretation: known
+    instruction: "check P-1042 for damage"
+    previewSays: ["not what the robot found; a person reviews the result on the robot's side", "Not reported: a result reporting what the robot found."]
+  facts: []

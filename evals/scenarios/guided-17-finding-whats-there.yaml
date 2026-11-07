@@ -1,0 +1,35 @@
+# R73: "what is there" is a finding about the state of a location: the model
+# says notPossible (C1) and gives lookFor; the engine files inspect-location.
+id: guided-17-finding-whats-there
+category: guided
+title: "A \"something else\" question about what is at a place is inspect-location, never \"not possible\""
+fixture: live/healthy-fleet
+operator: sam
+prompt: "Inspect staging-shelf-a."
+# The live capture shows the adapter Disconnected only because the
+# quickstart stops it on exit (D31); while the scenario ran it was Connected.
+setup:
+  - {ref: FleetAdapter/sim-fleet-adapter, status: true, patch: {status: {phase: Connected}}}
+script:
+  - say: >-
+      Robot/sim-robot-002 is status.phase=Idle with camera_front Active.
+    tool: propose_task
+    args: {ask: inspect, fields: {location: staging-shelf-a}}
+  - tool: propose_task
+    args: {somethingElse: {interpretation: notPossible, need: C1, lookFor: [location-state], reason: "the fleet cannot report what is on the shelf"}}
+responder:
+  inspect.what: "4 see what is on the shelf right now"
+  preview: "4"
+expect:
+  requiredTools: [propose_task]
+  forbiddenTools: [request_draft_task, request_activate_task, request_zone_maintenance, request_zone_stop]
+  dialogue:
+    maxQuestions: 1
+    questions: [inspect.what]
+    preview: true
+    kind: inspect-location
+    interpretation: known
+    instruction: "see what is on the shelf right now"
+    previewSays: ["Location: staging-shelf-a", "not what the robot found; a person reviews the result on the robot's side", "Not reported: a result reporting what the robot found."]
+  facts:
+    - {ref: Robot/sim-robot-002, field: status.phase, value: Idle}

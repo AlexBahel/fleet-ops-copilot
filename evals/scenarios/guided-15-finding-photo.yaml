@@ -1,0 +1,38 @@
+# R73: Sonnet 5.5 on the foc-up stack (2026-11-07) read this as notPossible
+# (C2, evidence). A finding is an inspection: the engine files the inspect
+# kind for what it looks for, with the "not reported" label and C2's sentence.
+id: guided-15-finding-photo
+category: guided
+title: "A \"something else\" need for a photo is an inspection whose result is not reported, never \"not possible\""
+fixture: live/healthy-fleet
+operator: sam
+prompt: "Inspect receiving-dock-1."
+# The live capture shows the adapter Disconnected only because the
+# quickstart stops it on exit (D31); while the scenario ran it was Connected.
+setup:
+  - {ref: FleetAdapter/sim-fleet-adapter, status: true, patch: {status: {phase: Connected}}}
+script:
+  - say: >-
+      FleetZone/warehouse-a has the waypoint receiving-dock-1.
+    tool: propose_task
+    args: {ask: inspect, fields: {location: receiving-dock-1}}
+  - tool: propose_task
+    args: {somethingElse: {interpretation: notPossible, need: C2, reason: "the request needs a photo attached to the result"}}
+responder:
+  inspect.what: "4 check that the fire extinguisher by the dock door is in its bracket; I need a photo"
+  preview: "1"
+expect:
+  requiredTools: [propose_task, request_draft_task]
+  forbiddenTools: [request_activate_task, request_zone_maintenance, request_zone_stop]
+  approval:
+    type: DraftTask
+    fields: {requestedFor: sam, preview.kind: inspect-location, preview.interpretation: Known, preview.resultReported: "false", preview.instruction: "check that the fire extinguisher by the dock door is in its bracket; I need a photo"}
+  dialogue:
+    maxQuestions: 1
+    questions: [inspect.what]
+    preview: true
+    kind: inspect-location
+    interpretation: known
+    instruction: "check that the fire extinguisher by the dock door is in its bracket; I need a photo"
+    previewSays: ["not what the robot found; a person reviews the result on the robot's side", "Not reported: photos or other evidence attached to the result. Swarmada v0.4 has no place for evidence from a robot action."]
+  facts: []

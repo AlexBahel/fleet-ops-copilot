@@ -113,6 +113,9 @@ type ExpectDialogue struct {
 	Alternative bool     `json:"alternative,omitempty"`
 	// Instruction: the person's words kept verbatim must equal it.
 	Instruction string `json:"instruction,omitempty"`
+	// PreviewSays: every string appears in a preview the copilot showed
+	// (R73: the "not reported" label and note of a finding).
+	PreviewSays []string `json:"previewSays,omitempty"`
 }
 
 // ScriptStep is one scripted turn: one tool call (with optional text the

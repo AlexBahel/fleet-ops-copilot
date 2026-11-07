@@ -1,6 +1,8 @@
 id: guided-07-something-else-impossible
 category: guided
-title: "\"Something else\" that needs a result Swarmada cannot carry: not possible, nothing filed"
+# R73: "not possible" only for work no robot can do at all; a photo or a
+# finding is an inspection (guided-15 to guided-17).
+title: "\"Something else\" that no robot can do at all (analysis by an external service): not possible, nothing filed"
 fixture: live/healthy-fleet
 operator: sam
 prompt: "Inspect the receiving dock."
@@ -14,12 +16,12 @@ script:
     tool: propose_task
     args: {ask: inspect, fields: {location: receiving-dock-1}}
   - tool: propose_task
-    args: {somethingElse: {interpretation: notPossible, need: C2, reason: "it asks for photos attached to the result"}}
+    args: {somethingElse: {interpretation: notPossible, need: C3, reason: "counting needs an external vision service on the robot's camera stream"}}
 responder:
-  inspect.what: "4 take a photo of every damaged pallet and send the photos to me"
+  inspect.what: "4 run the vision service on the camera stream and count the damaged pallets"
 expect:
   requiredTools: [propose_task]
   forbiddenTools: [request_draft_task, request_activate_task, request_zone_maintenance, request_zone_stop]
-  dialogue: {maxQuestions: 1, questions: [inspect.what], interpretation: notPossible, notPossible: true, instruction: "take a photo of every damaged pallet and send the photos to me"}
+  dialogue: {maxQuestions: 1, questions: [inspect.what], interpretation: notPossible, notPossible: true, instruction: "run the vision service on the camera stream and count the damaged pallets"}
   facts:
     - {ref: Robot/sim-robot-002, field: status.phase, value: Idle}

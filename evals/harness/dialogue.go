@@ -210,6 +210,17 @@ func judgeDialogue(s Scenario, tr agent.Trace, ob Observed) Criterion {
 	if want.Instruction != "" && instr != want.Instruction {
 		fail("instruction kept %q, want the person's words %q", instr, want.Instruction)
 	}
+	for _, w := range want.PreviewSays {
+		found := false
+		for _, t := range tr.Conversation {
+			if t.Dialogue != nil && t.Dialogue.Outcome == agent.OutcomePreview && strings.Contains(t.Reply, w) {
+				found = true
+			}
+		}
+		if !found {
+			fail("no preview says %q", w)
+		}
+	}
 	return c
 }
 
