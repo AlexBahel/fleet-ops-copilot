@@ -653,8 +653,10 @@ quickstart itself writes some status by hand (see "Honest notes — what's real 
   job in `.github/workflows/ci.yml` runs `make ci`; a repository-hygiene job runs alongside it
   (decision D26).
 - **Image** (`make test-image`, a CI step after `make ci`, D83): builds the binaries under umask 077
-  and the image, and runs each binary in it as user 65532; it fails rather than skips in CI when
-  Docker is not reachable.
+  and the image, and runs each binary in it as user 65532; as that user it also reads the image's
+  policy and files mounted at `/etc/fleetops/policy` and `/etc/fleetops/catalogue`, as the chart
+  mounts them (`COPY --chmod` sets the mode of the parent directories it creates too). It fails
+  rather than skips in CI when Docker is not reachable.
 - **Model evals** (`make eval-cloud`, `make eval-airgap`) need an API key or the in-cluster
   model and are run on demand. Results are committed under `evals/results/<date>-<deployment>/`
   with raw traces. The regression threshold for model evals is set from the first measured

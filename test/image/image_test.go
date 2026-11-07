@@ -18,7 +18,8 @@ limitations under the License.
 
 // Package image checks the runtime image (R60): whatever the umask of the
 // machine that built the binaries, each binary in the image runs as the
-// image's non-root user.
+// image's non-root user, and the files it reads under /etc/fleetops are
+// readable by that user.
 package image
 
 import (
@@ -107,6 +108,25 @@ func TestBinariesRunAsNonRootWhateverTheUmask(t *testing.T) {
 		}
 		if !strings.Contains(strings.ToLower(o), "usage") {
 			t.Errorf("%s -h printed no usage (did it run?):\n%s", b, o)
+		}
+	}
+	// The image's own policy, and files mounted under /etc/fleetops as the
+	// chart mounts its ConfigMaps (policy, catalogue), are readable by user
+	// 65532: COPY --chmod also sets the parent directories' mode.
+	if o, err := run(t, repo, "docker", "run", "--rm", "--user", "65532:65532", "--entrypoint", "/busybox/cat", tag, "/etc/fleetops/policies/default.yaml"); err != nil {
+		t.Errorf("the image's policy is not readable as 65532: %v\n%s", err, o)
+	}
+	mnt := t.TempDir()
+	if err := os.Chmod(mnt, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(mnt, "default.yaml"), []byte("x: 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, at := range []string{"/etc/fleetops/policy", "/etc/fleetops/catalogue"} {
+		o, err := run(t, repo, "docker", "run", "--rm", "--user", "65532:65532", "-v", mnt+":"+at+":ro", "--entrypoint", "/busybox/cat", tag, at+"/default.yaml")
+		if err != nil {
+			t.Errorf("a file mounted at %s is not readable as 65532: %v\n%s", at, err, o)
 		}
 	}
 }
