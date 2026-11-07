@@ -9,7 +9,8 @@ request, or edits work that already exists.
 **Status: early development.** The design is in [`docs/DESIGN.md`](docs/DESIGN.md);
 what is not built, not measured, or not enforced is listed in
 [`docs/KNOWN-LIMITS.md`](docs/KNOWN-LIMITS.md). Every number below links to the committed file or
-CI run it comes from.
+CI run it comes from. Records made before the rename use earlier names;
+[`docs/NAMES.md`](docs/NAMES.md) maps them to the current ones.
 
 ## Problem
 
@@ -368,7 +369,7 @@ go run -tags envtest ./evals/cmd/fleetops-eval -backend claude -model claude-son
 | `charts/fleet-ops-copilot` | Helm chart: the objects in `config/` plus an optional NetworkPolicy and trace backend; `make chart-check` |
 | `scripts/` | `demo-preflight.sh` (cluster and Swarmada webhook checks), `chart-parity` (chart vs `config/`), `baseline-lowered` (CI warning when `evals/baseline.json` is lowered) |
 | `hack/` | `demo-up.sh`, `demo-down.sh`, `kind-people.sh` (test-only person tokens), `kind/` (kind configuration), `airgap.mk`, live-test scripts |
-| `docs/` | `DESIGN.md` (design and decision log), `KNOWN-LIMITS.md`, `BACKLOG-v4.md`, `RUNBOOK.md` (draft), `architecture/` (D2 source and SVG), `evidence/` (cluster logs) |
+| `docs/` | `DESIGN.md` (design and decision log), `KNOWN-LIMITS.md`, `BACKLOG-v4.md`, `RUNBOOK.md` (draft), `NAMES.md` (names before and after the rename), `architecture/` (D2 source and SVG), `evidence/` (cluster logs) |
 | `evals/` | Evaluation harness, scenarios, fixtures (hand-written and captured live), results |
 | `test/envtest`, `test/live`, `test/image` | API-server tests; approval paths against a live Swarmada control plane; the image's binaries run, and its mounted files are readable, as the non-root user |
 

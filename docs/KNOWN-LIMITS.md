@@ -3,6 +3,9 @@
 What is not built, not measured, or not enforced. Each item stays here until code and a test
 remove it.
 
+Evidence and results recorded before the rename (R70) use the earlier program, target and setting
+names; [`docs/NAMES.md`](NAMES.md) maps them to the current ones.
+
 ## Not built yet
 
 - The five agent roles (Router, Diagnose, Dispatch, Zone ops, Reporter) and their tool
