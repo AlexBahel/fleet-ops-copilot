@@ -64,6 +64,9 @@ func RenderPreview(p *Proposal, chk tools.CheckTaskResult) Preview {
 	if !p.ResultReported {
 		b.WriteString("  " + ResultNotReported + "\n")
 	}
+	for _, n := range p.Notes {
+		b.WriteString("  " + n + "\n")
+	}
 	blocked := len(p.Missing) > 0 || chk.Verdict == feasibility.Blocked
 	verdict := chk.Verdict
 	if verdict == "" {

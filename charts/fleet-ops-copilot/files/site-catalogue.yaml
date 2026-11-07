@@ -273,12 +273,17 @@ basicSteps: [move, patrol, charge]
 # Class (c): needs a Swarmada change (inventory §4, BACKLOG-v4 "Proposed for
 # Swarmada draft 5"). Nothing here can be previewed or filed.
 notYetPossible:
+  # C1 and C2 are findings (R67, R73): a robot can still go and look, so a
+  # request that needs one is filed as the inspect kind for what it looks
+  # for, and the preview says what is not reported. Never "not possible".
   - id: C1
     need: a result reporting what the robot found
     say: Swarmada v0.4 records that a robot action ran and ended, not what the robot found; there is no result field for a robot action.
+    finding: true
   - id: C2
     need: photos or other evidence attached to the result
     say: Swarmada v0.4 has no place for evidence from a robot action.
+    finding: true
   - id: C3
     need: analysis by an external service on a robot's sensor stream
     say: Swarmada v0.4 has no dispatch path for External actions.

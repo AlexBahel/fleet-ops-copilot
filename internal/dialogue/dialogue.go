@@ -104,6 +104,9 @@ type SomethingElse struct {
 	Text           string `json:"text"`
 	Interpretation string `json:"interpretation,omitempty"`
 	FollowUpAsked  bool   `json:"followUpAsked,omitempty"`
+	// Finding is the notYetPossible id of a finding the request asked for
+	// (a result, a photo): the preview says it is not reported (R73).
+	Finding string `json:"finding,omitempty"`
 }
 
 // State is the dialogue state of one conversation. It is stored by
@@ -138,6 +141,7 @@ type SomethingElseInput struct {
 	Steps          []StepInput `json:"steps,omitempty" jsonschema:"basic steps in order, for composed"`
 	Need           string      `json:"need,omitempty" jsonschema:"the notYetPossible id it needs, for notPossible"`
 	Reason         string      `json:"reason,omitempty" jsonschema:"why it is not possible, in one sentence"`
+	LookFor        []string    `json:"lookFor,omitempty" jsonschema:"for an inspection: what the robot looks at (damage, location-state, or both)"`
 }
 
 // Input is what the model passes to propose_task.
@@ -160,6 +164,9 @@ type Proposal struct {
 	Lines []string
 	// Missing are required items with no value and no default (rule 7).
 	Missing []string
+	// Notes are shown after the result label: what was asked for that
+	// Swarmada does not report (R73).
+	Notes []string
 }
 
 // Outcome is the engine's answer. Exactly one field is set.
@@ -176,6 +183,9 @@ type ReviewEntry struct {
 	Kind           string
 	Steps          []string
 	Reason         string
+	// Finding is set when a notPossible reading named a finding gap and the
+	// engine filed it as an inspection instead (R73).
+	Finding string
 }
 
 // Engine walks one catalogue.
@@ -288,6 +298,32 @@ func (st *State) Describe(text string) {
 	st.Pending = nil
 }
 
+// damageWords mark a finding about damage when the model gave no lookFor.
+var damageWords = regexp.MustCompile(`(?i)\b(damage[sd]?|dent(s|ed)?|crack(s|ed)?|broken|leak(s|ing)?|scratch(es|ed)?|torn|bent)\b`)
+
+// lookFor is what an inspection looks at: the model's lookFor, kept to the
+// catalogue's words; else damage when the person's words name damage, and
+// the state of the location otherwise.
+func (e *Engine) lookFor(given []string, text string) []string {
+	words := e.Cat.LookForWords()
+	var out []string
+	for _, w := range given {
+		if w == "both" {
+			return words
+		}
+		if slices.Contains(words, w) {
+			out = append(out, w)
+		}
+	}
+	if len(out) > 0 {
+		return out
+	}
+	if damageWords.MatchString(text) {
+		return []string{"damage"}
+	}
+	return []string{"location-state"}
+}
+
 func (e *Engine) askOpen(st *State) Outcome {
 	if len(st.Asked) >= catalogue.MaxQuestions {
 		return e.proposal(st, nil)
@@ -300,8 +336,20 @@ func (e *Engine) askOpen(st *State) Outcome {
 
 func (e *Engine) somethingElse(st *State, in SomethingElseInput, snap Snapshot) Outcome {
 	se := st.SomethingElse
+	finding := ""
+	if in.Interpretation != Known && in.Interpretation != Composed {
+		// R67, R73: a need for a finding (a result, a photo) is an inspection
+		// whose result is not reported, not "not possible".
+		if g, ok := e.Cat.GapByID(in.Need); ok && g.Finding {
+			if k, ok := e.Cat.FindingKind(e.lookFor(in.LookFor, se.Text)); ok {
+				finding = g.ID
+				in = SomethingElseInput{Interpretation: Known, Kind: k.Name, Reason: in.Reason}
+			}
+		}
+	}
 	se.Interpretation = in.Interpretation
-	entry := ReviewEntry{Text: se.Text, Interpretation: in.Interpretation, Kind: in.Kind, Reason: in.Reason}
+	se.Finding = finding
+	entry := ReviewEntry{Text: se.Text, Interpretation: in.Interpretation, Kind: in.Kind, Reason: in.Reason, Finding: finding}
 	for _, s := range in.Steps {
 		entry.Steps = append(entry.Steps, s.Kind)
 	}
@@ -581,8 +629,10 @@ func (e *Engine) proposal(st *State, wps map[string]Waypoint) Outcome {
 		return Outcome{NotPossible: "Not possible to prepare a request: the kind of work is still open. Nothing was filed; say what you need in one message."}
 	}
 	p := &Proposal{Kind: k.Name, Title: k.Title, Interpretation: Known, ResultReported: k.ResultReported}
-	if st.SomethingElse != nil && st.SomethingElse.Text != "" {
-		p.Interpretation = Known
+	if st.SomethingElse != nil && st.SomethingElse.Finding != "" {
+		if g, ok := e.Cat.GapByID(st.SomethingElse.Finding); ok {
+			p.Notes = append(p.Notes, fmt.Sprintf("Not reported: %s. %s", g.Need, g.Say))
+		}
 	}
 	vals := map[string]string{}
 	for _, f := range k.Fields() {

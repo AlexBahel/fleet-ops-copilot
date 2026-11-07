@@ -193,6 +193,61 @@ type Gap struct {
 	ID   string `json:"id"`
 	Need string `json:"need"`
 	Say  string `json:"say"`
+	// Finding marks a gap in what is reported, not in what a robot can do
+	// (a result, a photo): a request that needs it is still an inspection,
+	// filed as the class (b) inspect kind for what it looks for, with the
+	// "not reported" label and Say shown in the preview. It is never a
+	// reason for "not possible" (R67, R73).
+	Finding bool `json:"finding,omitempty"`
+}
+
+// classB is a kind Swarmada runs but whose result it does not report (R67).
+const classB = "b"
+
+// GapByID returns a notYetPossible entry.
+func (c *Catalogue) GapByID(id string) (*Gap, bool) {
+	for i := range c.NotYetPossible {
+		if c.NotYetPossible[i].ID == id {
+			return &c.NotYetPossible[i], true
+		}
+	}
+	return nil, false
+}
+
+// LookForWords are the values of lookFor across the class (b) kinds.
+func (c *Catalogue) LookForWords() []string {
+	var out []string
+	for _, k := range c.Kinds {
+		if k.Class != classB {
+			continue
+		}
+		for _, w := range k.LookFor {
+			if !slices.Contains(out, w) {
+				out = append(out, w)
+			}
+		}
+	}
+	return out
+}
+
+// FindingKind returns the class (b) kind whose lookFor is exactly the given
+// set, in any order (R73).
+func (c *Catalogue) FindingKind(lookFor []string) (*Kind, bool) {
+	want := slices.Clone(lookFor)
+	slices.Sort(want)
+	want = slices.Compact(want)
+	for i := range c.Kinds {
+		k := &c.Kinds[i]
+		if k.Class != classB || len(k.LookFor) == 0 {
+			continue
+		}
+		have := slices.Clone(k.LookFor)
+		slices.Sort(have)
+		if slices.Equal(have, want) {
+			return k, true
+		}
+	}
+	return nil, false
 }
 
 // Load reads and validates a catalogue file.
@@ -336,6 +391,9 @@ func (c *Catalogue) Validate() error {
 	for _, g := range c.NotYetPossible {
 		if g.ID == "" || g.Need == "" || g.Say == "" {
 			add("notYetPossible entries need id, need and say")
+		}
+		if g.Finding && len(c.LookForWords()) == 0 {
+			add("notYetPossible %s is a finding, but no class b kind has lookFor", g.ID)
 		}
 	}
 	if len(errs) > 0 {

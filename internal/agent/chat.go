@@ -97,7 +97,12 @@ func ProposeSpec(cat *catalogue.Catalogue) llm.ToolSpec {
 		kinds = append(kinds, fmt.Sprintf("%s (%s)", k.Name, k.Title))
 	}
 	steps = cat.BasicSteps
+	var findings []string
 	for _, g := range cat.NotYetPossible {
+		if g.Finding {
+			findings = append(findings, g.Need)
+			continue
+		}
 		gaps = append(gaps, fmt.Sprintf("%s: %s", g.ID, g.Need))
 	}
 	desc := "Start or continue a request for work. Pass the ask and every field the person's words state; " +
@@ -106,6 +111,9 @@ func ProposeSpec(cat *catalogue.Catalogue) llm.ToolSpec {
 		"Kinds: " + strings.Join(kinds, "; ") + ". " +
 		"For a 'something else' description set somethingElse: known (with kind), composed (with steps from: " + strings.Join(steps, ", ") +
 		"), or notPossible (with need, one of: " + strings.Join(gaps, "; ") + ", and the reason). " +
+		"notPossible is only for work no robot can do at all. A need for a finding (" + strings.Join(findings, "; ") + "; damage, what is at a place, whether something is in place) " +
+		"is an inspection: use known with the inspect kind for what it looks for (lookFor: " + strings.Join(cat.LookForWords(), ", ") + ", or both); " +
+		"the preview says what is not reported. " +
 		"Fields are strings; location, from, to and dock are waypoint names, route is waypoint names separated by commas."
 	return llm.ToolSpec{Name: ProposeTool, Description: desc, InputSchema: b}
 }

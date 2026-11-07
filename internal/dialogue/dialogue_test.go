@@ -165,15 +165,57 @@ func TestSomethingElse(t *testing.T) {
 	if o.Proposal.Interpretation != Composed || in.Preview.Interpretation != "Composed" || len(in.Actions) != 2 || in.Actions[1].DependsOn[0] != "step1-move" || in.Actions[1].RobotSelector != "sim-robot-003" {
 		t.Fatalf("composed %+v", in)
 	}
-	// Not possible.
+	// Not possible: only work no robot can do at all (R73).
 	st3 := newState("x")
-	st3.Describe("take a photo of the damaged pallet and send it to me")
-	o = e.Propose(st3, Input{SomethingElse: &SomethingElseInput{Interpretation: NotPossible, Need: "C2", Reason: "it needs a photo attached to the result"}}, snap)
-	if o.NotPossible == "" || !strings.Contains(o.NotPossible, "Nothing was filed") || !strings.Contains(o.NotPossible, "no place for evidence") {
+	st3.Describe("run the vision service on the camera stream and count the pallets")
+	o = e.Propose(st3, Input{SomethingElse: &SomethingElseInput{Interpretation: NotPossible, Need: "C3", Reason: "it needs an external analysis service"}}, snap)
+	if o.NotPossible == "" || !strings.Contains(o.NotPossible, "Nothing was filed") || !strings.Contains(o.NotPossible, "no dispatch path for External actions") {
 		t.Fatalf("not possible %+v", o)
 	}
 	if len(logged) != 3 || logged[2].Interpretation != NotPossible || logged[0].Text == "" {
 		t.Fatalf("review log %+v", logged)
+	}
+}
+
+// R67, R73: a "something else" need for a finding (a result, a photo,
+// damage, what is at a place) is never "not possible": it becomes the
+// inspect kind for what it looks for, with the "not reported" label and the
+// gap's own sentence in the preview, and the person's words kept.
+func TestFindingIsAnInspection(t *testing.T) {
+	e := &Engine{Cat: cat(t)}
+	for name, tc := range map[string]struct {
+		words   string
+		in      SomethingElseInput
+		kind    string
+		note    string
+		finding string
+	}{
+		"photo, model said not possible":         {"check the extinguisher at receiving-dock-1 is in its bracket; I need a photo", SomethingElseInput{Interpretation: NotPossible, Need: "C2"}, "inspect-location", "no place for evidence", "C2"},
+		"damage, model said not possible":        {"check P-1042 for damage", SomethingElseInput{Interpretation: NotPossible, Need: "C1"}, "inspect-damage", "no result field", "C1"},
+		"what is there, model said not possible": {"see what is on staging-shelf-a", SomethingElseInput{Interpretation: NotPossible, Need: "C1"}, "inspect-location", "no result field", "C1"},
+		"model's lookFor wins over the words":    {"look at the dock", SomethingElseInput{Interpretation: NotPossible, Need: "C1", LookFor: []string{"damage", "location-state"}}, "inspect-both", "no result field", "C1"},
+		"model said known":                       {"check P-1042 for damage", SomethingElseInput{Interpretation: Known, Kind: "inspect-damage"}, "inspect-damage", "", ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			st := newState("x")
+			st.Fields = map[string]string{"location": "receiving-dock-1"}
+			st.Describe(tc.words)
+			o := e.Propose(st, Input{SomethingElse: &tc.in}, snap)
+			if o.Proposal == nil {
+				t.Fatalf("no proposal: %+v", o)
+			}
+			p := o.Proposal
+			pv := RenderPreview(p, tools.CheckTaskResult{Report: feasibility.Report{Verdict: feasibility.LikelyFeasible}})
+			if p.Kind != tc.kind || p.ResultReported || p.Interpretation != Known || !strings.Contains(pv.Text, ResultNotReported) || st.SomethingElse.Finding != tc.finding {
+				t.Fatalf("kind %s reported=%v interp %s finding %q:\n%s", p.Kind, p.ResultReported, p.Interpretation, st.SomethingElse.Finding, pv.Text)
+			}
+			if tc.note != "" && (!strings.Contains(pv.Text, "Not reported: ") || !strings.Contains(pv.Text, tc.note)) {
+				t.Fatalf("preview lacks the note %q:\n%s", tc.note, pv.Text)
+			}
+			if in := draftInput(t, o); in.Preview.Instruction != tc.words || in.Actions[0].Instruction != tc.words {
+				t.Fatalf("words not kept: %+v", in.Preview)
+			}
+		})
 	}
 }
 

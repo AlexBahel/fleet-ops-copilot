@@ -201,16 +201,16 @@ func TestBlockedPreviewCannotBeConfirmed(t *testing.T) {
 }
 
 // Something else: "4" with a description keeps the words verbatim and the
-// model reads them; not possible files nothing.
+// model reads them; not possible (work no robot can do, R73) files nothing.
 func TestSomethingElseFlows(t *testing.T) {
 	c := world(t)
 	_, conv, send := chatFixture(t, c,
 		llm.Step{Calls: []llm.ToolCall{call("p1", ProposeTool, map[string]any{"ask": "inspect"})}},
-		llm.Step{Calls: []llm.ToolCall{call("p2", ProposeTool, map[string]any{"somethingElse": map[string]any{"interpretation": "notPossible", "need": "C2", "reason": "it needs a photo in the result"}})}},
+		llm.Step{Calls: []llm.ToolCall{call("p2", ProposeTool, map[string]any{"somethingElse": map[string]any{"interpretation": "notPossible", "need": "C3", "reason": "it needs an external analysis service"}})}},
 	)
 	send("inspect something")
-	tr := send("4 take a photo of pallet 7 and send it to me")
-	if tr.Dialogue.Outcome != OutcomeNotPossible || tr.Dialogue.Instruction != "take a photo of pallet 7 and send it to me" || !strings.Contains(tr.Final, "Nothing was filed") {
+	tr := send("4 run the vision service on the camera stream and count pallet 7's boxes")
+	if tr.Dialogue.Outcome != OutcomeNotPossible || tr.Dialogue.Instruction != "run the vision service on the camera stream and count pallet 7's boxes" || !strings.Contains(tr.Final, "Nothing was filed") {
 		t.Fatalf("not possible %+v %q", tr.Dialogue, tr.Final)
 	}
 	if conv.State.Active() || len(requests(t, c)) != 0 {
