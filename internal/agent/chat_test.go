@@ -217,3 +217,54 @@ func TestSomethingElseFlows(t *testing.T) {
 		t.Fatal("state left or request filed")
 	}
 }
+
+// R73: the finding fallback (a model's "not possible" for a photo, mapped to
+// the matching inspect kind) only produces a preview. Nothing is filed on
+// the turn that maps it, nor on a reply that is not a confirmation ("3");
+// the one
+// request is filed on the person's "1", with that preview's id; cancelling
+// files nothing.
+func TestFindingFallbackOnlyPreviewsUntilConfirmed(t *testing.T) {
+	steps := []llm.Step{
+		{Calls: []llm.ToolCall{call("p1", ProposeTool, map[string]any{"ask": "inspect", "fields": map[string]any{"location": "receiving-dock-1"}})}},
+		{Calls: []llm.ToolCall{call("p2", ProposeTool, map[string]any{"somethingElse": map[string]any{"interpretation": "notPossible", "need": "C2", "reason": "it needs a photo"}})}},
+	}
+	for _, last := range []string{"1", "4"} {
+		t.Run("then "+last, func(t *testing.T) {
+			c := world(t)
+			_, conv, send := chatFixture(t, c, steps...)
+			send("inspect the receiving dock")
+			tr := send("4 check the extinguisher is in its bracket; I need a photo")
+			if tr.Dialogue == nil || tr.Dialogue.Outcome != OutcomePreview || tr.Dialogue.Kind != "inspect-location" || tr.Dialogue.Blocked {
+				t.Fatalf("the fallback did not give an open preview: %+v\n%s", tr.Dialogue, tr.Final)
+			}
+			if !strings.Contains(tr.Final, "Not reported: photos or other evidence") || !strings.Contains(tr.Final, "1 Confirm") {
+				t.Fatalf("preview text:\n%s", tr.Final)
+			}
+			if conv.Preview == nil || tr.Dialogue.PreviewID == "" {
+				t.Fatal("no preview stored to confirm")
+			}
+			previewID := tr.Dialogue.PreviewID
+			if n := len(requests(t, c)); n != 0 {
+				t.Fatalf("%d request(s) filed by the fallback itself", n)
+			}
+			// A reply that is not a confirmation ("3", change something) files
+			// nothing and keeps the preview.
+			tr = send("3")
+			if n := len(requests(t, c)); n != 0 || tr.Dialogue == nil || tr.Dialogue.Outcome != OutcomeQuestion || conv.Preview == nil {
+				t.Fatalf("after a non-confirmation: %d requests, %+v", n, tr.Dialogue)
+			}
+			tr = send(last)
+			rs := requests(t, c)
+			if last == "4" {
+				if tr.Dialogue.Outcome != OutcomeCancelled || len(rs) != 0 {
+					t.Fatalf("cancel: %+v, %d requests", tr.Dialogue, len(rs))
+				}
+				return
+			}
+			if tr.Dialogue.Outcome != OutcomeFiled || len(rs) != 1 || rs[0].Spec.Preview == nil || rs[0].Spec.Preview.ID != previewID || rs[0].Spec.Preview.Kind != "inspect-location" {
+				t.Fatalf("confirm: %+v, %d requests", tr.Dialogue, len(rs))
+			}
+		})
+	}
+}
