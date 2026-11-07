@@ -86,6 +86,8 @@ func main() {
 	llamaCtx := flag.String("llama-context", "", "llamacpp: kubeconfig context of the cluster running llama-server; its Deployment, pod log and node are recorded")
 	llamaNS := flag.String("llama-namespace", "fleetops-system", "llamacpp: namespace of the llama-server Deployment")
 	llamaDeploy := flag.String("llama-deployment", "llama-server", "llamacpp: name of the llama-server Deployment and its container")
+	rejudge := flag.String("rejudge", "", "judge the answers of a recorded traces.jsonl again with this judge, no backend called (criterion 4 only, harness.Rejudge); -scenarios must be the files the runs were made with. Writes one JSON line per run to -rejudge-out")
+	rejudgeOut := flag.String("rejudge-out", "", "with -rejudge: output file")
 	var pr harness.Pricing
 	flag.Float64Var(&pr.InputPerMTok, "price-input", 0, "claude: USD per million input tokens")
 	flag.Float64Var(&pr.OutputPerMTok, "price-output", 0, "claude: USD per million output tokens")
@@ -96,6 +98,12 @@ func main() {
 	flag.Parse()
 	if *traces == "" {
 		*traces = filepath.Join(filepath.Dir(*out), "traces.jsonl")
+	}
+	if *rejudge != "" {
+		if err := runRejudge(*scenarios, *fixtures, *rejudge, *rejudgeOut); err != nil {
+			log.Fatal(err)
+		}
+		return
 	}
 	cfg := runConfig{scenarioDir: *scenarios, fixtureDir: *fixtures, runs: *runs, out: *out, tracePath: *traces, policyPath: *policyPath, cataloguePath: *cataloguePath, baseline: *baselinePath, updateBaseline: *updateBaseline, only: *only, liveCtx: *liveCtx, liveMCP: *liveMCP, otlp: *otlp}
 	switch *backend {
@@ -157,6 +165,40 @@ func main() {
 	if err := run(cfg); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// runRejudge judges recorded answers again (harness.Rejudge) and prints
+// how many verdicts changed.
+func runRejudge(scenarioDir, fixtureDir, tracesPath, outPath string) error {
+	if outPath == "" {
+		return fmt.Errorf("-rejudge needs -rejudge-out")
+	}
+	repo, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	scs, err := harness.LoadScenarios(scenarioDir)
+	if err != nil {
+		return err
+	}
+	env, err := testenv.Start(repo, testenv.DefaultPeople)
+	if err != nil {
+		return err
+	}
+	defer env.Stop()
+	in, err := os.Open(tracesPath)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = in.Close() }()
+	out, err := os.Create(outPath)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = out.Close() }()
+	n, err := (&harness.Runner{Env: env, FixtureDir: fixtureDir}).Rejudge(context.Background(), scs, in, out)
+	fmt.Printf("rejudged %d runs of %s with judge %s into %s\n", n, tracesPath, harness.JudgeVersion, outPath)
+	return err
 }
 
 // llamaServerSettings returns the server-side settings for backendSettings
