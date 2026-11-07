@@ -60,13 +60,13 @@ This gives two deployments of the same agent:
 ## 3. Architecture
 
 ```text
- operator ──► fleetops CLI ─┐                                   approver (named person)
- operator ──► Web chat ┤                                     │  fleetops approve: creates an
-                       │                                     │  ApprovalDecision with the
-                       │                                     │  approver's own credentials
-                       ▼                                     ▼
+ operator ──► fleetops CLI ─┐                              approver (named person)
+ operator ──► Web chat ─────┤                                │  fleetops approve: creates an
+                            │                                │  ApprovalDecision with the
+                            │                                │  approver's own credentials
+                            ▼                                ▼
               ┌──────────────────┐   MCP (HTTP)   ┌──────────────────┐   ┌──────────────────────┐
-              │  fleetops-agent       │ ─────────────► │  fleetops-mcp         │   │  fleetops-approvals       │
+              │  fleetops-agent  │ ─────────────► │  fleetops-mcp    │   │  fleetops-approvals  │
               │  Router          │                │  read tools      │   │  decision checks     │
               │  Diagnose        │                │  request_* tools │   │  executor            │
               │  Dispatch        │                │  policy engine   │   │  policy re-check     │

@@ -2,8 +2,8 @@
 
 | Source | Rendered | Shows |
 |---|---|---|
-| `components.d2` | `components.svg` | The three processes and their ServiceAccounts, the copilot's admission policies and CRDs, Swarmada's admission webhooks, the cloud and air-gapped model profiles, NetworkPolicy, the optional trace collector |
-| `approval-flow.d2` | `approval-flow.svg` | A draft `FleetTask` from request to execution, then its activation, which the approver performs with their own credentials |
+| `components.d2` | `components.svg` | The three processes and their ServiceAccounts, the site catalogue, the copilot's admission policies and CRDs, Swarmada's admission webhooks, the cloud and air-gapped model profiles, NetworkPolicy, the optional trace collector |
+| `approval-flow.d2` | `approval-flow.svg` | A draft `FleetTask` from the person's confirmed preview to execution, then its activation with `fleetops activate`, which a person runs with their own credentials |
 
 Solid boxes are built. The dashed box is the NetworkPolicy: in the chart, off by default, never
 applied to a cluster. Dashed edges are optional (traces) or not wired by any manifest (fleetops-agent to

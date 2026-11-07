@@ -27,10 +27,11 @@ otel: "OTLP collector\n(optional: tracing.otlpEndpoint)" {class: external}
 
 cluster: Kubernetes cluster {
   fleetops: "namespace fleetops-system (Helm chart fleet-ops-copilot)" {
-    agent: "fleetops-agent (model loop, web UI)\nSA fleetops-agent: get/list ApprovalRequest only\nweb chat + requests panel: shows fleetops approve/reject,\ncannot decide; ClusterIP, no Ingress, no login\nbackend: claude, llamacpp or scripted\n(roles Router ... Reporter: not built)" {class: built}
-    mcp: "fleetops-mcp (MCP server)\nSA fleetops-mcp: get/list/watch Swarmada,\ncreate ApprovalRequest, create TokenReview;\nno Swarmada write; requester = TokenReview of\nthe caller's bearer token (R39)\npolicy engine, audit JSONL" {class: built}
-    approvals: "fleetops-approvals (controller, executor)\nSA fleetops-approvals: create draft FleetTask,\ncreate ZoneMaintenance, patch + estop-trigger FleetZone\nSubjectAccessReview, policy re-check, audit JSONL" {class: built}
+    agent: "fleetops-agent (model loop, web UI)\nSA fleetops-agent: get/list ApprovalRequest only\ndialogue engine + site catalogue: at most two questions,\na preview, files a request only on the person's confirmation\n(the model is offered no request tool)\nweb chat + requests panel: shows fleetops approve/reject,\ncannot decide; ClusterIP, no Ingress, no login\nbackend: claude, llamacpp or scripted\n(roles Router ... Reporter: not built)" {class: built}
+    mcp: "fleetops-mcp (MCP server)\nSA fleetops-mcp: get/list/watch Swarmada,\ncreate ApprovalRequest, create TokenReview;\nread tools and check_task (reads only);\nrefuses a request without a confirmed preview;\nno Swarmada write; requester = TokenReview of\nthe caller's bearer token (R39)\npolicy engine, audit JSONL" {class: built}
+    approvals: "fleetops-approvals (controller, executor)\nSA fleetops-approvals: create draft FleetTask,\ncreate ZoneMaintenance, patch + estop-trigger FleetZone\nSubjectAccessReview, policy re-check;\nbefore a draft: check_task again + dry runs;\naudit JSONL" {class: built}
     policy: "ConfigMap fleetops-policy\n(policies/default.yaml)" {class: built}
+    catalogue: "ConfigMap fleetops-catalogue\n(catalogue/warehouse-a.yaml)" {class: built}
     netpol: "NetworkPolicy (networkPolicy.enabled, off by default)\ndefault deny; DNS; API server ipBlock (incl. fleetops-agent);\nfleetops-agent -> fleetops-mcp; fleetops-agent -> Claude API ipBlock;\nOTLP egress if given; no ingress to the web UI" {class: planned}
 
     airgap: "Air-gapped profile (config/airgap, not in chart)" {
@@ -43,10 +44,11 @@ cluster: Kubernetes cluster {
     agent -> airgap.llama: "chat completions (airgap profile;\n-backend llamacpp, not set by any manifest)" {style.stroke-dash: 5}
     policy -> mcp: mounted {style.stroke-dash: 2}
     policy -> approvals: mounted {style.stroke-dash: 2}
+    catalogue -> agent: mounted {style.stroke-dash: 2}
   }
 
   apiserver: "Kubernetes API server" {
-    vap: "Copilot ValidatingAdmissionPolicies\nfleetops-requests: requestedBy = caller\nfleetops-decisions: person only, decidedBy = caller, immutable\nfleetops-approvals-drafts-only\nfleetops-approvals-zone-stop-only" {class: built}
+    vap: "Copilot ValidatingAdmissionPolicies\nfleetops-requests: requestedBy = caller\nfleetops-decisions: person only, decidedBy = caller, immutable\nfleetops-approvals-drafts-only\nfleetops-approvals-dry-run-only\nfleetops-approvals-zone-stop-only" {class: built}
     crds: "CRDs\nswarmada.io/v1 (Swarmada)\nApprovalRequest, ApprovalDecision\n(fleetops.alexbahel.github.io/v1alpha1)"
   }
 
@@ -66,4 +68,4 @@ people.operator -> cluster.fleetops.agent: "fleetops chat with own token: verifi
 cluster.fleetops.agent -> claude_api: "Messages API (cloud profile)\nkey from an existing Secret"
 cluster.fleetops.agent -> otel: "traces (OTLP/gRPC)" {style.stroke-dash: 5}
 cluster.fleetops.mcp -> otel: "traces: tool calls,\npolicy decisions" {style.stroke-dash: 5}
-people.approver -> cluster.apiserver: "fleetops approve or fleetops reject:\nApprovalDecision with own credentials;\nruns the activation command itself"
+people.approver -> cluster.apiserver: "fleetops approve or fleetops reject:\nApprovalDecision with own credentials;\nfleetops activate: activates with own credentials"
