@@ -521,7 +521,7 @@ func TestLiveApprovalPaths(t *testing.T) {
 		// The person runs the printed command with their own credentials:
 		// foc activate records an Activation ApprovalDecision, then sends the
 		// plain spec.draft=false patch through Swarmada's real webhook (R71).
-		act := e.foc(t, strings.Fields(strings.TrimSpace(out[iCmd+1:iCmd+len(want)]))[1:]...)
+		act := e.foc(t, strings.Fields(strings.TrimSpace(out[iCmd+1 : iCmd+len(want)]))[1:]...)
 		if !strings.Contains(act, "recorded ApprovalDecision "+req+"-activation-") || !strings.Contains(act, "activated FleetTask "+draft) {
 			t.Fatalf("foc activate output:\n%s", act)
 		}
@@ -579,6 +579,92 @@ func TestLiveApprovalPaths(t *testing.T) {
 		}
 		if got.Status.ActivatedBy != got.Status.DecidedBy {
 			t.Logf("note: activated by %q, approved by %q", got.Status.ActivatedBy, got.Status.DecidedBy)
+		}
+	})
+
+	// R43/D57 on the live API server: the requester is the person behind the
+	// bearer token, whatever name _meta asserts; without a token the requester
+	// is unverified:<name> and no one can approve the request.
+	t.Run("requester-is-authenticated-not-asserted", func(t *testing.T) {
+		draftArgs := func(name string) map[string]any {
+			return map[string]any{
+				"name": name, "purpose": "live check: the requester is the token's person",
+				"actions": []map[string]any{{"name": "inspect", "type": "Navigate", "zone": zone}},
+			}
+		}
+		// sam's token, _meta asserts dana: requestedFor is sam.
+		forged := requestName(t, e.callAs(t, "sam", "dana", "request_draft_task", draftArgs(fmt.Sprintf("foc-live-forged-%d", stamp))))
+		if got := e.requestedFor(t, forged); got != "sam" {
+			t.Errorf("requestedFor %q, want sam (the asserted name dana must have no effect)", got)
+		}
+		// No token, _meta asserts dana: unverified, and dana's own approval is refused.
+		anon := fmt.Sprintf("foc-live-unverified-%d", stamp)
+		unverified := requestName(t, e.callAs(t, "", "dana", "request_draft_task", draftArgs(anon)))
+		if got := e.requestedFor(t, unverified); got != "unverified:dana" {
+			t.Errorf("requestedFor %q, want unverified:dana", got)
+		}
+		e.foc(t, "approve", unverified, "-n", ns, "--context", e.approverCtx)
+		time.Sleep(10 * time.Second)
+		var ar focv1.ApprovalRequest
+		if err := e.admin.Get(ctx, client.ObjectKey{Namespace: ns, Name: unverified}, &ar); err != nil {
+			t.Fatal(err)
+		}
+		var ft swarmv1.FleetTask
+		err := e.admin.Get(ctx, client.ObjectKey{Namespace: ns, Name: anon}, &ft)
+		t.Logf("approved unverified request %s: state=%s refusedDecisions=%v message=%q; FleetTask/%s: %v", unverified, ar.Status.State, ar.Status.RefusedDecisions, ar.Status.Message, anon, err)
+		if len(ar.Status.RefusedDecisions) == 0 || ar.Status.State == focv1.StateApproved || ar.Status.State == focv1.StateExecuted {
+			t.Error("the approval of an unverified request was not refused")
+		}
+		if !apierrors.IsNotFound(err) {
+			t.Errorf("FleetTask %s exists after approving an unverified request", anon)
+		}
+		for _, r := range []string{forged, unverified} {
+			e.foc(t, "reject", r, "-n", ns, "--context", e.approverCtx, "-comment", "live check cleanup")
+		}
+	})
+
+	t.Run("executor-writes-only-after-named-approval", func(t *testing.T) {
+		// No decision: nothing is written.
+		pendingDraft := fmt.Sprintf("foc-live-pending-%d", stamp)
+		req := requestName(t, e.call(t, operator, "request_draft_task", map[string]any{
+			"name": pendingDraft, "purpose": "live check: no decision, no write",
+			"actions": []map[string]any{{"name": "inspect", "type": "Navigate", "zone": zone}},
+		}))
+		time.Sleep(15 * time.Second)
+		var ar focv1.ApprovalRequest
+		if err := e.admin.Get(ctx, client.ObjectKey{Namespace: ns, Name: req}, &ar); err != nil {
+			t.Fatal(err)
+		}
+		var ft swarmv1.FleetTask
+		err := e.admin.Get(ctx, client.ObjectKey{Namespace: ns, Name: pendingDraft}, &ft)
+		t.Logf("request %s with no decision after 15s: state=%s; FleetTask/%s: %v", req, ar.Status.State, pendingDraft, err)
+		if !apierrors.IsNotFound(err) {
+			t.Errorf("FleetTask %s exists without a decision", pendingDraft)
+		}
+		e.foc(t, "reject", req, "-n", ns, "--context", e.approverCtx, "-comment", "live check cleanup")
+		e.waitState(t, req, focv1.StateRejected, 60*time.Second)
+		if err := e.admin.Get(ctx, client.ObjectKey{Namespace: ns, Name: pendingDraft}, &ft); !apierrors.IsNotFound(err) {
+			t.Errorf("FleetTask %s exists after rejection: %v", pendingDraft, err)
+		}
+
+		// The requester approving their own request: refused, nothing written.
+		selfDraft := fmt.Sprintf("foc-live-self-%d", stamp)
+		req = requestName(t, e.call(t, e.approverUser, "request_draft_task", map[string]any{
+			"name": selfDraft, "purpose": "live check: self-approval is refused",
+			"actions": []map[string]any{{"name": "inspect", "type": "Navigate", "zone": zone}},
+		}))
+		e.foc(t, "approve", req, "-n", ns, "--context", e.approverCtx)
+		time.Sleep(10 * time.Second)
+		if err := e.admin.Get(ctx, client.ObjectKey{Namespace: ns, Name: req}, &ar); err != nil {
+			t.Fatal(err)
+		}
+		err = e.admin.Get(ctx, client.ObjectKey{Namespace: ns, Name: selfDraft}, &ft)
+		t.Logf("self-approved request %s: state=%s refusedDecisions=%v message=%q; FleetTask/%s: %v", req, ar.Status.State, ar.Status.RefusedDecisions, ar.Status.Message, selfDraft, err)
+		if len(ar.Status.RefusedDecisions) == 0 || ar.Status.State == focv1.StateApproved || ar.Status.State == focv1.StateExecuted {
+			t.Error("self-approval was not refused")
+		}
+		if !apierrors.IsNotFound(err) {
+			t.Errorf("FleetTask %s exists after a self-approval", selfDraft)
 		}
 	})
 
@@ -675,91 +761,9 @@ func TestLiveApprovalPaths(t *testing.T) {
 		}
 	})
 
-	// R43/D57 on the live API server: the requester is the person behind the
-	// bearer token, whatever name _meta asserts; without a token the requester
-	// is unverified:<name> and no one can approve the request.
-	t.Run("requester-is-authenticated-not-asserted", func(t *testing.T) {
-		draftArgs := func(name string) map[string]any {
-			return map[string]any{
-				"name": name, "purpose": "live check: the requester is the token's person",
-				"actions": []map[string]any{{"name": "inspect", "type": "Navigate", "zone": zone}},
-			}
-		}
-		// sam's token, _meta asserts dana: requestedFor is sam.
-		forged := requestName(t, e.callAs(t, "sam", "dana", "request_draft_task", draftArgs(fmt.Sprintf("foc-live-forged-%d", stamp))))
-		if got := e.requestedFor(t, forged); got != "sam" {
-			t.Errorf("requestedFor %q, want sam (the asserted name dana must have no effect)", got)
-		}
-		// No token, _meta asserts dana: unverified, and dana's own approval is refused.
-		anon := fmt.Sprintf("foc-live-unverified-%d", stamp)
-		unverified := requestName(t, e.callAs(t, "", "dana", "request_draft_task", draftArgs(anon)))
-		if got := e.requestedFor(t, unverified); got != "unverified:dana" {
-			t.Errorf("requestedFor %q, want unverified:dana", got)
-		}
-		e.foc(t, "approve", unverified, "-n", ns, "--context", e.approverCtx)
-		time.Sleep(10 * time.Second)
-		var ar focv1.ApprovalRequest
-		if err := e.admin.Get(ctx, client.ObjectKey{Namespace: ns, Name: unverified}, &ar); err != nil {
-			t.Fatal(err)
-		}
-		var ft swarmv1.FleetTask
-		err := e.admin.Get(ctx, client.ObjectKey{Namespace: ns, Name: anon}, &ft)
-		t.Logf("approved unverified request %s: state=%s refusedDecisions=%v message=%q; FleetTask/%s: %v", unverified, ar.Status.State, ar.Status.RefusedDecisions, ar.Status.Message, anon, err)
-		if len(ar.Status.RefusedDecisions) == 0 || ar.Status.State == focv1.StateApproved || ar.Status.State == focv1.StateExecuted {
-			t.Error("the approval of an unverified request was not refused")
-		}
-		if !apierrors.IsNotFound(err) {
-			t.Errorf("FleetTask %s exists after approving an unverified request", anon)
-		}
-		for _, r := range []string{forged, unverified} {
-			e.foc(t, "reject", r, "-n", ns, "--context", e.approverCtx, "-comment", "live check cleanup")
-		}
-	})
-
-	t.Run("executor-writes-only-after-named-approval", func(t *testing.T) {
-		// No decision: nothing is written.
-		pendingDraft := fmt.Sprintf("foc-live-pending-%d", stamp)
-		req := requestName(t, e.call(t, operator, "request_draft_task", map[string]any{
-			"name": pendingDraft, "purpose": "live check: no decision, no write",
-			"actions": []map[string]any{{"name": "inspect", "type": "Navigate", "zone": zone}},
-		}))
-		time.Sleep(15 * time.Second)
-		var ar focv1.ApprovalRequest
-		if err := e.admin.Get(ctx, client.ObjectKey{Namespace: ns, Name: req}, &ar); err != nil {
-			t.Fatal(err)
-		}
-		var ft swarmv1.FleetTask
-		err := e.admin.Get(ctx, client.ObjectKey{Namespace: ns, Name: pendingDraft}, &ft)
-		t.Logf("request %s with no decision after 15s: state=%s; FleetTask/%s: %v", req, ar.Status.State, pendingDraft, err)
-		if !apierrors.IsNotFound(err) {
-			t.Errorf("FleetTask %s exists without a decision", pendingDraft)
-		}
-		e.foc(t, "reject", req, "-n", ns, "--context", e.approverCtx, "-comment", "live check cleanup")
-		e.waitState(t, req, focv1.StateRejected, 60*time.Second)
-		if err := e.admin.Get(ctx, client.ObjectKey{Namespace: ns, Name: pendingDraft}, &ft); !apierrors.IsNotFound(err) {
-			t.Errorf("FleetTask %s exists after rejection: %v", pendingDraft, err)
-		}
-
-		// The requester approving their own request: refused, nothing written.
-		selfDraft := fmt.Sprintf("foc-live-self-%d", stamp)
-		req = requestName(t, e.call(t, e.approverUser, "request_draft_task", map[string]any{
-			"name": selfDraft, "purpose": "live check: self-approval is refused",
-			"actions": []map[string]any{{"name": "inspect", "type": "Navigate", "zone": zone}},
-		}))
-		e.foc(t, "approve", req, "-n", ns, "--context", e.approverCtx)
-		time.Sleep(10 * time.Second)
-		if err := e.admin.Get(ctx, client.ObjectKey{Namespace: ns, Name: req}, &ar); err != nil {
-			t.Fatal(err)
-		}
-		err = e.admin.Get(ctx, client.ObjectKey{Namespace: ns, Name: selfDraft}, &ft)
-		t.Logf("self-approved request %s: state=%s refusedDecisions=%v message=%q; FleetTask/%s: %v", req, ar.Status.State, ar.Status.RefusedDecisions, ar.Status.Message, selfDraft, err)
-		if len(ar.Status.RefusedDecisions) == 0 || ar.Status.State == focv1.StateApproved || ar.Status.State == focv1.StateExecuted {
-			t.Error("self-approval was not refused")
-		}
-		if !apierrors.IsNotFound(err) {
-			t.Errorf("FleetTask %s exists after a self-approval", selfDraft)
-		}
-
+	// Last before the audit record: the zone stop above leaves the zone stopped,
+	// so every subtest that files a draft into it runs before (R65 check).
+	t.Run("every-write-traces-to-a-named-approval", func(t *testing.T) {
 		// Every object the executor created traces to an approval by a person.
 		var reqs focv1.ApprovalRequestList
 		if err := e.admin.List(ctx, &reqs, client.InNamespace(ns)); err != nil {
