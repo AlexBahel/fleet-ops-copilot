@@ -365,3 +365,47 @@ func TestSomethingElseAnsweredWithAKindIsLogged(t *testing.T) {
 		t.Fatalf("logged twice: %+v", logged)
 	}
 }
+
+// P6, the path Sonnet 5.5 guided-06 took (runs 1-3): inspect.what, "4", the
+// open question, a description, and then the model answers the description
+// with a new ask (charge) instead of somethingElse. That is its reading of
+// the description: the charge, with no third question.
+func TestNewAskAfterSomethingElseIsTheReading(t *testing.T) {
+	var logged []ReviewEntry
+	e := &Engine{Cat: cat(t), Review: func(r ReviewEntry) { logged = append(logged, r) }}
+	st := newState("I need an inspection.")
+	if o := e.Propose(st, Input{Ask: "inspect"}, snap); o.Question == nil || o.Question.ID != "inspect.what" {
+		t.Fatalf("Q1 %+v", o)
+	}
+	if o, _, _ := e.Answer(st, 4, "", snap); o.Question == nil || !o.Question.Open {
+		t.Fatalf("open question %+v", o)
+	}
+	st.Describe("send sim-robot-003 to the charging bay and have it charge there")
+	o := e.Propose(st, Input{Ask: "charge", Fields: map[string]string{"robot": "sim-robot-003", "dock": "charging-bay", "location": "charging-bay"}}, snap)
+	if o.Question != nil {
+		t.Fatalf("a third question was asked: %s (asked %v)", o.Question.ID, st.Asked)
+	}
+	if in := draftInput(t, o); in.Preview.Kind != "charge" || in.Actions[0].RobotSelector != "sim-robot-003" {
+		t.Fatalf("proposal %+v", in)
+	}
+	if len(st.Asked) != 2 || len(logged) != 1 || logged[0].Interpretation != Known || logged[0].Kind != "charge" {
+		t.Fatalf("asked %v, review %+v", st.Asked, logged)
+	}
+}
+
+// P6: every question the person is shown counts against the cap of two,
+// a question asked again included, in every path.
+func TestCapCountsEveryQuestionShown(t *testing.T) {
+	e := &Engine{Cat: cat(t)}
+	st := newState("I need an inspection.")
+	shown := 0
+	for i := 0; i < 4; i++ {
+		// The person's answers were unclear; the model calls again with the ask only.
+		if o := e.Propose(st, Input{Ask: "inspect"}, snap); o.Question != nil {
+			shown++
+		}
+	}
+	if shown > catalogue.MaxQuestions || len(st.Asked) != shown {
+		t.Fatalf("%d questions shown, %d counted (%v); the cap is %d", shown, len(st.Asked), st.Asked, catalogue.MaxQuestions)
+	}
+}

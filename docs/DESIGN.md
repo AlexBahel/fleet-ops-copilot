@@ -426,8 +426,9 @@ response (D84).
    failure handling report only, Swarmada's own retry (`onFailure: Requeue`, shown as "retries up
    to 3 times, then alerts"; "alert on first failure" is available through "Change something",
    R69), start when activated, a generated draft name.
-7. **At most two questions before the preview.** The engine counts them in the dialogue state and,
-   once two have been asked, returns the preview with defaults for what is still open. A required
+7. **At most two questions before the preview.** The engine counts every question it shows in the
+   dialogue state, a question asked again after an unclear answer and the open question included
+   (D87), and, once two have been shown, returns the preview with defaults for what is still open. A required
    field with no default is then shown in the preview as missing; that preview cannot be
    confirmed, and its choices are to supply the item or cancel.
 8. **Inspect's first question is exactly** "What should the robot inspect? 1 Damage · 2 Location ·
@@ -449,7 +450,10 @@ only, or prepare a follow-up request if the task fails. A follow-up is never fil
   (normal preview); **composed** from `basicSteps` (members with `dependsOn`; the preview and the
   `ApprovalRequest` say "composed from basic steps for human review", and the requests panel shows
   it); or **not possible** (it needs a `notYetPossible` item or a capability no robot has): the
-  copilot says why and files nothing.
+  copilot says why and files nothing. A model that answers the description with a plain ask of the
+  catalogue (`propose_task(ask: charge, …)`) instead of `somethingElse` has read it as that ask:
+  the request becomes that ask, its kind is logged as a known reading, and its own tree continues
+  within the same cap (D87).
 - **A finding is an inspection, never "not possible" (R67, R73).** A need for what a robot sees
   or records (a reported result, a photo, damage, what is at a place) is filed as the class (b)
   inspect kind for what it looks for (`lookFor`: damage, location-state, or both), with the "not
@@ -878,6 +882,7 @@ these, `check_task` correctly finds no eligible robot in those fixtures. Results
 | D84 | The reply to a message is the text of every model response of that message, in order, each separated by a blank line, then the engine's question or preview when `propose_task` ended the turn; the trace records each response's text (`responses`, one entry per model turn, empty for a response with tool calls only). The judge grades that reply, which is what the person saw | BACKLOG-v4 P9, found in the v4 record runs (2026-11-07): when `propose_task` ended the turn, only that response's text reached the person, so a model that cited the fleet state in an earlier response of the same message was shown without it, and the trace did not record it. Showing every response keeps what the model said visible next to the preview; the engine's text stays last, so the question or the preview's choices are what the person answers. |
 | D85 | `propose_task`'s schema is narrowed to the site catalogue: `ask`, `kind`, `somethingElse.interpretation`, `.kind`, `.need`, `.lookFor` and the basic steps' `kind` are enums of the catalogue's values, and `fields` (also a step's) is an object with exactly the catalogue's field names, each described with its form and the kinds that use it, closed values (`mode`, `priority`, `onFailure`) as enums, no other property. The engine refuses a call that names a field the catalogue does not know before applying anything of it, and returns to the model a question naming the kind's fields and all allowed names; the model then calls again | BACKLOG-v4 P8, found in the v4 record runs (2026-11-07): unknown field names were dropped without notice and the default used, so six guided-12 runs passed the rounds as `repeat` and the preview showed "1 round(s) (default)". The schema says what is allowed; the refusal makes a wrong name a correction by the model instead of a silent default. The question goes to the model, not the person, because the person does not name fields. |
 | D86 | `check_task` blocks a member whose location names a waypoint that no FleetZone declares (it resolves to no zone) with `WAYPOINT_NOT_FOUND`, listing the waypoints that exist, so such a preview is blocked and never "likely feasible". When filing fails as a call (an API server refusal, an unreachable fleetops-mcp), fleetops-agent writes a fixed reply naming the request and the error and saying nothing was filed (`FILING_ERROR`), closes the preview, and does not return the error as the turn's result | BACKLOG-v4 P5, found in the v4 record runs (2026-11-07): a location the catalogue does not know (`receiving-dock`, `warehouse-a`) gave a preview with `location.zone: ""` that `check_task` called likely feasible (its location check ran only when a zone was set); the CRD refused the ApprovalRequest after the person confirmed, and the reply was empty. The check now runs before the preview, and no refusal leaves the person without a reply. |
+| D87 | The two-question cap counts every question the engine shows before the preview, in every path: a question asked again after an unclear answer counts again, as does the open question; once two have been shown, the engine returns the preview (missing items shown) or says the kind is still open. A new ask of the catalogue in answer to a "something else" description is the model's reading of that description: the request becomes that ask (its kind when the ask has one, logged as a known reading), and its tree continues within the cap | BACKLOG-v4 P6, found in the v4 record runs (2026-11-07): Sonnet 5.5 answered guided-06's description with `ask: charge`; the engine kept the first ask (inspect) and showed its first question again, a third question to the person, while its count stayed at two because a repeated question was not counted (`capViolations` 3). The harness counts every question shown; the engine now counts the same way. |
 
 ## 8. Resolved questions (2026-11-03)
 

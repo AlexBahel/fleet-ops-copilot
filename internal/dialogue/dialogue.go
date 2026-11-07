@@ -115,7 +115,8 @@ type State struct {
 	Ask    string            `json:"ask,omitempty"`
 	Kind   string            `json:"kind,omitempty"`
 	Fields map[string]string `json:"fields,omitempty"`
-	// Asked lists the questions asked before the preview (the cap counts it).
+	// Asked lists every question shown before the preview, in order, one
+	// asked again included; the cap counts it (D87).
 	Asked []string `json:"asked,omitempty"`
 	// Pending is the question awaiting an answer.
 	Pending *Question `json:"pending,omitempty"`
@@ -230,6 +231,12 @@ func (e *Engine) Propose(st *State, in Input, snap Snapshot) Outcome {
 	// A "something else" description the model answered with a plain kind
 	// is still an interpreted answer: it is logged like one (D72).
 	reading := st.SomethingElse != nil && st.SomethingElse.Text != "" && st.SomethingElse.Interpretation == ""
+	if reading && in.Ask != "" && in.Ask != st.Ask && e.knownAsk(in.Ask) {
+		// A new ask in answer to a "something else" description is the
+		// model's reading of it: the request becomes that ask (D87).
+		a, _ := e.Cat.AskByName(in.Ask)
+		st.Ask, st.Kind, st.Pending = in.Ask, a.Kind, nil
+	}
 	if st.Ask == "" {
 		st.Ask = in.Ask
 	}
@@ -436,8 +443,8 @@ func (e *Engine) next(st *State, snap Snapshot) Outcome {
 		if q.Source != nil && len(choices) == 0 {
 			return Outcome{NotPossible: fmt.Sprintf("Not possible now: there is nothing to choose for %q in %s. Nothing was filed.", q.Text, e.Cat.Namespace)}
 		}
-		again := slices.Contains(st.Asked, q.ID)
-		if !again && len(st.Asked) >= catalogue.MaxQuestions {
+		// Every question shown counts, one asked again included (D87).
+		if len(st.Asked) >= catalogue.MaxQuestions {
 			break
 		}
 		rq := Question{ID: q.ID, Text: q.Text}
@@ -446,11 +453,7 @@ func (e *Engine) next(st *State, snap Snapshot) Outcome {
 			rq.Choices = append(rq.Choices, c)
 		}
 		rq.Choices = append(rq.Choices, Choice{N: len(choices) + 1, Label: catalogue.SomethingElse, SomethingElse: true})
-		if !again {
-			// Asking the same question again after an unclear answer is not
-			// a new question.
-			st.Asked = append(st.Asked, q.ID)
-		}
+		st.Asked = append(st.Asked, q.ID)
 		st.Pending = &rq
 		return Outcome{Question: &rq}
 	}
