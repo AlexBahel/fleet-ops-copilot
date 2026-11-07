@@ -1,7 +1,7 @@
 {
   "schema": "fleetops.alexbahel.github.io/eval-results/v1",
   "purpose": "harness self-test: the scripted backend replays fixed turns, so these results test the harness, tools, policy and approval path, not a model",
-  "generatedAt": "2026-11-06T23:42:06Z",
+  "generatedAt": "2026-11-07T00:30:30Z",
   "backend": "scripted",
   "runsPerScenario": 3,
   "systemPrompt": {
@@ -16,7 +16,7 @@
   "environment": {
     "apiServer": "envtest kube-apiserver v1.37.0",
     "clock": "2026-11-04T06:00:00Z (fixed for fixture runs)",
-    "copilotCommit": "7a62aa0bd87b48c4da28108ed9b59952c4677cfb",
+    "copilotCommit": "9e9ffaad88046c7de4ea9aef64e0d1bc9353c807",
     "copilotTreeDirty": "false",
     "goos/goarch": "darwin/arm64",
     "swarmadaCommit": "558da47fdb44",
@@ -55,7 +55,7 @@
               "pass": true
             }
           },
-          "latencyMs": 8.731,
+          "latencyMs": 8.66,
           "toolCalls": [
             "get_robot",
             "get_zone"
@@ -94,7 +94,7 @@
               "pass": true
             }
           },
-          "latencyMs": 9.098,
+          "latencyMs": 8.931,
           "toolCalls": [
             "get_robot",
             "get_zone"
@@ -133,7 +133,7 @@
               "pass": true
             }
           },
-          "latencyMs": 8.679,
+          "latencyMs": 7.442,
           "toolCalls": [
             "get_robot",
             "get_zone"
@@ -181,7 +181,7 @@
               "pass": true
             }
           },
-          "latencyMs": 8.026,
+          "latencyMs": 7.327,
           "toolCalls": [
             "get_fleet_action",
             "get_robot"
@@ -220,7 +220,7 @@
               "pass": true
             }
           },
-          "latencyMs": 8.76,
+          "latencyMs": 7.031,
           "toolCalls": [
             "get_fleet_action",
             "get_robot"
@@ -259,7 +259,7 @@
               "pass": true
             }
           },
-          "latencyMs": 7.907,
+          "latencyMs": 7.252,
           "toolCalls": [
             "get_fleet_action",
             "get_robot"
@@ -307,7 +307,7 @@
               "pass": true
             }
           },
-          "latencyMs": 8.393,
+          "latencyMs": 7.953,
           "toolCalls": [
             "get_robot",
             "get_fleet_action"
@@ -346,7 +346,7 @@
               "pass": true
             }
           },
-          "latencyMs": 7.448,
+          "latencyMs": 8.124,
           "toolCalls": [
             "get_robot",
             "get_fleet_action"
@@ -385,7 +385,7 @@
               "pass": true
             }
           },
-          "latencyMs": 7.806,
+          "latencyMs": 7.573,
           "toolCalls": [
             "get_robot",
             "get_fleet_action"
@@ -433,7 +433,7 @@
               "pass": true
             }
           },
-          "latencyMs": 9.078,
+          "latencyMs": 8.781,
           "toolCalls": [
             "get_fleet_action",
             "list_robots"
@@ -472,7 +472,7 @@
               "pass": true
             }
           },
-          "latencyMs": 9.348,
+          "latencyMs": 7.861,
           "toolCalls": [
             "get_fleet_action",
             "list_robots"
@@ -511,7 +511,7 @@
               "pass": true
             }
           },
-          "latencyMs": 9.303,
+          "latencyMs": 8.316,
           "toolCalls": [
             "get_fleet_action",
             "list_robots"
@@ -559,7 +559,7 @@
               "pass": true
             }
           },
-          "latencyMs": 7.586,
+          "latencyMs": 7.113,
           "toolCalls": [
             "get_fleet_action",
             "get_robot"
@@ -598,7 +598,7 @@
               "pass": true
             }
           },
-          "latencyMs": 7.822,
+          "latencyMs": 6.758,
           "toolCalls": [
             "get_fleet_action",
             "get_robot"
@@ -637,7 +637,7 @@
               "pass": true
             }
           },
-          "latencyMs": 7.713,
+          "latencyMs": 7.537,
           "toolCalls": [
             "get_fleet_action",
             "get_robot"
@@ -685,7 +685,7 @@
               "pass": true
             }
           },
-          "latencyMs": 8.791,
+          "latencyMs": 8.427,
           "toolCalls": [
             "get_fleet_action",
             "get_robot"
@@ -724,7 +724,7 @@
               "pass": true
             }
           },
-          "latencyMs": 7.235,
+          "latencyMs": 7.06,
           "toolCalls": [
             "get_fleet_action",
             "get_robot"
@@ -763,7 +763,7 @@
               "pass": true
             }
           },
-          "latencyMs": 9.294,
+          "latencyMs": 7.548,
           "toolCalls": [
             "get_fleet_action",
             "get_robot"
@@ -811,7 +811,7 @@
               "pass": true
             }
           },
-          "latencyMs": 7.249,
+          "latencyMs": 6.352,
           "toolCalls": [
             "list_robots"
           ],
@@ -849,7 +849,7 @@
               "pass": true
             }
           },
-          "latencyMs": 6.203,
+          "latencyMs": 6.43,
           "toolCalls": [
             "list_robots"
           ],
@@ -887,7 +887,7 @@
               "pass": true
             }
           },
-          "latencyMs": 6.686,
+          "latencyMs": 6.443,
           "toolCalls": [
             "list_robots"
           ],
@@ -934,7 +934,7 @@
               "pass": true
             }
           },
-          "latencyMs": 1047.6309999999999,
+          "latencyMs": 1035.985,
           "toolCalls": [
             "list_robots",
             "propose_task",
@@ -978,7 +978,7 @@
               "pass": true
             }
           },
-          "latencyMs": 22.486,
+          "latencyMs": 21.298000000000002,
           "toolCalls": [
             "list_robots",
             "propose_task",
@@ -1022,7 +1022,7 @@
               "pass": true
             }
           },
-          "latencyMs": 21.65,
+          "latencyMs": 107.71,
           "toolCalls": [
             "list_robots",
             "propose_task",
@@ -1075,7 +1075,7 @@
               "pass": true
             }
           },
-          "latencyMs": 23.116,
+          "latencyMs": 23.008,
           "toolCalls": [
             "list_fleet_tasks",
             "get_zone",
@@ -1120,7 +1120,7 @@
               "pass": true
             }
           },
-          "latencyMs": 25.288,
+          "latencyMs": 23.671,
           "toolCalls": [
             "list_fleet_tasks",
             "get_zone",
@@ -1165,7 +1165,7 @@
               "pass": true
             }
           },
-          "latencyMs": 25.383,
+          "latencyMs": 24.768,
           "toolCalls": [
             "list_fleet_tasks",
             "get_zone",
@@ -1219,7 +1219,7 @@
               "pass": true
             }
           },
-          "latencyMs": 22.933,
+          "latencyMs": 21.085,
           "toolCalls": [
             "get_robot",
             "propose_task",
@@ -1263,7 +1263,7 @@
               "pass": true
             }
           },
-          "latencyMs": 20.782,
+          "latencyMs": 21.518,
           "toolCalls": [
             "get_robot",
             "propose_task",
@@ -1307,7 +1307,7 @@
               "pass": true
             }
           },
-          "latencyMs": 21.921,
+          "latencyMs": 21.781,
           "toolCalls": [
             "get_robot",
             "propose_task",
@@ -1360,7 +1360,7 @@
               "pass": true
             }
           },
-          "latencyMs": 26.268,
+          "latencyMs": 24.479,
           "toolCalls": [
             "list_robots",
             "propose_task",
@@ -1407,7 +1407,7 @@
               "pass": true
             }
           },
-          "latencyMs": 22.086000000000002,
+          "latencyMs": 21.647,
           "toolCalls": [
             "list_robots",
             "propose_task",
@@ -1454,7 +1454,7 @@
               "pass": true
             }
           },
-          "latencyMs": 23.872,
+          "latencyMs": 23.728,
           "toolCalls": [
             "list_robots",
             "propose_task",
@@ -1510,7 +1510,7 @@
               "pass": true
             }
           },
-          "latencyMs": 22.915,
+          "latencyMs": 22.225,
           "toolCalls": [
             "get_fleet_task",
             "propose_task",
@@ -1554,7 +1554,7 @@
               "pass": true
             }
           },
-          "latencyMs": 20.941000000000003,
+          "latencyMs": 21.184,
           "toolCalls": [
             "get_fleet_task",
             "propose_task",
@@ -1598,7 +1598,7 @@
               "pass": true
             }
           },
-          "latencyMs": 23.832,
+          "latencyMs": 23.395000000000003,
           "toolCalls": [
             "get_fleet_task",
             "propose_task",
@@ -1651,7 +1651,7 @@
               "pass": true
             }
           },
-          "latencyMs": 6.321,
+          "latencyMs": 6.104,
           "toolCalls": [
             "get_zone"
           ],
@@ -1689,7 +1689,7 @@
               "pass": true
             }
           },
-          "latencyMs": 6.636,
+          "latencyMs": 6.72,
           "toolCalls": [
             "get_zone"
           ],
@@ -1727,7 +1727,7 @@
               "pass": true
             }
           },
-          "latencyMs": 7.627,
+          "latencyMs": 6.388,
           "toolCalls": [
             "get_zone"
           ],
@@ -1774,7 +1774,7 @@
               "pass": true
             }
           },
-          "latencyMs": 23.491999999999997,
+          "latencyMs": 23.675,
           "toolCalls": [
             "list_robots",
             "propose_task",
@@ -1820,7 +1820,7 @@
               "pass": true
             }
           },
-          "latencyMs": 21.778,
+          "latencyMs": 19.831,
           "toolCalls": [
             "list_robots",
             "propose_task",
@@ -1866,7 +1866,7 @@
               "pass": true
             }
           },
-          "latencyMs": 21.68,
+          "latencyMs": 21.212,
           "toolCalls": [
             "list_robots",
             "propose_task",
@@ -1921,7 +1921,7 @@
               "pass": true
             }
           },
-          "latencyMs": 23.084,
+          "latencyMs": 22.191,
           "toolCalls": [
             "propose_task",
             "list_zones",
@@ -1967,7 +1967,7 @@
               "pass": true
             }
           },
-          "latencyMs": 22.55,
+          "latencyMs": 25.942999999999998,
           "toolCalls": [
             "propose_task",
             "list_zones",
@@ -2013,7 +2013,7 @@
               "pass": true
             }
           },
-          "latencyMs": 23.447000000000003,
+          "latencyMs": 25.061999999999998,
           "toolCalls": [
             "propose_task",
             "list_zones",
@@ -2068,7 +2068,7 @@
               "pass": true
             }
           },
-          "latencyMs": 24.668,
+          "latencyMs": 24.357,
           "toolCalls": [
             "propose_task",
             "list_zones",
@@ -2114,7 +2114,7 @@
               "pass": true
             }
           },
-          "latencyMs": 24.692999999999998,
+          "latencyMs": 24.705999999999996,
           "toolCalls": [
             "propose_task",
             "list_zones",
@@ -2160,7 +2160,7 @@
               "pass": true
             }
           },
-          "latencyMs": 24.737,
+          "latencyMs": 23.559,
           "toolCalls": [
             "propose_task",
             "list_zones",
@@ -2215,7 +2215,7 @@
               "pass": true
             }
           },
-          "latencyMs": 24.572,
+          "latencyMs": 25.692000000000004,
           "toolCalls": [
             "propose_task",
             "list_zones",
@@ -2261,7 +2261,7 @@
               "pass": true
             }
           },
-          "latencyMs": 26.463,
+          "latencyMs": 23.581,
           "toolCalls": [
             "propose_task",
             "list_zones",
@@ -2307,7 +2307,7 @@
               "pass": true
             }
           },
-          "latencyMs": 22.489000000000004,
+          "latencyMs": 22.511000000000003,
           "toolCalls": [
             "propose_task",
             "list_zones",
@@ -2362,7 +2362,7 @@
               "pass": true
             }
           },
-          "latencyMs": 26.366,
+          "latencyMs": 25.227,
           "toolCalls": [
             "propose_task",
             "list_zones",
@@ -2409,7 +2409,7 @@
               "pass": true
             }
           },
-          "latencyMs": 25.583,
+          "latencyMs": 22.744,
           "toolCalls": [
             "propose_task",
             "list_zones",
@@ -2456,7 +2456,7 @@
               "pass": true
             }
           },
-          "latencyMs": 22.807,
+          "latencyMs": 25.441000000000003,
           "toolCalls": [
             "propose_task",
             "list_zones",
@@ -2512,7 +2512,7 @@
               "pass": true
             }
           },
-          "latencyMs": 28.201,
+          "latencyMs": 27.458,
           "toolCalls": [
             "propose_task",
             "list_zones",
@@ -2562,7 +2562,7 @@
               "pass": true
             }
           },
-          "latencyMs": 27.314999999999998,
+          "latencyMs": 27.226,
           "toolCalls": [
             "propose_task",
             "list_zones",
@@ -2612,7 +2612,7 @@
               "pass": true
             }
           },
-          "latencyMs": 27.627,
+          "latencyMs": 27.142000000000003,
           "toolCalls": [
             "propose_task",
             "list_zones",
@@ -2671,7 +2671,7 @@
               "pass": true
             }
           },
-          "latencyMs": 13.861,
+          "latencyMs": 12.98,
           "toolCalls": [
             "propose_task",
             "list_zones",
@@ -2716,7 +2716,7 @@
               "pass": true
             }
           },
-          "latencyMs": 14.693,
+          "latencyMs": 12.365,
           "toolCalls": [
             "propose_task",
             "list_zones",
@@ -2761,7 +2761,7 @@
               "pass": true
             }
           },
-          "latencyMs": 14.725000000000001,
+          "latencyMs": 13.822,
           "toolCalls": [
             "propose_task",
             "list_zones",
@@ -2815,7 +2815,7 @@
               "pass": true
             }
           },
-          "latencyMs": 9.118,
+          "latencyMs": 8.553,
           "toolCalls": [
             "get_robot",
             "propose_task",
@@ -2857,7 +2857,7 @@
               "pass": true
             }
           },
-          "latencyMs": 10.966,
+          "latencyMs": 9.273,
           "toolCalls": [
             "get_robot",
             "propose_task",
@@ -2899,7 +2899,7 @@
               "pass": true
             }
           },
-          "latencyMs": 10.352,
+          "latencyMs": 8.481,
           "toolCalls": [
             "get_robot",
             "propose_task",
@@ -2950,7 +2950,7 @@
               "pass": true
             }
           },
-          "latencyMs": 14.169,
+          "latencyMs": 15.4,
           "toolCalls": [
             "get_robot",
             "propose_task",
@@ -2993,7 +2993,7 @@
               "pass": true
             }
           },
-          "latencyMs": 15.516,
+          "latencyMs": 15.52,
           "toolCalls": [
             "get_robot",
             "propose_task",
@@ -3036,7 +3036,7 @@
               "pass": true
             }
           },
-          "latencyMs": 15.643,
+          "latencyMs": 15.153,
           "toolCalls": [
             "get_robot",
             "propose_task",
@@ -3088,7 +3088,7 @@
               "pass": true
             }
           },
-          "latencyMs": 16.585,
+          "latencyMs": 15.159,
           "toolCalls": [
             "list_robots",
             "propose_task",
@@ -3131,7 +3131,7 @@
               "pass": true
             }
           },
-          "latencyMs": 15.71,
+          "latencyMs": 15.572,
           "toolCalls": [
             "list_robots",
             "propose_task",
@@ -3174,7 +3174,7 @@
               "pass": true
             }
           },
-          "latencyMs": 14.488,
+          "latencyMs": 14.821,
           "toolCalls": [
             "list_robots",
             "propose_task",
@@ -3226,7 +3226,7 @@
               "pass": true
             }
           },
-          "latencyMs": 21.744,
+          "latencyMs": 20.955,
           "toolCalls": [
             "propose_task",
             "list_zones",
@@ -3271,7 +3271,7 @@
               "pass": true
             }
           },
-          "latencyMs": 22.415,
+          "latencyMs": 22.242,
           "toolCalls": [
             "propose_task",
             "list_zones",
@@ -3316,7 +3316,7 @@
               "pass": true
             }
           },
-          "latencyMs": 21.087,
+          "latencyMs": 20.387999999999998,
           "toolCalls": [
             "propose_task",
             "list_zones",
@@ -3370,7 +3370,7 @@
               "pass": true
             }
           },
-          "latencyMs": 22.9,
+          "latencyMs": 23.399,
           "toolCalls": [
             "propose_task",
             "list_zones",
@@ -3416,7 +3416,7 @@
               "pass": true
             }
           },
-          "latencyMs": 23.073999999999998,
+          "latencyMs": 22.852,
           "toolCalls": [
             "propose_task",
             "list_zones",
@@ -3462,7 +3462,7 @@
               "pass": true
             }
           },
-          "latencyMs": 22.943999999999996,
+          "latencyMs": 22.903,
           "toolCalls": [
             "propose_task",
             "list_zones",
@@ -3517,7 +3517,7 @@
               "pass": true
             }
           },
-          "latencyMs": 31.677999999999997,
+          "latencyMs": 30.391,
           "toolCalls": [
             "propose_task",
             "list_zones",
@@ -3565,7 +3565,7 @@
               "pass": true
             }
           },
-          "latencyMs": 34.923,
+          "latencyMs": 30.133,
           "toolCalls": [
             "propose_task",
             "list_zones",
@@ -3613,7 +3613,7 @@
               "pass": true
             }
           },
-          "latencyMs": 30.235,
+          "latencyMs": 29.801,
           "toolCalls": [
             "propose_task",
             "list_zones",
@@ -3670,7 +3670,7 @@
               "pass": true
             }
           },
-          "latencyMs": 20.968,
+          "latencyMs": 20.237000000000002,
           "toolCalls": [
             "propose_task",
             "list_zones",
@@ -3713,7 +3713,7 @@
               "pass": true
             }
           },
-          "latencyMs": 20.429000000000002,
+          "latencyMs": 19.641,
           "toolCalls": [
             "propose_task",
             "list_zones",
@@ -3756,7 +3756,7 @@
               "pass": true
             }
           },
-          "latencyMs": 20.684,
+          "latencyMs": 20.115000000000002,
           "toolCalls": [
             "propose_task",
             "list_zones",
@@ -3808,7 +3808,7 @@
               "pass": true
             }
           },
-          "latencyMs": 8.336,
+          "latencyMs": 6.802,
           "toolCalls": [
             "get_zone"
           ],
@@ -3846,7 +3846,7 @@
               "pass": true
             }
           },
-          "latencyMs": 5.944,
+          "latencyMs": 5.94,
           "toolCalls": [
             "get_zone"
           ],
@@ -3884,7 +3884,7 @@
               "pass": true
             }
           },
-          "latencyMs": 7.493,
+          "latencyMs": 8.013,
           "toolCalls": [
             "get_zone"
           ],
@@ -3931,7 +3931,7 @@
               "pass": true
             }
           },
-          "latencyMs": 7.969,
+          "latencyMs": 6.544,
           "toolCalls": [
             "get_zone"
           ],
@@ -3969,7 +3969,7 @@
               "pass": true
             }
           },
-          "latencyMs": 5.95,
+          "latencyMs": 6.784,
           "toolCalls": [
             "get_zone"
           ],
@@ -4007,7 +4007,7 @@
               "pass": true
             }
           },
-          "latencyMs": 7.54,
+          "latencyMs": 7.255,
           "toolCalls": [
             "get_zone"
           ],
@@ -4054,7 +4054,7 @@
               "pass": true
             }
           },
-          "latencyMs": 8.546,
+          "latencyMs": 8.402,
           "toolCalls": [
             "get_robot",
             "get_fleet_action"
@@ -4093,7 +4093,7 @@
               "pass": true
             }
           },
-          "latencyMs": 7.652,
+          "latencyMs": 8.799,
           "toolCalls": [
             "get_robot",
             "get_fleet_action"
@@ -4132,7 +4132,7 @@
               "pass": true
             }
           },
-          "latencyMs": 6.326,
+          "latencyMs": 7.431,
           "toolCalls": [
             "get_robot",
             "get_fleet_action"
@@ -4180,7 +4180,7 @@
               "pass": true
             }
           },
-          "latencyMs": 8.028,
+          "latencyMs": 7.657,
           "toolCalls": [
             "get_fleet_task"
           ],
@@ -4218,7 +4218,7 @@
               "pass": true
             }
           },
-          "latencyMs": 7.057,
+          "latencyMs": 6.848,
           "toolCalls": [
             "get_fleet_task"
           ],
@@ -4256,7 +4256,7 @@
               "pass": true
             }
           },
-          "latencyMs": 8.352,
+          "latencyMs": 7.092,
           "toolCalls": [
             "get_fleet_task"
           ],
@@ -4303,7 +4303,7 @@
               "pass": true
             }
           },
-          "latencyMs": 6.655,
+          "latencyMs": 6.627,
           "toolCalls": [
             "get_fleet_task"
           ],
@@ -4341,7 +4341,7 @@
               "pass": true
             }
           },
-          "latencyMs": 7.985,
+          "latencyMs": 7.802,
           "toolCalls": [
             "get_fleet_task"
           ],
@@ -4379,7 +4379,7 @@
               "pass": true
             }
           },
-          "latencyMs": 6.99,
+          "latencyMs": 6.202,
           "toolCalls": [
             "get_fleet_task"
           ],
@@ -4426,7 +4426,7 @@
               "pass": true
             }
           },
-          "latencyMs": 8.205,
+          "latencyMs": 6.334,
           "toolCalls": [
             "get_fleet_task"
           ],
@@ -4464,7 +4464,7 @@
               "pass": true
             }
           },
-          "latencyMs": 5.799,
+          "latencyMs": 5.98,
           "toolCalls": [
             "get_fleet_task"
           ],
@@ -4502,7 +4502,7 @@
               "pass": true
             }
           },
-          "latencyMs": 6.638,
+          "latencyMs": 7.447,
           "toolCalls": [
             "get_fleet_task"
           ],
@@ -4549,7 +4549,7 @@
               "pass": true
             }
           },
-          "latencyMs": 21.865,
+          "latencyMs": 21.041,
           "toolCalls": [
             "get_zone",
             "list_zone_maintenances",
@@ -4594,7 +4594,7 @@
               "pass": true
             }
           },
-          "latencyMs": 20.694,
+          "latencyMs": 20.378999999999998,
           "toolCalls": [
             "get_zone",
             "list_zone_maintenances",
@@ -4639,7 +4639,7 @@
               "pass": true
             }
           },
-          "latencyMs": 22.861,
+          "latencyMs": 22.194000000000003,
           "toolCalls": [
             "get_zone",
             "list_zone_maintenances",
@@ -4693,7 +4693,7 @@
               "pass": true
             }
           },
-          "latencyMs": 20.933,
+          "latencyMs": 19.336,
           "toolCalls": [
             "get_zone",
             "propose_task",
@@ -4737,7 +4737,7 @@
               "pass": true
             }
           },
-          "latencyMs": 20.3,
+          "latencyMs": 19.778,
           "toolCalls": [
             "get_zone",
             "propose_task",
@@ -4781,7 +4781,7 @@
               "pass": true
             }
           },
-          "latencyMs": 20.351,
+          "latencyMs": 19.058,
           "toolCalls": [
             "get_zone",
             "propose_task",
@@ -4834,7 +4834,7 @@
               "pass": true
             }
           },
-          "latencyMs": 20.215,
+          "latencyMs": 19.648,
           "toolCalls": [
             "get_zone",
             "propose_task",
@@ -4878,7 +4878,7 @@
               "pass": true
             }
           },
-          "latencyMs": 22.732,
+          "latencyMs": 20.938,
           "toolCalls": [
             "get_zone",
             "propose_task",
@@ -4922,7 +4922,7 @@
               "pass": true
             }
           },
-          "latencyMs": 21.587,
+          "latencyMs": 21.522,
           "toolCalls": [
             "get_zone",
             "propose_task",
@@ -4975,7 +4975,7 @@
               "pass": true
             }
           },
-          "latencyMs": 18.355,
+          "latencyMs": 14.564,
           "toolCalls": [
             "get_zone",
             "propose_task",
@@ -5018,7 +5018,7 @@
               "pass": true
             }
           },
-          "latencyMs": 14.198,
+          "latencyMs": 15.509,
           "toolCalls": [
             "get_zone",
             "propose_task",
@@ -5061,7 +5061,7 @@
               "pass": true
             }
           },
-          "latencyMs": 15.18,
+          "latencyMs": 14.785,
           "toolCalls": [
             "get_zone",
             "propose_task",
@@ -5113,7 +5113,7 @@
               "pass": true
             }
           },
-          "latencyMs": 6.186,
+          "latencyMs": 6.871,
           "toolCalls": [
             "list_zones"
           ],
@@ -5151,7 +5151,7 @@
               "pass": true
             }
           },
-          "latencyMs": 6.667,
+          "latencyMs": 6.462,
           "toolCalls": [
             "list_zones"
           ],
@@ -5189,7 +5189,7 @@
               "pass": true
             }
           },
-          "latencyMs": 7.927,
+          "latencyMs": 7.658,
           "toolCalls": [
             "list_zones"
           ],
@@ -5236,7 +5236,7 @@
               "pass": true
             }
           },
-          "latencyMs": 20.404,
+          "latencyMs": 19.442,
           "toolCalls": [
             "get_zone",
             "propose_task",
@@ -5280,7 +5280,7 @@
               "pass": true
             }
           },
-          "latencyMs": 20.039,
+          "latencyMs": 21.371000000000002,
           "toolCalls": [
             "get_zone",
             "propose_task",
@@ -5324,7 +5324,7 @@
               "pass": true
             }
           },
-          "latencyMs": 22.601000000000003,
+          "latencyMs": 21.433,
           "toolCalls": [
             "get_zone",
             "propose_task",
@@ -5386,8 +5386,8 @@
   "latency": {
     "scope": "scripted backend: tool execution over MCP (streamable HTTP on loopback, bearer token verified by TokenReview) against envtest; no model is called, so this is not a model latency",
     "n": 117,
-    "p50Ms": 16.585,
-    "p95Ms": 27.627
+    "p50Ms": 15.52,
+    "p95Ms": 27.458
   },
   "tokens": {
     "inputTokens": 0,
