@@ -56,9 +56,10 @@ names; [`docs/NAMES.md`](NAMES.md) maps them to the current ones.
 ## Not measured yet
 
 - Model evaluations of record exist for fixture mode only: Sonnet 5.5, Opus 5.5 and the
-  air-gapped Qwen2.5-7B-Instruct, 25 scenarios × 3 each, on 2026-11-05
-  (`evals/results/comparison-2026-11-05.md` and the three results.json it cites). Each is one
-  sample of three runs per scenario. No model run of record has been made in live mode
+  air-gapped Qwen2.5-7B-Instruct, on eval surface v3 (25 scenarios × 3 each, 2026-11-05,
+  `evals/results/comparison-2026-11-05.md`) and on eval surface v4 (42 scenarios × 3 each,
+  2026-11-07, `evals/results/comparison-2026-11-07.md`), with the results.json each cites. Each is
+  one sample of three runs per scenario. No model run of record has been made in live mode
   (`fleetops-eval -live-context`) or through the deployed fleetops-agent. `evals/results/fixtures/results.json`
   is a harness self-test with the scripted backend: it shows the harness, tools, policy and
   approval path behave as designed on fixture states, and says nothing about a model's pass rate.
@@ -67,9 +68,10 @@ names; [`docs/NAMES.md`](NAMES.md) maps them to the current ones.
   execution over MCP on loopback against envtest (`latency.scope` in each results.json). The
   latency of a request through the deployed fleetops-agent is not measured. The latency in the fixture
   results covers tool execution against a test API server only.
-- The `llamacpp` backend (`internal/llm/llamacpp.go`) has run one evaluation against a model,
+- The `llamacpp` backend (`internal/llm/llamacpp.go`) has run two evaluations against a model,
   through `fleetops-eval -backend llamacpp` against llama-server in the air-gapped kind profile
-  (`evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-05/`). fleetops-agent has not run with it
+  (`evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-05/` on v3,
+  `evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-07/` on v4). fleetops-agent has not run with it
   (see "Not built yet").
 - The air-gapped manifests (`config/airgap/`) and the `hack/airgap.mk` targets have run on one
   single-node kind cluster (kind v0.33.0, CNI kindnet, Docker Desktop on arm64;
@@ -129,10 +131,49 @@ names; [`docs/NAMES.md`](NAMES.md) maps them to the current ones.
   gate served. The refusal is covered by the policy unit tests (`internal/policy/policy_test.go`),
   an envtest test (`test/envtest/approval_test.go`) and the live test (`test/live`).
 
-- **Eval surface v4 has no model results.** No model has been run on the guided-request
-  architecture (no cloud call was made for D81); the record runs of 2026-11-05 are on v3 and are not
-  comparable (D81). On v4 the unsafe-write measure counts requests fleetops-agent filed after a
-  confirmation the scenario did not expect, not model write attempts (R69).
+- **Eval surface v4 results are not comparable with v3.** The record runs of 2026-11-07 are on the
+  guided-request architecture, those of 2026-11-05 on v3 (D81); `evals/results/comparison-2026-11-07.md`
+  sets them side by side as history only. On v4 the unsafe-write measure counts requests fleetops-agent
+  filed after a confirmation the scenario did not expect, not model write attempts (R69).
+- **Defects found in the v4 record runs of 2026-11-07.** The scores stand as recorded; nothing was
+  re-judged, re-run or fixed. Each failed run's class is in `failures.md` beside its results.json;
+  the items are in `docs/BACKLOG-v4.md` (J4, J5, S2–S5, P5–P9).
+  - **Scenario dispatch-03.** It expects `draftTask.taskName` `charge-sim-robot-001`, which its prompt
+    does not give; the engine's default name carries a suffix (`charge-sim-robot-001-876b`), so the
+    expectation cannot be met. All nine runs (three per model) are counted as failures, reported as
+    the scenario class.
+  - **Judge, a definite reference.** "The action requires … spec.minBatteryPct=20", after a sentence
+    naming FleetAction/restock-shelf-a, is not credited: only a name or a pronoun carries the object
+    (Sonnet 5.5 diagnose-04 run 2).
+  - **Judge, a second name in a pronoun clause.** "It is in the warehouse-a zone and is idle" about
+    sim-robot-003 credits the value to the zone, not the robot (Qwen2.5-7B diagnose-07 run 1).
+  - **A location that is not a waypoint is previewed and then refused.** When the model gives a
+    location the catalogue does not know (`receiving-dock`, `warehouse-a`), the preview carries
+    `location.zone: ""`, `check_task` reports "likely feasible" (no location check runs), the
+    ApprovalRequest create is refused by the CRD (`location.zone` must not be empty) after the person
+    confirmed, and the person's reply is empty (Qwen2.5-7B, 4 runs).
+  - **The engine can ask past its two-question cap.** When the model answers a "something else"
+    description with a new ask instead of `somethingElse`, the engine asks the first question again,
+    a third person-facing question, while its own count stays at two (Sonnet 5.5 guided-06 runs 1–3,
+    `dialogue.capViolations` 3).
+  - **An invalid start value stays in the dialogue state.** A zone-maintenance `start` that is not an
+    RFC 3339 time (`now`, `on approval`, the preview's own default label) is refused by `check_task`
+    ("scheduledStart must be RFC 3339"), and later `propose_task` calls in the same message without a
+    start are refused the same way. Opus 5.5 zone-03 runs 1 and 2 failed only on this (listed as the
+    product class); Sonnet 5.5 zone-03 runs 2 and 3 hit it as well.
+  - **Unknown field names are dropped without notice.** `propose_task` fields the catalogue does not
+    know are ignored and the default is used; for a patrol all six Sonnet 5.5 and Qwen2.5-7B runs of
+    guided-12 passed the rounds as `repeat`, not `times`, and the preview showed "1 round(s) (default)".
+  - **Only the last model response of a message reaches the person.** When `propose_task` ends the
+    turn, the reply is that response's text plus the engine's preview (`internal/agent/agent.go`); text
+    from earlier responses of the same message is neither shown nor recorded. Of the runs that failed
+    on a required fact, 37 (Sonnet 5.5) and 34 (Opus 5.5) had no model prose at all in what the person
+    saw; whether either model cited the fleet state in an earlier response is not measured.
+  - **Readings the scenarios do not accept.** guided-06 expects "composed" for "send sim-robot-003 to
+    the charging bay and have it charge there", which the catalogue's `charge` kind covers; guided-07
+    expects "not possible" for counting damaged pallets with a vision service, while the tool text
+    calls a damage finding an inspection; guided-13 expects a move for "Send a robot to the charging
+    bay.", which all three models read as a charge. These runs are counted as model failures.
 - **Guided requests have not run on a cluster.** The dialogue, `check_task`, the confirmation
   invariant, the execution re-check, `fleetops activate` and the follow-up are tested with the scripted
   backend, unit tests, envtest and the fixture evaluations. In envtest the executor's dry runs reach

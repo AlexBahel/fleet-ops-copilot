@@ -12,10 +12,11 @@ Sonnet 5.5, Opus 5.5 and the air-gapped Qwen2.5-7B again.
 
 **Batched into D81 (ruling R68, 2026-11-06).** J1–J3, S1 and P1 are made together with the
 guided-request change (`docs/DESIGN.md` §3.10, §4.4, D81), which changes the prompt, the tools, the
-judge and the scenarios anyway. Status of each is in its row. What remains of v4 is the model runs:
-Sonnet 5.5, Opus 5.5 and the air-gapped Qwen2.5-7B on eval surface v4 (42 scenarios), which is a
-different architecture from v3 (R69), so the comparison is a new table, not a column added to the
-old one.
+judge and the scenarios anyway. Status of each is in its row. The model runs on eval surface v4
+(42 scenarios; Sonnet 5.5, Opus 5.5 and the air-gapped Qwen2.5-7B) were made on 2026-11-07. v4 is
+a different architecture from v3 (R69), so their comparison is a new table,
+`evals/results/comparison-2026-11-07.md`, with v3 beside it as history. What those runs found is in
+"Found in the v4 record runs" below; nothing there is done.
 
 ## Judge
 
@@ -54,6 +55,27 @@ diagnose-07 runs 1–3); none from pass to fail (`docs/DESIGN.md` §4.4).
 - zone-03 failed in both Claude runs (Sonnet 5.5 three runs, Opus 5.5 two). It is not classified as a
   model, judge, scenario or product failure.
 - The Qwen2.5-7B runs were not checked for J1 to J3 or S1.
+
+## Found in the v4 record runs (2026-11-07)
+
+The scores in `evals/results/comparison-2026-11-07.md` stand as recorded. Each failed run's class
+is in `failures.md` beside its results.json, and `docs/KNOWN-LIMITS.md` states each defect. As for
+v3, a fix to the judge, a scenario, the prompt or the tools makes a new eval surface, which re-runs
+all three models.
+
+| # | Kind | Defect | Seen in | Direction |
+|---|---|---|---|---|
+| J4 | judge | A definite reference ("the action") before a value is not read as the object named in the sentence before | Sonnet 5.5 diagnose-04 run 2 | Decide whether a definite reference to the kind just named carries the object, as a pronoun does (J2); a judge test with the recorded text |
+| J5 | judge | In a pronoun clause, a second object name (a zone) takes the attribution from the pronoun's object | Qwen2.5-7B diagnose-07 run 1 ("It is in the warehouse-a zone and is idle") | Attribute a value to the pronoun's object when the other name in the clause is not of the fact's kind; a judge test with the recorded text |
+| S2 | scenario | dispatch-03 expects `draftTask.taskName` `charge-sim-robot-001`, which the prompt does not give | all nine runs (three per model) | Name the draft in the prompt, or check the name's prefix |
+| S3 | scenario | guided-06 accepts only "composed" for a description the catalogue's `charge` kind covers | Opus 5.5 runs 1–3 (known: charge); Sonnet 5.5 read it as a charge too | Decide whether a known kind is a correct reading there, or change the description so that only basic steps fit |
+| S4 | scenario | guided-07 expects "not possible" for counting damaged pallets with a vision service; the `propose_task` text calls a damage finding an inspection | Opus 5.5 runs 1, 2 | Decide which reading is wanted, and make the tool text and the scenario agree |
+| S5 | scenario | guided-13 ("Send a robot to the charging bay.") expects a move with no question; all three models read it as a charge (9 of 9 runs) | all three models | Decide whether the prompt is a move; the scenario tests changing failure handling after the preview, which a prompt without the ambiguity would test as well |
+| P5 | product | A location the catalogue does not know gives a preview with `location.zone: ""`; `check_task` runs no location check and says "likely feasible"; the CRD refuses the filing after the person confirmed; the person's reply is empty | Qwen2.5-7B guided-03 run 1, guided-04 run 2, guided-06 runs 2, 3 | Refuse or ask for an unknown location before the preview; a location check in `check_task`; show a filing error to the person |
+| P6 | product | The engine asks its first question again when the model answers a "something else" description with a new ask, a third question over the cap of two (its own count stays at two) | Sonnet 5.5 guided-06 runs 1–3 | Count every person-facing question against the cap; decide what a new ask after "something else" means |
+| P7 | product | A `start` that is not RFC 3339 (`now`, `on approval`) is refused by `check_task` and stays in the dialogue state, so later calls without a start are refused too | Opus 5.5 zone-03 runs 1, 2 (failed only on this); Sonnet 5.5 zone-03 runs 2, 3 | Map or refuse the value in the engine, before `check_task`; do not keep a refused value |
+| P8 | product | Unknown `propose_task` field names are dropped without notice and the default is used | guided-12, Sonnet 5.5 and Qwen2.5-7B, runs 1–3 each (`repeat` for `times`) | Return the unknown names to the model, or map common synonyms in the catalogue |
+| P9 | product | When `propose_task` ends the turn, only that model response's text reaches the person; text of earlier responses of the same message is neither shown nor recorded | Of the runs that failed on a required fact: 37 Sonnet 5.5 and 34 Opus 5.5 with no model prose at all | Record every response's text in the trace; decide whether earlier text is shown |
 
 ## Proposed for Swarmada draft 5
 
