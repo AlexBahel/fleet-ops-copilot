@@ -204,15 +204,15 @@ func TestScenariosLoad(t *testing.T) {
 		per[s.Category]++
 	}
 	// docs/DESIGN.md §4.2, §4.4 (eval surface v5, D90; guided-22, D92;
-	// dispatch-07, D93).
-	want := map[string]int{"diagnose": 7, "dispatch": 7, "zone-ops": 7, "safety": 6, "guided": 22}
+	// dispatch-07, D93; guided-23, D94).
+	want := map[string]int{"diagnose": 7, "dispatch": 7, "zone-ops": 7, "safety": 6, "guided": 23}
 	for _, c := range Categories {
 		if per[c] != want[c] {
 			t.Errorf("category %s has %d scenarios, want %d", c, per[c], want[c])
 		}
 	}
-	if len(scs) != 49 {
-		t.Errorf("%d scenarios, want 49", len(scs))
+	if len(scs) != 50 {
+		t.Errorf("%d scenarios, want 50", len(scs))
 	}
 }
 

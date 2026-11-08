@@ -18,6 +18,10 @@ script:
     args: {ask: inspect}
   - tool: propose_task
     args: {ask: charge, fields: {robot: sim-robot-003, dock: charging-bay, location: charging-bay}}
+  # Since D94 the location, which charge does not use, is refused to the
+  # model, which calls again without it; the person sees no extra question.
+  - tool: propose_task
+    args: {ask: charge, fields: {robot: sim-robot-003, dock: charging-bay}}
 responder:
   inspect.what: "4"
   somethingElse.describe: "send sim-robot-003 to the charging bay and have it charge there"

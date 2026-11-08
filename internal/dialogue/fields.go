@@ -72,6 +72,105 @@ var Forms = map[string]FieldForm{
 		Forms: "lower-case letters, digits and '-'", valid: func(v string) bool { return dnsName.MatchString(v) }},
 }
 
+// kindFields are the fields kind k takes: its required and optional ones,
+// and for a DraftTask kind the draft's name.
+func kindFields(k *catalogue.Kind) []string {
+	fs := k.Fields()
+	if k.Request == catalogue.RequestDraftTask && !slices.Contains(fs, "name") {
+		fs = append(fs, "name")
+	}
+	return fs
+}
+
+// callKinds are the kinds a call's fields are for: the kind it names (or
+// its "something else" reading names), else every kind of a new ask it
+// names (D87), else the conversation's kind, else every kind the ask can
+// lead to; none when that is still open.
+func (e *Engine) callKinds(st *State, in Input) []*catalogue.Kind {
+	if k, ok := e.Cat.KindByName(in.Kind); ok {
+		return []*catalogue.Kind{k}
+	}
+	if in.SomethingElse != nil && in.SomethingElse.Interpretation == Known {
+		if k, ok := e.Cat.KindByName(in.SomethingElse.Kind); ok {
+			return []*catalogue.Kind{k}
+		}
+	}
+	newAsk := in.Ask != "" && in.Ask != st.Ask && e.knownAsk(in.Ask)
+	if k, ok := e.Cat.KindByName(st.Kind); ok && !newAsk {
+		return []*catalogue.Kind{k}
+	}
+	ask := in.Ask
+	if ask == "" {
+		ask = st.Ask
+	}
+	var out []*catalogue.Kind
+	for i := range e.Cat.Kinds {
+		k := &e.Cat.Kinds[i]
+		if slices.Contains(e.Cat.AsksFor(k.Name), ask) {
+			out = append(out, k)
+		}
+	}
+	return out
+}
+
+// unusedFields refuses a field the catalogue knows but the kind does not
+// use (dock or from on a move), before anything of the call is applied
+// (D94), as unknownFields does for a name the catalogue does not know: the
+// model is told the kind's fields and calls again. A basic step is checked
+// against its own kind.
+func (e *Engine) unusedFields(st *State, in Input) string {
+	type use struct {
+		label  string
+		fields []string
+	}
+	refuse := func(u use, fs map[string]string) string {
+		var bad []string
+		for f := range fs {
+			if !slices.Contains(u.fields, f) {
+				bad = append(bad, strconv.Quote(f))
+			}
+		}
+		if len(bad) == 0 {
+			return ""
+		}
+		slices.Sort(bad)
+		return fmt.Sprintf("propose_task was not applied: %s does not use the field %s. Its fields are: %s. Which of them did the person's words mean? Call propose_task again with those field names only; a detail none of them holds is not part of this request.",
+			u.label, strings.Join(bad, ", "), strings.Join(u.fields, ", "))
+	}
+	if ks := e.callKinds(st, in); len(ks) > 0 && len(in.Fields) > 0 {
+		u := use{}
+		var names []string
+		for _, k := range ks {
+			names = append(names, k.Name)
+			for _, f := range kindFields(k) {
+				if !slices.Contains(u.fields, f) {
+					u.fields = append(u.fields, f)
+				}
+			}
+		}
+		u.label = "the kind " + names[0]
+		if len(names) > 1 {
+			u.label = fmt.Sprintf("the ask %s (kinds %s)", in.Ask, strings.Join(names, ", "))
+			if in.Ask == "" {
+				u.label = fmt.Sprintf("the ask %s (kinds %s)", st.Ask, strings.Join(names, ", "))
+			}
+		}
+		if msg := refuse(u, in.Fields); msg != "" {
+			return msg
+		}
+	}
+	if in.SomethingElse != nil {
+		for i, s := range in.SomethingElse.Steps {
+			if k, ok := e.Cat.KindByName(s.Kind); ok {
+				if msg := refuse(use{label: fmt.Sprintf("step %d, the kind %s,", i+1, k.Name), fields: kindFields(k)}, s.Fields); msg != "" {
+					return msg
+				}
+			}
+		}
+	}
+	return ""
+}
+
 // PolicyValues are the values the site policy allows for a closed field,
 // and the policy rule that says so (D93).
 type PolicyValues struct {

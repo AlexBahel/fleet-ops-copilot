@@ -385,7 +385,13 @@ func TestNewAskAfterSomethingElseIsTheReading(t *testing.T) {
 		t.Fatalf("open question %+v", o)
 	}
 	st.Describe("send sim-robot-003 to the charging bay and have it charge there")
+	// The recorded call also gave a location, which charge does not use: it
+	// is refused to the model (D94), and the model calls again without it.
 	o := e.Propose(st, Input{Ask: "charge", Fields: map[string]string{"robot": "sim-robot-003", "dock": "charging-bay", "location": "charging-bay"}}, snap)
+	if o.Invalid == "" || !strings.Contains(o.Invalid, `"location"`) || len(st.Asked) != 2 {
+		t.Fatalf("location on a charge: %+v (asked %v)", o, st.Asked)
+	}
+	o = e.Propose(st, Input{Ask: "charge", Fields: map[string]string{"robot": "sim-robot-003", "dock": "charging-bay"}}, snap)
 	if o.Question != nil {
 		t.Fatalf("a third question was asked: %s (asked %v)", o.Question.ID, st.Asked)
 	}
@@ -574,5 +580,59 @@ func TestFormsFollowThePolicy(t *testing.T) {
 	}
 	if got := strings.Join(FormsFor(nil)["priority"].Enum, ","); got != "Low,Normal,High,Critical" {
 		t.Fatalf("no policy: %s", got)
+	}
+}
+
+// P10 (D94): a field the catalogue knows but the kind does not use is
+// refused to the model, with the kind's fields named, before anything of
+// the call is applied; it is never dropped. The calls are the readings of
+// the v5 record: Qwen2.5-7B guided-14 runs 1-3 (dock on a move) and
+// guided-13 run 3 (from on a move).
+func TestFieldTheKindDoesNotUseIsRefused(t *testing.T) {
+	e := &Engine{Cat: cat(t)}
+	for _, c := range []struct {
+		name string
+		in   Input
+		want []string
+	}{
+		{"dock on a move", Input{Ask: "move", Kind: "move", Fields: map[string]string{"dock": "receiving-dock-1"}},
+			[]string{`"dock"`, "move", "location, robot, priority, onFailure, name"}},
+		{"from on a move", Input{Ask: "move", Fields: map[string]string{"from": "staging-shelf-a", "location": "staging-shelf-a"}},
+			[]string{`"from"`, "location, robot, priority, onFailure, name"}},
+		{"zone on an inspection of any kind", Input{Ask: "inspect", Fields: map[string]string{"zone": "warehouse-a", "location": "receiving-dock-1"}},
+			[]string{`"zone"`, "inspect-damage", "location, robot, priority, onFailure, name"}},
+		{"dock in a composed move step", Input{Ask: AskSomethingElse, SomethingElse: &SomethingElseInput{Interpretation: Composed, Steps: []StepInput{{Kind: "move", Fields: map[string]string{"dock": "charging-bay"}}}}},
+			[]string{`"dock"`, "move"}},
+	} {
+		st := newState("Move a robot to receiving-dock-1.")
+		o := e.Propose(st, c.in, snap)
+		if o.Invalid == "" || o.Question != nil || o.Proposal != nil {
+			t.Errorf("%s: outcome %+v", c.name, o)
+			continue
+		}
+		for _, w := range c.want {
+			if !strings.Contains(o.Invalid, w) {
+				t.Errorf("%s: %q lacks %q", c.name, o.Invalid, w)
+			}
+		}
+		if len(st.Fields) != 0 || len(st.Asked) != 0 || st.Ask != "" {
+			t.Errorf("%s: state changed: %+v", c.name, st)
+		}
+	}
+	// Controls: the kind's own fields, a draft name, and a dock on a charge
+	// are applied.
+	for _, in := range []Input{
+		{Ask: "move", Fields: map[string]string{"location": "receiving-dock-1", "name": "move-1", "priority": "High"}},
+		{Ask: "charge", Fields: map[string]string{"robot": "sim-robot-002", "dock": "charging-bay"}},
+	} {
+		if o := e.Propose(newState("x"), in, snap); o.Invalid != "" {
+			t.Errorf("%+v refused: %s", in, o.Invalid)
+		}
+	}
+	// The kind already chosen in the conversation decides.
+	st := newState("Inspect receiving-dock-1.")
+	e.Propose(st, Input{Ask: "inspect", Kind: "inspect-damage", Fields: map[string]string{"location": "receiving-dock-1"}}, snap)
+	if o := e.Propose(st, Input{Fields: map[string]string{"times": "3"}}, snap); o.Invalid == "" || !strings.Contains(o.Invalid, "inspect-damage") {
+		t.Errorf("later call: %+v", o)
 	}
 }

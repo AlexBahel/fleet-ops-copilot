@@ -269,6 +269,9 @@ func (e *Engine) Propose(st *State, in Input, snap Snapshot) Outcome {
 	if msg := e.unknownFields(st, in); msg != "" {
 		return Outcome{Invalid: msg}
 	}
+	if msg := e.unusedFields(st, in); msg != "" {
+		return Outcome{Invalid: msg}
+	}
 	if msg := e.forbidden(in); msg != "" {
 		return Outcome{Refused: msg, Code: string(policy.CodeField), Checked: snap.Checked(in.Ask)}
 	}
