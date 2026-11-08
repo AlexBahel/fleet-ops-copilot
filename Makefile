@@ -7,14 +7,14 @@ SETUP_ENVTEST_VERSION ?= v0.0.0-20260305142021-f9589b9f2b9d
 GO ?= go
 BIN := bin
 
-.PHONY: help build vet lint fmt test test-envtest eval-fixtures eval-baseline generate check-no-local all ci envtest-assets image deploy-kind test-live-go demo demo-down test-live baseline-lowered
+.PHONY: help build vet lint shellcheck fmt test test-envtest eval-fixtures eval-baseline generate check-no-local all ci envtest-assets image deploy-kind test-live-go demo demo-down test-live baseline-lowered
 
 help: ## List targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
 
 all: ci
 
-ci: check-no-local build vet lint test test-envtest eval-fixtures ## Everything the CI Go job runs
+ci: check-no-local build vet lint shellcheck test test-envtest eval-fixtures ## Everything the CI Go job runs, and the hygiene job's shellcheck
 
 build: ## Build fleetops, fleetops-mcp, fleetops-approvals, fleetops-agent into bin/
 	$(GO) build -o $(BIN)/ ./cmd/...
@@ -26,6 +26,9 @@ vet: ## go vet (including envtest-tagged files)
 
 lint: ## golangci-lint
 	golangci-lint run ./...
+
+shellcheck: ## ShellCheck 0.11.0 (pinned, downloaded once into bin/) on hack/, hack/lib/ and scripts/; the CI hygiene job runs the same target
+	hack/shellcheck.sh
 
 fmt: ## gofmt
 	gofmt -w api cmd internal test evals

@@ -434,7 +434,7 @@ make test-live             # live approval paths on the demo stack, requests fil
 Without a cluster:
 
 ```bash
-make ci             # build, vet, lint, unit tests, envtest, fixture evals held to evals/baseline.json
+make ci             # build, vet, lint, ShellCheck 0.11.0, unit tests, envtest, fixture evals held to evals/baseline.json
 make chart-check    # helm lint, kubeconform, chart parity with config/
 ```
 

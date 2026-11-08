@@ -26,10 +26,12 @@ jobs:
         run: |
           missing="$(git ls-files '*.go' | xargs grep -L 'Licensed under the Apache License, Version 2.0' || true)"
           if [ -n "$missing" ]; then echo "missing header: $missing"; exit 1; fi
-      # shellcheck is on the ubuntu-24.04 runner image. .shellcheckrc makes
+      # ShellCheck 0.11.0, pinned in hack/shellcheck.sh (release archive
+      # checked against its SHA-256), the same version `make ci` runs; the
+      # runner image's own shellcheck is not used. .shellcheckrc makes
       # `# shellcheck source=` paths relative to each script.
-      - name: Shell scripts pass shellcheck
-        run: shellcheck -x hack/*.sh hack/lib/*.sh scripts/*.sh
+      - name: Shell scripts pass shellcheck 0.11.0
+        run: make shellcheck
       - name: Every commit after the repository's first is signed off (DCO)
         run: |
           root="$(git rev-list --max-parents=0 HEAD)"
