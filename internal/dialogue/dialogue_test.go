@@ -410,19 +410,20 @@ func TestCapCountsEveryQuestionShown(t *testing.T) {
 	}
 }
 
-// P7: a value that does not have its field's form (start "now", the reading
-// Opus 5.5 gave in zone-03) is removed from the dialogue state, and the
+// P7: a value that does not have its field's form (start "on approval", a
+// reading Opus 5.5 gave in zone-03; "now" is D91) is removed from the
+// dialogue state, and the
 // person is asked the question that fills it again, with the valid forms.
 // A later call with a valid value is used, not refused.
 func TestInvalidValueRemovedAndAskedAgain(t *testing.T) {
 	e := &Engine{Cat: cat(t)}
 	st := newState("Pause all robots in warehouse-a right away.")
-	in := Input{Ask: "zone-maintenance", Kind: "zone-maintenance", Fields: map[string]string{"zone": "warehouse-a", "mode": "Immediate", "start": "now", "reason": "forklift crossing"}}
+	in := Input{Ask: "zone-maintenance", Kind: "zone-maintenance", Fields: map[string]string{"zone": "warehouse-a", "mode": "Immediate", "start": "on approval", "reason": "forklift crossing"}}
 	o := e.Propose(st, in, snap)
 	if o.Question == nil || o.Question.ID != "maintenance.mode" {
 		t.Fatalf("outcome %+v", o)
 	}
-	if text := o.Question.Render(); !strings.Contains(text, `"now"`) || !strings.Contains(text, "on approval, or a time such as 2026-11-04T08:00:00Z") {
+	if text := o.Question.Render(); !strings.Contains(text, `"on approval"`) || !strings.Contains(text, "on approval, or a time such as 2026-11-04T08:00:00Z") {
 		t.Fatalf("question does not name the value and the valid forms:\n%s", text)
 	}
 	if _, ok := st.Fields["start"]; ok {
@@ -448,13 +449,43 @@ func TestInvalidValueRemovedAndAskedAgain(t *testing.T) {
 // the default and says the value given could not be used.
 func TestInvalidValuePastTheCapShownInPreview(t *testing.T) {
 	e := &Engine{Cat: cat(t)}
-	st := newState("Pause warehouse-a now.")
+	st := newState("Pause warehouse-a on approval.")
 	st.Asked = []string{"a", "b"}
-	o := e.Propose(st, Input{Ask: "zone-maintenance", Fields: map[string]string{"zone": "warehouse-a", "start": "now", "reason": "r"}}, snap)
+	o := e.Propose(st, Input{Ask: "zone-maintenance", Fields: map[string]string{"zone": "warehouse-a", "start": "on approval", "reason": "r"}}, snap)
 	if o.Proposal == nil {
 		t.Fatalf("outcome %+v", o)
 	}
-	if got := strings.Join(o.Proposal.Lines, "\n"); !strings.Contains(got, `Start: on approval (default)`) || !strings.Contains(got, `"now"`) {
+	if got := strings.Join(o.Proposal.Lines, "\n"); !strings.Contains(got, `Start: on approval (default)`) || !strings.Contains(got, `"on approval"`) {
 		t.Fatalf("lines:\n%s", got)
+	}
+}
+
+// D91: a start of "now", "immediately" or "asap" (any case) means the window
+// starts on approval in mode Immediate; no question is asked (zone-03).
+// Any other value without the start's form is still asked again (D88).
+func TestStartNowIsImmediateOnApproval(t *testing.T) {
+	e := &Engine{Cat: cat(t)}
+	for _, v := range []string{"now", "NOW", " Immediately ", "asap", "ASAP"} {
+		for _, mode := range []string{"", "Graceful"} {
+			st := newState("Pause all robots in warehouse-a right away.")
+			fields := map[string]string{"zone": "warehouse-a", "start": v, "reason": "forklift crossing"}
+			if mode != "" {
+				fields["mode"] = mode
+			}
+			o := e.Propose(st, Input{Ask: "zone-maintenance", Fields: fields}, snap)
+			if o.Proposal == nil {
+				t.Fatalf("start %q, mode %q: %+v", v, mode, o)
+			}
+			if zm := o.Proposal.Input.(tools.ZoneMaintenanceInput); zm.Mode != "Immediate" || zm.ScheduledStart != "" {
+				t.Fatalf("start %q, mode %q: input %+v", v, mode, zm)
+			}
+			if len(st.Asked) != 0 || len(st.Invalid) != 0 {
+				t.Fatalf("start %q: asked %v, invalid %v", v, st.Asked, st.Invalid)
+			}
+		}
+	}
+	st := newState("Pause warehouse-a after the wave.")
+	if o := e.Propose(st, Input{Ask: "zone-maintenance", Fields: map[string]string{"zone": "warehouse-a", "start": "after the wave", "reason": "r"}}, snap); o.Question == nil || o.Question.ID != "maintenance.mode" {
+		t.Fatalf("another invalid start is not asked again: %+v", o)
 	}
 }

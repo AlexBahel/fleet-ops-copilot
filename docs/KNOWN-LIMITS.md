@@ -138,7 +138,7 @@ names; [`docs/NAMES.md`](NAMES.md) maps them to the current ones.
 - **Defects found in the v4 record runs of 2026-11-07.** The v4 scores stand as recorded; nothing
   was re-judged or re-run. Each failed run's class is in `failures.md` beside its results.json;
   the items are in `docs/BACKLOG-v4.md` (J4, J5, S2–S5, P5–P9). All but S3–S5 are fixed in eval
-  surface v5 (D84–D90), which has no model results yet; the descriptions below are of v4.
+  surface v5 (D84–D91), which has no model results yet; the descriptions below are of v4.
   - **Scenario dispatch-03.** It expects `draftTask.taskName` `charge-sim-robot-001`, which its prompt
     does not give; the engine's default name carries a suffix (`charge-sim-robot-001-876b`), so the
     expectation cannot be met. All nine runs (three per model) are counted as failures, reported as
@@ -164,7 +164,8 @@ names; [`docs/NAMES.md`](NAMES.md) maps them to the current ones.
     RFC 3339 time (`now`, `on approval`, the preview's own default label) is refused by `check_task`
     ("scheduledStart must be RFC 3339"), and later `propose_task` calls in the same message without a
     start are refused the same way. Opus 5.5 zone-03 runs 1 and 2 failed only on this (listed as the
-    product class); Sonnet 5.5 zone-03 runs 2 and 3 hit it as well. Fixed in v5: the value is
+    product class); Sonnet 5.5 zone-03 runs 2 and 3 hit it as well. Fixed in v5: `now`,
+    `immediately` and `asap` start on approval in mode Immediate (D91); any other such value is
     removed and the question asked again with the valid forms (D88).
   - **Unknown field names are dropped without notice.** `propose_task` fields the catalogue does not
     know are ignored and the default is used; for a patrol all six Sonnet 5.5 and Qwen2.5-7B runs of
@@ -185,9 +186,6 @@ names; [`docs/NAMES.md`](NAMES.md) maps them to the current ones.
 - **Fields of composed steps are not checked for their form.** A "something else" request composed
   from basic steps (D72) carries each step's fields as the model gave them; D88's form check
   applies to the request's own fields only, so an invalid step value reaches `check_task`.
-- **zone-03 expects no question.** On v5 a model that passes `start: now` for "right away" is asked
-  the start question again (D88) and can still file, but zone-03's `maxQuestions: 0` counts that run
-  as a failure; `propose_task`'s schema now gives the start's form.
 - **guided-06 changed after the 2026-11-07 record (S3, D90).** Its "something else" description is
   now "drive sim-robot-003 to staging-shelf-a, then send it to charge at the charging bay"; the old
   one ("… to the charging bay and have it charge there") is covered by the catalogue's `charge`

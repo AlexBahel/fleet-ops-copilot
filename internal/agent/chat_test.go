@@ -417,13 +417,13 @@ func TestRefusedFilingIsNeverAnEmptyReply(t *testing.T) {
 	}
 }
 
-// P7 end to end, the zone-03 reading: start "now" is not sent to check_task
+// P7 end to end, a zone-03 reading: start "on approval" is not sent to check_task
 // (which refused it, and kept refusing later calls); the person is asked
 // again and the request is filed after the answer and the confirmation.
 func TestInvalidStartAskedAgainThenFiled(t *testing.T) {
 	c := world(t)
 	_, _, send := chatFixture(t, c,
-		llm.Step{Calls: []llm.ToolCall{call("p1", ProposeTool, map[string]any{"ask": "zone-maintenance", "kind": "zone-maintenance", "fields": map[string]any{"zone": "warehouse-a", "mode": "Immediate", "start": "now", "reason": "forklift crossing"}})}},
+		llm.Step{Calls: []llm.ToolCall{call("p1", ProposeTool, map[string]any{"ask": "zone-maintenance", "kind": "zone-maintenance", "fields": map[string]any{"zone": "warehouse-a", "mode": "Immediate", "start": "on approval", "reason": "forklift crossing"}})}},
 	)
 	tr := send("A forklift has to cross warehouse-a. Pause all robots there right away.")
 	if tr.Dialogue == nil || tr.Dialogue.Outcome != OutcomeQuestion || tr.Dialogue.QuestionID != "maintenance.mode" {

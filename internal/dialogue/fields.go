@@ -71,6 +71,17 @@ var Forms = map[string]FieldForm{
 		Forms: "lower-case letters, digits and '-'", valid: func(v string) bool { return dnsName.MatchString(v) }},
 }
 
+// rightAway reports whether a start value means "as soon as possible":
+// now, immediately or asap, in any case (D91). Such a window starts on
+// approval in mode Immediate, before the start's form is checked.
+func rightAway(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "now", "immediately", "asap":
+		return true
+	}
+	return false
+}
+
 // unknownFields refuses field names the catalogue does not know, before
 // anything of the call is applied (D85): the model is told which names
 // are allowed, for the kind when it is known, and asked which one it meant.

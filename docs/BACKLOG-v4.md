@@ -16,7 +16,7 @@ judge and the scenarios anyway. Status of each is in its row. The model runs on 
 (42 scenarios; Sonnet 5.5, Opus 5.5 and the air-gapped Qwen2.5-7B) were made on 2026-11-07. v4 is
 a different architecture from v3 (R69), so their comparison is a new table,
 `evals/results/comparison-2026-11-07.md`, with v3 beside it as history. What those runs found is in
-"Found in the v4 record runs" below; all are fixed in eval surface v5 (D84–D90).
+"Found in the v4 record runs" below; all are fixed in eval surface v5 (D84–D91).
 
 ## Judge
 
@@ -64,10 +64,11 @@ v3, a fix to the judge, a scenario, the prompt or the tools makes a new eval sur
 all three models.
 
 **Batched into eval surface v5 (D90, 2026-11-07).** P9 (D84), P8 (D85), P5 (D86), P6 (D87), P7
-(D88), J4 and J5 (judge v5, D89) and S2 (D90) are fixed, each with a test that fails before the
-fix, and P5–P9 each with a regression scenario (guided-18 to guided-21, zone-07). S3, S4 and S5
-are changed on the owner's ruling (guided-06, guided-07, guided-13; D90). The three model runs are
-repeated on v5; the v4 scores stand as recorded.
+(D88, with D91: `now`, `immediately`, `asap` start on approval in mode Immediate), J4 and J5
+(judge v5, D89) and S2 (D90) are fixed, each with a test that fails before the fix, and P5–P9
+each with a regression scenario (guided-18 to guided-21, zone-07). S3, S4 and S5 are changed on
+the owner's ruling (guided-06, guided-07, guided-13; D90). The three model runs are repeated on
+v5; the v4 scores stand as recorded.
 
 | # | Kind | Defect | Seen in | Direction |
 |---|---|---|---|---|
