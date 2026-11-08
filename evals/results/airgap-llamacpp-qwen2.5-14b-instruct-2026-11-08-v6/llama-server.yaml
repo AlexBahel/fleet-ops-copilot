@@ -1,0 +1,108 @@
+# llama-server (llama.cpp) serving Qwen2.5-7B-Instruct for the air-gapped
+# deployment (docs/DESIGN.md §2, §3.5). Apply after llama-storage-hostpath.yaml
+# (or your own PVC named llama-models) and after config/rbac (namespace).
+#
+# Image: ghcr.io/ggml-org/llama.cpp:server-b12004, a multi-arch (amd64, arm64)
+# build whose index digest is
+#   sha256:b32890309c1a33a534a01b0b461e953dc2c5a6bac20213abcf48e22847a19c85
+# The tag is used here, not the digest, because `kind load` stores the image
+# under its tag; make load-llama-image pulls by the digest and checks it.
+#
+# Offline: --offline forbids network access (including model download), the
+# model is read from the claim at /models, and imagePullPolicy IfNotPresent
+# means a missing image is an error, not a pull. The CPU build is used; there
+# is no GPU in a kind node.
+#
+# Flags that change a measurement are explicit so that nothing depends on a
+# server default: --ctx-size, --parallel (default is auto, which splits the
+# context across slots), --jinja (required for tool calling), --threads left
+# at the server default. fleetops-eval -backend llamacpp -llama-context records the
+# args, the resources below, /props (n_ctx, total_slots, build) and the thread
+# count from this container's log in backendSettings (R41, D64).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llama-server
+  namespace: fleetops-system
+  labels: {app.kubernetes.io/name: llama-server, app.kubernetes.io/part-of: fleet-ops-copilot}
+spec:
+  replicas: 1
+  strategy: {type: Recreate} # one model in memory at a time
+  selector:
+    matchLabels: {app.kubernetes.io/name: llama-server}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: llama-server, app.kubernetes.io/part-of: fleet-ops-copilot}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, seccompProfile: {type: RuntimeDefault}}
+      initContainers:
+        # Fail with a readable message when the model files are not on the node,
+        # instead of a llama-server load error.
+        - name: check-model
+          image: ghcr.io/ggml-org/llama.cpp:server-b12004
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c]
+          args:
+            - |
+              for f in qwen2.5-14b-instruct-q4_k_m-00001-of-00003.gguf qwen2.5-14b-instruct-q4_k_m-00002-of-00003.gguf qwen2.5-14b-instruct-q4_k_m-00003-of-00003.gguf; do
+                if [ ! -s "/models/$f" ]; then echo "model file /models/$f is missing or empty; run make load-llama-model" >&2; exit 1; fi
+              done
+              ls -l /models
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts:
+            - {name: models, mountPath: /models, readOnly: true}
+      containers:
+        - name: llama-server
+          image: ghcr.io/ggml-org/llama.cpp:server-b12004
+          imagePullPolicy: IfNotPresent
+          # The image entrypoint is /app/llama-server. Passing the first shard
+          # makes it load the second one from the same directory.
+          # llama-server does not accept --flag=value: each value is its own item.
+          args:
+            - --model
+            - /models/qwen2.5-14b-instruct-q4_k_m-00001-of-00003.gguf
+            - --alias
+            - qwen2.5-14b-instruct
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8080"
+            - --offline
+            - --jinja
+            - --ctx-size
+            - "8192"
+            - --parallel
+            - "1"
+            - --no-webui
+          env:
+            - {name: HOME, value: /tmp}
+          ports: [{name: http, containerPort: 8080}]
+          # /health answers 503 while the model loads and 200 when ready.
+          startupProbe: {httpGet: {path: /health, port: http}, periodSeconds: 10, failureThreshold: 90}
+          readinessProbe: {httpGet: {path: /health, port: http}, periodSeconds: 5, timeoutSeconds: 5}
+          livenessProbe: {httpGet: {path: /health, port: http}, periodSeconds: 20, timeoutSeconds: 10, failureThreshold: 6}
+          # No CPU limit: throttling would be measured as model latency. Memory:
+          # ~4.7 GB of weights, ~0.5 GB of KV cache at 8192 tokens, compute buffers.
+          resources:
+            requests: {cpu: "2", memory: 11Gi}
+            limits: {memory: 13Gi}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts:
+            - {name: models, mountPath: /models, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: models
+          persistentVolumeClaim: {claimName: llama-models, readOnly: true}
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llama-server
+  namespace: fleetops-system
+  labels: {app.kubernetes.io/name: llama-server, app.kubernetes.io/part-of: fleet-ops-copilot}
+spec:
+  selector: {app.kubernetes.io/name: llama-server}
+  ports: [{name: http, port: 8080, targetPort: http}]
