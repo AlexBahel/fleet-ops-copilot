@@ -73,7 +73,7 @@ var Forms = map[string]FieldForm{
 
 // rightAway reports whether a start value means "as soon as possible":
 // now, immediately or asap, in any case (D91). Such a window starts on
-// approval in mode Immediate, before the start's form is checked.
+// approval, before the start's form is checked; its mode is not changed.
 func rightAway(v string) bool {
 	switch strings.ToLower(strings.TrimSpace(v)) {
 	case "now", "immediately", "asap":

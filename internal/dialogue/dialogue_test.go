@@ -461,22 +461,20 @@ func TestInvalidValuePastTheCapShownInPreview(t *testing.T) {
 }
 
 // D91: a start of "now", "immediately" or "asap" (any case) means the window
-// starts on approval in mode Immediate; no question is asked (zone-03).
+// starts on approval, with the mode given; no question is asked (zone-03).
 // Any other value without the start's form is still asked again (D88).
-func TestStartNowIsImmediateOnApproval(t *testing.T) {
+func TestStartNowIsOnApproval(t *testing.T) {
 	e := &Engine{Cat: cat(t)}
 	for _, v := range []string{"now", "NOW", " Immediately ", "asap", "ASAP"} {
-		for _, mode := range []string{"", "Graceful"} {
+		for _, mode := range []string{"Immediate", "Graceful"} {
 			st := newState("Pause all robots in warehouse-a right away.")
 			fields := map[string]string{"zone": "warehouse-a", "start": v, "reason": "forklift crossing"}
-			if mode != "" {
-				fields["mode"] = mode
-			}
+			fields["mode"] = mode
 			o := e.Propose(st, Input{Ask: "zone-maintenance", Fields: fields}, snap)
 			if o.Proposal == nil {
 				t.Fatalf("start %q, mode %q: %+v", v, mode, o)
 			}
-			if zm := o.Proposal.Input.(tools.ZoneMaintenanceInput); zm.Mode != "Immediate" || zm.ScheduledStart != "" {
+			if zm := o.Proposal.Input.(tools.ZoneMaintenanceInput); zm.Mode != mode || zm.ScheduledStart != "" {
 				t.Fatalf("start %q, mode %q: input %+v", v, mode, zm)
 			}
 			if len(st.Asked) != 0 || len(st.Invalid) != 0 {
@@ -487,5 +485,30 @@ func TestStartNowIsImmediateOnApproval(t *testing.T) {
 	st := newState("Pause warehouse-a after the wave.")
 	if o := e.Propose(st, Input{Ask: "zone-maintenance", Fields: map[string]string{"zone": "warehouse-a", "start": "after the wave", "reason": "r"}}, snap); o.Question == nil || o.Question.ID != "maintenance.mode" {
 		t.Fatalf("another invalid start is not asked again: %+v", o)
+	}
+}
+
+// D91 (corrected): "now" means on approval only; it never changes the mode.
+// An explicit Graceful stays Graceful, and with no mode the default applies
+// and the preview shows it.
+func TestStartNowKeepsTheMode(t *testing.T) {
+	e := &Engine{Cat: cat(t)}
+	st := newState("Pause warehouse-a now, gracefully.")
+	o := e.Propose(st, Input{Ask: "zone-maintenance", Fields: map[string]string{"zone": "warehouse-a", "mode": "Graceful", "start": "now", "reason": "r"}}, snap)
+	if o.Proposal == nil {
+		t.Fatalf("outcome %+v", o)
+	}
+	zm := o.Proposal.Input.(tools.ZoneMaintenanceInput)
+	lines := strings.Join(o.Proposal.Lines, "\n")
+	if zm.Mode != "Graceful" || zm.ScheduledStart != "" || !strings.Contains(lines, "Mode: Graceful\n") || !strings.Contains(lines, "Start: on approval") {
+		t.Fatalf("input %+v\n%s", zm, lines)
+	}
+	st = newState("Pause warehouse-a now.")
+	o = e.Propose(st, Input{Ask: "zone-maintenance", Fields: map[string]string{"zone": "warehouse-a", "start": "now", "reason": "r"}}, snap)
+	if o.Proposal == nil {
+		t.Fatalf("outcome %+v", o)
+	}
+	if zm := o.Proposal.Input.(tools.ZoneMaintenanceInput); zm.Mode != "Graceful" || !strings.Contains(strings.Join(o.Proposal.Lines, "\n"), "Mode: Graceful (default)") {
+		t.Fatalf("no mode given: input %+v\n%s", zm, strings.Join(o.Proposal.Lines, "\n"))
 	}
 }

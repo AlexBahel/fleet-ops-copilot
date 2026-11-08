@@ -239,9 +239,8 @@ func (e *Engine) Propose(st *State, in Input, snap Snapshot) Outcome {
 		}
 	}
 	if rightAway(in.Fields["start"]) {
-		// "now": on approval, in mode Immediate, whatever mode was given (D91).
+		// "now": on approval; the mode is not changed (D91).
 		st.set("start", "")
-		st.set("mode", "Immediate")
 	}
 	if in.SomethingElse != nil || in.Ask == AskSomethingElse || (in.Ask != "" && !e.knownAsk(in.Ask) && st.Ask == "") {
 		if st.SomethingElse == nil {

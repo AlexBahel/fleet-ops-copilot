@@ -165,7 +165,7 @@ names; [`docs/NAMES.md`](NAMES.md) maps them to the current ones.
     ("scheduledStart must be RFC 3339"), and later `propose_task` calls in the same message without a
     start are refused the same way. Opus 5.5 zone-03 runs 1 and 2 failed only on this (listed as the
     product class); Sonnet 5.5 zone-03 runs 2 and 3 hit it as well. Fixed in v5: `now`,
-    `immediately` and `asap` start on approval in mode Immediate (D91); any other such value is
+    `immediately` and `asap` start on approval, the mode unchanged (D91); any other such value is
     removed and the question asked again with the valid forms (D88).
   - **Unknown field names are dropped without notice.** `propose_task` fields the catalogue does not
     know are ignored and the default is used; for a patrol all six Sonnet 5.5 and Qwen2.5-7B runs of

@@ -64,7 +64,7 @@ v3, a fix to the judge, a scenario, the prompt or the tools makes a new eval sur
 all three models.
 
 **Batched into eval surface v5 (D90, 2026-11-07).** P9 (D84), P8 (D85), P5 (D86), P6 (D87), P7
-(D88, with D91: `now`, `immediately`, `asap` start on approval in mode Immediate), J4 and J5
+(D88, with D91: `now`, `immediately`, `asap` start on approval, the mode unchanged), J4 and J5
 (judge v5, D89) and S2 (D90) are fixed, each with a test that fails before the fix, and P5–P9
 each with a regression scenario (guided-18 to guided-21, zone-07). S3, S4 and S5 are changed on
 the owner's ruling (guided-06, guided-07, guided-13; D90). The three model runs are repeated on
