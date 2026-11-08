@@ -153,8 +153,9 @@ Pass is judged by a deterministic harness, not a model (`docs/DESIGN.md` §4.1).
 one sample of three runs per scenario; Claude runs at the API's default sampling, which cannot be
 fixed on these models (D43). The comparison classifies every failed run as model, scenario, judge
 or product; the defects are in [`docs/KNOWN-LIMITS.md`](docs/KNOWN-LIMITS.md) and
-[`docs/BACKLOG-v4.md`](docs/BACKLOG-v4.md) and are counted as failures (on v5: 6 scenario runs,
-guided-19 for both Claude models, and 1 judge run; no product runs).
+[`docs/BACKLOG-v4.md`](docs/BACKLOG-v4.md) and are counted as failures (on v5: 15 scenario runs,
+guided-19 for both Claude models and zone-07 for all three; 9 product runs, dispatch-06 for all
+three; 1 judge run).
 
 History, not like-for-like with v5 or with each other (each comparison says why):
 eval surface v4 of 2026-11-07 (42 scenarios: Sonnet 5.5 71/126, Opus 5.5 79/126, Qwen2.5-7B 6/126),
