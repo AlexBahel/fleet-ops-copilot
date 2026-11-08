@@ -4,12 +4,15 @@
 # again with the valid forms; the person picks Immediate on approval and the
 # request is filed. Before D88 check_task refused the value and kept
 # refusing the model's later calls without a start.
+# S6 (D96): the prompt was zone-03's, which states no start, so a reading
+# that passes zone-03 could not pass this scenario. The prompt now states the
+# start itself, in words that are not a time.
 id: zone-07-invalid-start
 category: zone-ops
 title: "A start that is not a time is asked again, then the window is filed"
 fixture: live/healthy-fleet
 operator: sam
-prompt: "A forklift has to cross warehouse-a in the next few minutes. Pause all robots there right away. It is not an emergency."
+prompt: "Put warehouse-a into Immediate maintenance starting at the end of this shift: a forklift has to cross it. It is not an emergency."
 script:
   - tool: get_zone
     args: {name: warehouse-a}
@@ -17,7 +20,7 @@ script:
       FleetZone/warehouse-a has status.robotCount=1. This is not an emergency, so this is an Immediate
       maintenance window, not a zone stop.
     tool: propose_task
-    args: {ask: zone-maintenance, fields: {zone: warehouse-a, mode: Immediate, start: "on approval", reason: "forklift crossing"}}
+    args: {ask: zone-maintenance, fields: {zone: warehouse-a, mode: Immediate, start: "at the end of this shift", reason: "forklift crossing"}}
 responder:
   maintenance.mode: "2"
   preview: "1"

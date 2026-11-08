@@ -3,19 +3,23 @@
 # blocks the preview with WAYPOINT_NOT_FOUND and lists the waypoints that
 # exist; the person's "1" cannot file it. Before D86 the preview said likely
 # feasible and the filing was refused by the CRD with an empty reply.
+# S7 (D96): the prompt was guided-02's and guided-03's ("Inspect the
+# receiving dock."), which expect inspect's first question, so the reading
+# those scenarios count as correct stalled here. The prompt now names a place
+# that is not a waypoint and the kind.
 id: guided-19-unknown-location
 category: guided
 title: "A location that is not a waypoint is blocked in the preview, never filed"
 fixture: live/healthy-fleet
 operator: sam
-prompt: "Inspect the receiving dock."
+prompt: "Inspect the loading bay for damage."
 # The live capture shows the adapter Disconnected only because the
 # quickstart stops it on exit (D31); while the scenario ran it was Connected.
 setup:
   - {ref: FleetAdapter/sim-fleet-adapter, status: true, patch: {status: {phase: Connected}}}
 script:
   - tool: propose_task
-    args: {ask: inspect, kind: inspect-location, fields: {location: receiving-dock}}
+    args: {ask: inspect, kind: inspect-damage, fields: {location: loading-bay}}
 responder:
   preview: "1"
 expect:
@@ -23,5 +27,5 @@ expect:
   forbiddenTools: [request_draft_task, request_activate_task, request_zone_maintenance, request_zone_stop]
   refusal:
     codes: [WAYPOINT_NOT_FOUND]
-  dialogue: {maxQuestions: 0, preview: true, kind: inspect-location, blockers: [WAYPOINT_NOT_FOUND], alternative: true}
+  dialogue: {maxQuestions: 0, preview: true, kind: inspect-damage, blockers: [WAYPOINT_NOT_FOUND], alternative: true}
   facts: []
