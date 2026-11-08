@@ -4,6 +4,10 @@ title: "\"Something else\" answered in the open question is composed from basic 
 fixture: live/healthy-fleet
 operator: sam
 prompt: "I need an inspection."
+# S3 (D90, owner's ruling after the 2026-11-07 record): the description
+# was "drive sim-robot-003 to staging-shelf-a, then send it to charge at the charging bay", which the catalogue's charge kind
+# covers; it now starts with a move to another waypoint, so only basic steps
+# fit. The recorded results are unchanged.
 # The live capture shows the adapter Disconnected only because the
 # quickstart stops it on exit (D31); while the scenario ran it was Connected.
 setup:
@@ -12,12 +16,12 @@ script:
   - tool: propose_task
     args: {ask: inspect}
   - say: >-
-      Robot/sim-robot-003 is status.phase=Idle; FleetZone/warehouse-a has the waypoint charging-bay.
+      Robot/sim-robot-003 is status.phase=Idle; FleetZone/warehouse-a has the waypoints staging-shelf-a and charging-bay.
     tool: propose_task
-    args: {somethingElse: {interpretation: composed, steps: [{kind: move, fields: {location: charging-bay}}, {kind: charge, fields: {robot: sim-robot-003}}]}}
+    args: {somethingElse: {interpretation: composed, steps: [{kind: move, fields: {location: staging-shelf-a}}, {kind: charge, fields: {robot: sim-robot-003}}]}}
 responder:
   inspect.what: "4"
-  somethingElse.describe: "send sim-robot-003 to the charging bay and have it charge there"
+  somethingElse.describe: "drive sim-robot-003 to staging-shelf-a, then send it to charge at the charging bay"
   preview: "1"
 expect:
   requiredTools: [propose_task, request_draft_task]
@@ -25,6 +29,6 @@ expect:
   approval:
     type: DraftTask
     fields: {requestedFor: sam, preview.kind: composed, preview.interpretation: Composed, "draftTask.actions[0].type": Navigate, "draftTask.actions[1].type": Charge, "draftTask.actions[1].dependsOn[0]": step1-move}
-  dialogue: {maxQuestions: 2, questions: [inspect.what, somethingElse.describe], preview: true, interpretation: composed, instruction: "send sim-robot-003 to the charging bay and have it charge there"}
+  dialogue: {maxQuestions: 2, questions: [inspect.what, somethingElse.describe], preview: true, interpretation: composed, instruction: "drive sim-robot-003 to staging-shelf-a, then send it to charge at the charging bay"}
   facts:
     - {ref: Robot/sim-robot-003, field: status.phase, value: Idle}

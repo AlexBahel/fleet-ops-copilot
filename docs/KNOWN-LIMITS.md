@@ -181,13 +181,25 @@ names; [`docs/NAMES.md`](NAMES.md) maps them to the current ones.
     expects "not possible" for counting damaged pallets with a vision service, while the tool text
     calls a damage finding an inspection; guided-13 expects a move for "Send a robot to the charging
     bay.", which all three models read as a charge. These runs are counted as model failures.
-    Open on v5: the scenarios are unchanged until the owner's ruling.
+    Changed in v5 on the owner's ruling (the three bullets below).
 - **Fields of composed steps are not checked for their form.** A "something else" request composed
   from basic steps (D72) carries each step's fields as the model gave them; D88's form check
   applies to the request's own fields only, so an invalid step value reaches `check_task`.
 - **zone-03 expects no question.** On v5 a model that passes `start: now` for "right away" is asked
   the start question again (D88) and can still file, but zone-03's `maxQuestions: 0` counts that run
   as a failure; `propose_task`'s schema now gives the start's form.
+- **guided-06 changed after the 2026-11-07 record (S3, D90).** Its "something else" description is
+  now "drive sim-robot-003 to staging-shelf-a, then send it to charge at the charging bay"; the old
+  one ("… to the charging bay and have it charge there") is covered by the catalogue's `charge`
+  kind, so a charge was a correct reading the scenario rejected. The recorded results are unchanged.
+- **guided-07 changed after the 2026-11-07 record (S4, D90).** Its reply now asks to "count the
+  pallets", not "the damaged pallets": the `propose_task` text makes a damage finding an inspection,
+  so the old wording had two readings; analysis by an external service (C3) is now the only one.
+  The recorded results are unchanged.
+- **guided-13 changed after the 2026-11-07 record (S5, D90).** Its prompt is now "Send a robot to
+  staging-shelf-a."; "Send a robot to the charging bay." was read as a charge in all nine runs, so the
+  runs never reached the change after the preview the scenario tests. The recorded results are
+  unchanged.
 - **Guided requests have not run on a cluster.** The dialogue, `check_task`, the confirmation
   invariant, the execution re-check, `fleetops activate` and the follow-up are tested with the scripted
   backend, unit tests, envtest and the fixture evaluations. In envtest the executor's dry runs reach

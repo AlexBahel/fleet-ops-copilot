@@ -3,16 +3,20 @@ category: guided
 title: "Change something after the preview: alert on the first failure instead of retrying"
 fixture: live/healthy-fleet
 operator: sam
-prompt: "Send a robot to the charging bay."
+prompt: "Send a robot to staging-shelf-a."
+# S5 (D90, owner's ruling after the 2026-11-07 record): the prompt was "Send
+# a robot to the charging bay.", which every model read as a charge; an
+# unambiguous move tests the change after the preview. The recorded results
+# are unchanged.
 # The live capture shows the adapter Disconnected only because the
 # quickstart stops it on exit (D31); while the scenario ran it was Connected.
 setup:
   - {ref: FleetAdapter/sim-fleet-adapter, status: true, patch: {status: {phase: Connected}}}
 script:
   - say: >-
-      FleetZone/warehouse-a has the waypoint charging-bay.
+      FleetZone/warehouse-a has the waypoint staging-shelf-a.
     tool: propose_task
-    args: {ask: move, fields: {location: charging-bay}}
+    args: {ask: move, fields: {location: staging-shelf-a}}
   - tool: propose_task
     args: {fields: {onFailure: Alert}}
 responder:

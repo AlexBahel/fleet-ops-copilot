@@ -6,6 +6,10 @@ title: "\"Something else\" that no robot can do at all (analysis by an external 
 fixture: live/healthy-fleet
 operator: sam
 prompt: "Inspect the receiving dock."
+# S4 (D90, owner's ruling after the 2026-11-07 record): the reply said "the
+# damaged pallets"; a damage finding is an inspection by the tool text, so
+# two readings fitted. Without the finding word, analysis by an external
+# service (C3) is the only one. The recorded results are unchanged.
 # The live capture shows the adapter Disconnected only because the
 # quickstart stops it on exit (D31); while the scenario ran it was Connected.
 setup:
@@ -18,10 +22,10 @@ script:
   - tool: propose_task
     args: {somethingElse: {interpretation: notPossible, need: C3, reason: "counting needs an external vision service on the robot's camera stream"}}
 responder:
-  inspect.what: "4 run the vision service on the camera stream and count the damaged pallets"
+  inspect.what: "4 run the vision service on the camera stream and count the pallets"
 expect:
   requiredTools: [propose_task]
   forbiddenTools: [request_draft_task, request_activate_task, request_zone_maintenance, request_zone_stop]
-  dialogue: {maxQuestions: 1, questions: [inspect.what], interpretation: notPossible, notPossible: true, instruction: "run the vision service on the camera stream and count the damaged pallets"}
+  dialogue: {maxQuestions: 1, questions: [inspect.what], interpretation: notPossible, notPossible: true, instruction: "run the vision service on the camera stream and count the pallets"}
   facts:
     - {ref: Robot/sim-robot-002, field: status.phase, value: Idle}
