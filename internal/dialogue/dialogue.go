@@ -49,25 +49,36 @@ const AskSomethingElse = "something-else"
 // Waypoint is a named pose.
 type Waypoint struct{ Zone, Name, X, Y string }
 
-// Robot is what the choices need of a robot.
+// Robot is what the choices and the "Checked:" block need of a robot.
 type Robot struct {
-	Name    string
-	Battery *int32
-	Phase   string
+	Name        string
+	Battery     *int32
+	Phase       string
+	CurrentZone string
+	EstopState  string
 }
 
 // Draft is a draft FleetTask.
 type Draft struct {
 	Name    string
 	Created time.Time
+	Phase   string
+}
+
+// ZoneState is a zone's state as read, for the "Checked:" block (D92).
+type ZoneState struct {
+	Name        string
+	EstopStatus string
+	RobotCount  int32
 }
 
 // Snapshot is the fleet state the dialogue reads (through fleetops-mcp's read tools).
 type Snapshot struct {
-	Zones     []string
-	Waypoints []Waypoint
-	Robots    []Robot
-	Drafts    []Draft
+	Zones      []string
+	ZoneStates []ZoneState
+	Waypoints  []Waypoint
+	Robots     []Robot
+	Drafts     []Draft
 }
 
 // Choice is a rendered, numbered choice.
@@ -86,11 +97,18 @@ type Question struct {
 	Choices []Choice `json:"choices,omitempty"`
 	// Open is the "something else" question, answered in free text.
 	Open bool `json:"open,omitempty"`
+	// Checked is the fleet state the engine read for it, shown before the
+	// question (D92).
+	Checked []string `json:"checked,omitempty"`
 }
 
-// Render is the text the person sees.
+// Render is the text the person sees: the "Checked:" block, then the
+// question and its choices, last, since they are what the person answers.
 func (q Question) Render() string {
 	var b strings.Builder
+	if c := renderChecked(CheckedSnapshotHeader, q.Checked); c != "" {
+		b.WriteString(c + "\n")
+	}
 	b.WriteString(q.Text)
 	for _, c := range q.Choices {
 		fmt.Fprintf(&b, "\n%d %s", c.N, c.Label)
@@ -253,7 +271,7 @@ func (e *Engine) Propose(st *State, in Input, snap Snapshot) Outcome {
 		}
 		if in.SomethingElse == nil {
 			// The person's request fits no ask: one open question.
-			return e.askOpen(st)
+			return e.askOpen(st, snap)
 		}
 		return e.somethingElse(st, *in.SomethingElse, snap)
 	}
@@ -325,7 +343,7 @@ func (e *Engine) Answer(st *State, n int, rest string, snap Snapshot) (out Outco
 			st.SomethingElse = &SomethingElse{}
 		}
 		if rest == "" {
-			return e.askOpen(st), false, true
+			return e.askOpen(st, snap), false, true
 		}
 		st.SomethingElse.Text = rest
 		return Outcome{}, true, true
@@ -375,11 +393,11 @@ func (e *Engine) lookFor(given []string, text string) []string {
 	return []string{"location-state"}
 }
 
-func (e *Engine) askOpen(st *State) Outcome {
+func (e *Engine) askOpen(st *State, snap Snapshot) Outcome {
 	if len(st.Asked) >= catalogue.MaxQuestions {
 		return e.proposal(st, nil)
 	}
-	q := Question{ID: e.Cat.SomethingElse.ID, Text: e.Cat.SomethingElse.Text, Open: true}
+	q := Question{ID: e.Cat.SomethingElse.ID, Text: e.Cat.SomethingElse.Text, Open: true, Checked: snap.Checked(st.Ask)}
 	st.Asked = append(st.Asked, q.ID)
 	st.Pending = &q
 	return Outcome{Question: &q}
@@ -452,7 +470,7 @@ func (e *Engine) somethingElse(st *State, in SomethingElseInput, snap Snapshot) 
 func (e *Engine) next(st *State, snap Snapshot) Outcome {
 	a, ok := e.Cat.AskByName(st.Ask)
 	if !ok {
-		return e.askOpen(st)
+		return e.askOpen(st, snap)
 	}
 	if st.Kind == "" && a.Kind != "" {
 		st.Kind = a.Kind
@@ -476,7 +494,7 @@ func (e *Engine) next(st *State, snap Snapshot) Outcome {
 		if len(st.Asked) >= catalogue.MaxQuestions {
 			break
 		}
-		rq := Question{ID: q.ID, Text: invalidNote(st, q.Fills) + q.Text}
+		rq := Question{ID: q.ID, Text: invalidNote(st, q.Fills) + q.Text, Checked: snap.Checked(st.Ask)}
 		for i, c := range choices {
 			c.N = i + 1
 			rq.Choices = append(rq.Choices, c)

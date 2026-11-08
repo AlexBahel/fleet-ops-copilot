@@ -499,6 +499,7 @@ func (c *Chat) snapshot(ctx context.Context, cs *mcp.ClientSession, operator, se
 	_ = json.Unmarshal(raw, &zones)
 	for _, z := range zones.Items {
 		snap.Zones = append(snap.Zones, z.Name)
+		snap.ZoneStates = append(snap.ZoneStates, dialogue.ZoneState{Name: z.Name, EstopStatus: z.EstopStatus, RobotCount: z.RobotCount})
 		for _, w := range z.Waypoints {
 			snap.Waypoints = append(snap.Waypoints, dialogue.Waypoint{Zone: z.Name, Name: w.Name, X: w.X, Y: w.Y})
 		}
@@ -511,7 +512,8 @@ func (c *Chat) snapshot(ctx context.Context, cs *mcp.ClientSession, operator, se
 	}
 	_ = json.Unmarshal(raw, &robots)
 	for _, r := range robots.Items {
-		snap.Robots = append(snap.Robots, dialogue.Robot{Name: r.Name, Battery: r.Status.BatteryPercent, Phase: r.Status.Phase})
+		snap.Robots = append(snap.Robots, dialogue.Robot{Name: r.Name, Battery: r.Status.BatteryPercent, Phase: r.Status.Phase,
+			CurrentZone: r.Status.CurrentZone, EstopState: r.Status.EstopState})
 	}
 	var tasks tools.FleetTaskList
 	ev, raw, err = c.agentCall(ctx, cs, operator, sessionID, "list_fleet_tasks", map[string]any{}, nil)
@@ -523,7 +525,7 @@ func (c *Chat) snapshot(ctx context.Context, cs *mcp.ClientSession, operator, se
 	for _, t := range tasks.Items {
 		if t.Draft {
 			created, _ := time.Parse(time.RFC3339, t.CreatedAt)
-			snap.Drafts = append(snap.Drafts, dialogue.Draft{Name: t.Name, Created: created})
+			snap.Drafts = append(snap.Drafts, dialogue.Draft{Name: t.Name, Created: created, Phase: t.Phase})
 		}
 	}
 	return snap, calls, nil

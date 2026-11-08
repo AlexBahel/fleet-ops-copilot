@@ -86,6 +86,9 @@ func RenderPreview(p *Proposal, chk tools.CheckTaskResult) Preview {
 	for _, a := range chk.Alternatives {
 		fmt.Fprintf(&b, "  Alternative: %s\n", a)
 	}
+	if c := renderChecked(CheckedHeader, CheckedPreview(chk.Facts, namedRobots(p.Input))); c != "" {
+		b.WriteString(c + "\n")
+	}
 	if len(p.Missing) > 0 {
 		fmt.Fprintf(&b, "  Missing: %s. Reply 3 with it, or 4 to cancel.\n", strings.Join(p.Missing, ", "))
 	}

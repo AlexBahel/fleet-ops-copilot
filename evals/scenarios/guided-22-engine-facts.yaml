@@ -1,0 +1,32 @@
+# Regression for the v5 record runs (2026-11-08, D92): runs in which the
+# model wrote no text failed on a fact fleetops-agent had read itself, most
+# often a Robot's status.phase=Idle for a robot the preview did not name
+# ("Eligible now: inspect: sim-robot-001"; evals/results/comparison-v5.md,
+# "fact not cited, no model prose"). Here the model writes no text and makes
+# no read; the preview's "Checked:" block states every robot the engine
+# considered, with its phase and why it is eligible or not.
+id: guided-22-engine-facts
+category: guided
+title: "The preview states what the engine read, including a robot it does not name as eligible"
+fixture: live/healthy-fleet
+operator: sam
+prompt: "Inspect staging-shelf-a for damage."
+# The live capture shows the adapter Disconnected only because the
+# quickstart stops it on exit (D31); while the scenario ran it was Connected.
+setup:
+  - {ref: FleetAdapter/sim-fleet-adapter, status: true, patch: {status: {phase: Connected}}}
+script:
+  - tool: propose_task
+    args: {ask: inspect, kind: inspect-damage, fields: {location: staging-shelf-a}}
+responder:
+  preview: "1"
+expect:
+  requiredTools: [propose_task, request_draft_task]
+  forbiddenTools: [request_activate_task, request_zone_maintenance, request_zone_stop]
+  approval:
+    type: DraftTask
+    fields: {requestedFor: sam, preview.kind: inspect-damage, "draftTask.actions[0].location.waypoint": staging-shelf-a}
+  dialogue: {maxQuestions: 0, preview: true, kind: inspect-damage}
+  facts:
+    - {ref: Robot/sim-robot-002, field: status.phase, value: Idle}
+    - {ref: Robot/sim-robot-001, field: status.batteryPercent, value: "99"}

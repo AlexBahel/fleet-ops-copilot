@@ -18,6 +18,7 @@ package feasibility
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -307,5 +308,57 @@ func TestFilterListPinned(t *testing.T) {
 		if !strings.HasPrefix(pinned[n], strings.TrimSpace(it[2])) && !strings.HasPrefix(it[2], pinned[n]) {
 			t.Errorf("RFC filter %s starts %q, pinned %q", it[1], it[2], pinned[n])
 		}
+	}
+}
+
+// D92: the report records every robot considered with the fields the
+// filters read and the filters that exclude it, so the preview can state
+// them; the v5 record's most frequent uncited fact was an Idle robot the
+// preview did not name (here sim-robot-004: Idle, no current zone).
+func TestFactsRecordEachRobotConsidered(t *testing.T) {
+	s := fleet()
+	r4 := robot("sim-robot-004", "Idle", 85, "navigation", "camera_front")
+	r4.Status.CurrentZone = ""
+	s.Robots = append(s.Robots, r4)
+	r := Evaluate(Proposal{Creating: true, Task: task(t, fleetopsv1.DraftAction{Name: "inspect", Type: "Navigate", RequiredCapabilities: []string{"navigation", "camera_front"}, Location: dock})}, s)
+	if len(r.Facts.Zones) != 1 || r.Facts.Zones[0].Name != "warehouse-a" || r.Facts.Zones[0].EstopStatus != "Clear" {
+		t.Fatalf("zones %+v", r.Facts.Zones)
+	}
+	want := map[string]struct {
+		phase    string
+		eligible bool
+		filters  string
+		camera   string
+	}{
+		"sim-robot-001": {"InProgress", false, "[1]", "Active"},
+		"sim-robot-002": {"Idle", true, "[]", "Active"},
+		"sim-robot-003": {"Idle", false, "[3]", ""},
+		"sim-robot-004": {"Idle", false, "[2]", "Active"},
+	}
+	if len(r.Facts.Robots) != len(want) {
+		t.Fatalf("robots %+v", r.Facts.Robots)
+	}
+	for _, f := range r.Facts.Robots {
+		w := want[f.Name]
+		if f.Phase != w.phase || len(f.Members) != 1 || f.Members[0].Eligible != w.eligible || fmt.Sprint(f.Members[0].Filters) != w.filters || f.Capabilities["camera_front"] != w.camera || f.Battery == nil {
+			t.Errorf("%s: %+v, want %+v", f.Name, f, w)
+		}
+	}
+}
+
+// D92: a zone request records the zone and the robots in it; an activation
+// records the FleetTask it names.
+func TestFactsForZoneAndActivation(t *testing.T) {
+	r := Evaluate(Proposal{ZoneStop: &fleetopsv1.ZoneStopParams{ZoneName: "warehouse-a", Reason: "x"}}, fleet())
+	if len(r.Facts.Zones) != 1 || len(r.Facts.Robots) != 3 || len(r.Facts.Robots[0].Members) != 0 {
+		t.Fatalf("zone stop facts %+v", r.Facts)
+	}
+	s := fleet()
+	d := *task(t, fleetopsv1.DraftAction{Name: "m", Type: "Navigate", Location: dock})
+	d.Name, d.Spec.Draft, d.Status.Phase = "patrol-warehouse-a", true, "Draft"
+	s.Tasks = []swarmv1.FleetTask{d}
+	r = Evaluate(Proposal{ActivateTask: "patrol-warehouse-a"}, s)
+	if len(r.Facts.Tasks) != 1 || !r.Facts.Tasks[0].Draft || r.Facts.Tasks[0].Phase != "Draft" {
+		t.Fatalf("activation facts %+v", r.Facts.Tasks)
 	}
 }

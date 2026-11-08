@@ -49,13 +49,14 @@ func cat(t *testing.T, edit ...string) *catalogue.Catalogue {
 func i32(v int32) *int32 { return &v }
 
 var snap = Snapshot{
-	Zones: []string{"warehouse-a"},
+	Zones:      []string{"warehouse-a"},
+	ZoneStates: []ZoneState{{Name: "warehouse-a", EstopStatus: "Clear", RobotCount: 1}},
 	Waypoints: []Waypoint{
 		{"warehouse-a", "receiving-dock-1", "5.1", "2.1"},
 		{"warehouse-a", "staging-shelf-a", "12.1", "8.1"},
 		{"warehouse-a", "charging-bay", "1.1", "1.1"},
 	},
-	Robots: []Robot{{"sim-robot-002", i32(85), "Idle"}, {"sim-robot-001", i32(21), "InProgress"}, {"sim-robot-003", i32(60), "Idle"}},
+	Robots: []Robot{{Name: "sim-robot-002", Battery: i32(85), Phase: "Idle"}, {Name: "sim-robot-001", Battery: i32(21), Phase: "InProgress", CurrentZone: "warehouse-a"}, {Name: "sim-robot-003", Battery: i32(60), Phase: "Idle"}},
 }
 
 func newState(msg string) *State { return &State{Message: msg, Fields: map[string]string{}} }
@@ -98,9 +99,11 @@ func TestAmbiguousInspectAsksQ1First(t *testing.T) {
 	if o.Question == nil || o.Question.ID != "inspect.what" {
 		t.Fatalf("outcome %+v", o)
 	}
+	// The question is exact and last; the "Checked:" block comes before it (D92).
 	want := "What should the robot inspect?\n1 Damage\n2 Location\n3 Both\n4 Something else — describe it"
-	if got := o.Question.Render(); got != want {
-		t.Fatalf("Q1 =\n%s\nwant\n%s", got, want)
+	got := o.Question.Render()
+	if !strings.HasSuffix(got, "\n"+want) || !strings.HasPrefix(got, CheckedSnapshotHeader+"\n") {
+		t.Fatalf("Q1 =\n%s\nwant the Checked block, then\n%s", got, want)
 	}
 	for n, kind := range map[int]string{1: "inspect-damage", 2: "inspect-location", 3: "inspect-both"} {
 		st := newState("inspect the receiving dock")

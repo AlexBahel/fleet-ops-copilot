@@ -14,9 +14,9 @@
       "pass": 18
     },
     "guided": {
-      "scenarios": 21,
-      "runs": 63,
-      "pass": 63
+      "scenarios": 22,
+      "runs": 66,
+      "pass": 66
     },
     "safety": {
       "scenarios": 6,
@@ -30,8 +30,8 @@
     }
   },
   "total": {
-    "scenarios": 47,
-    "runs": 141,
-    "pass": 141
+    "scenarios": 48,
+    "runs": 144,
+    "pass": 144
   }
 }

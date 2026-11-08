@@ -209,7 +209,68 @@ type Report struct {
 	Eligible     map[string][]string `json:"eligibleNow,omitempty"`
 	Checks       []Check             `json:"checks"`
 	NotChecked   []string            `json:"notChecked"`
+	// Facts are the fields of the objects the checks read, as read: the
+	// preview's "Checked:" block is written from them (D92).
+	Facts Facts `json:"facts"`
 }
+
+// Facts are what the checks read: each zone a member or the request names,
+// each robot considered with the fields the candidate filters used and the
+// filters that exclude it, and the FleetTask an activation names (D92).
+type Facts struct {
+	Zones  []ZoneFacts  `json:"zones,omitempty"`
+	Robots []RobotFacts `json:"robots,omitempty"`
+	Tasks  []TaskFacts  `json:"tasks,omitempty"`
+}
+
+// ZoneFacts is one FleetZone as the checks read it.
+type ZoneFacts struct {
+	Name        string `json:"name"`
+	EstopStatus string `json:"status.estopStatus"`
+	// EstopTriggered: the swarmada.io/estop-triggered annotation is set.
+	EstopTriggered bool  `json:"estopTriggered,omitempty"`
+	RobotCount     int32 `json:"status.robotCount"`
+	// Maintenances covering the zone, "name phase" (Active or Scheduled).
+	Maintenances []string `json:"maintenances,omitempty"`
+}
+
+// RobotFacts is one robot the checks considered.
+type RobotFacts struct {
+	Name        string `json:"name"`
+	Phase       string `json:"status.phase"`
+	Battery     *int32 `json:"status.batteryPercent,omitempty"`
+	CurrentZone string `json:"status.currentZone,omitempty"`
+	EstopState  string `json:"status.estopState,omitempty"`
+	// Floor is the battery floor filter 4 used, when one is set.
+	Floor *int32 `json:"batteryFloor,omitempty"`
+	// Capabilities are the statuses of the required capabilities, by name
+	// ("" when the robot does not declare it).
+	Capabilities map[string]string `json:"capabilities,omitempty"`
+	// Adapter and AdapterPhase are set when filter 9 excludes the robot.
+	Adapter      string `json:"spec.adapter.name,omitempty"`
+	AdapterPhase string `json:"adapterPhase,omitempty"`
+	// Members is the filter evaluation per member; empty for a robot read
+	// for a zone request (in the zone, not evaluated for work).
+	Members []MemberFit `json:"members,omitempty"`
+}
+
+// MemberFit is one robot's candidate-filter result for one member.
+type MemberFit struct {
+	Member   string `json:"member"`
+	Eligible bool   `json:"eligible"`
+	// Filters are the RFC §9.4.2 filter numbers that exclude it (Filters).
+	Filters []int `json:"filters,omitempty"`
+}
+
+// TaskFacts is the FleetTask an activation names.
+type TaskFacts struct {
+	Name  string `json:"name"`
+	Draft bool   `json:"spec.draft"`
+	Phase string `json:"status.phase,omitempty"`
+}
+
+// FilterPhrase is the phrase of RFC §9.4.2 filter n (Filters).
+func FilterPhrase(n int) string { return phrase(n) }
 
 // Records converts the checks for an ApprovalRequest.
 func (r Report) Records() []fleetopsv1.CheckRecord {
@@ -298,6 +359,7 @@ func (e *eval) activate(name string) {
 		if t.Name != name {
 			continue
 		}
+		e.r.Facts.Tasks = append(e.r.Facts.Tasks, TaskFacts{Name: t.Name, Draft: t.Spec.Draft, Phase: string(t.Status.Phase)})
 		if !t.Spec.Draft {
 			e.block(CodeTaskNotDraft, "", "FleetTask %s is not a draft (status.phase=%s)", name, t.Status.Phase)
 			return
@@ -451,6 +513,9 @@ func (e *eval) zoneState(member string, a swarmv1.FleetActionSpec) bool {
 		}
 		return false
 	}
+	for _, anc := range e.chain(z.Name) {
+		e.zoneFacts(anc)
+	}
 	okAll := true
 	for _, anc := range e.chain(z.Name) {
 		zz := e.zones[anc]
@@ -493,6 +558,61 @@ func (e *eval) zoneState(member string, a swarmv1.FleetActionSpec) bool {
 		e.pass(member+": zone", "FleetZone %s exists, no stop in force on it or its ancestors, no restriction denies the work", a.Zone)
 	}
 	return okAll
+}
+
+// zoneFacts records a zone as read, once (D92).
+func (e *eval) zoneFacts(name string) {
+	z, ok := e.zones[name]
+	if !ok {
+		return
+	}
+	for _, f := range e.r.Facts.Zones {
+		if f.Name == name {
+			return
+		}
+	}
+	_, t := z.Annotations[estopTriggered]
+	f := ZoneFacts{Name: name, EstopStatus: string(z.Status.EstopStatus), EstopTriggered: t, RobotCount: z.Status.RobotCount}
+	if f.EstopStatus == "" {
+		f.EstopStatus = "Clear" // RFC-0001: empty is treated as Clear (fleetzone_types.go)
+	}
+	for _, m := range e.s.Maintenances {
+		if (m.Status.Phase == "Active" || m.Status.Phase == "Scheduled" || m.Status.Phase == "") &&
+			(m.Spec.Scope.Type == "Namespace" || slices.Contains(e.chain(name), m.Spec.Scope.ZoneName)) {
+			phase := string(m.Status.Phase)
+			if phase == "" {
+				phase = "Scheduled"
+			}
+			f.Maintenances = append(f.Maintenances, m.Name+" "+phase)
+		}
+	}
+	e.r.Facts.Zones = append(e.r.Facts.Zones, f)
+}
+
+// robotFacts returns the record of a robot, adding it once (D92).
+func (e *eval) robotFacts(r *swarmv1.Robot) *RobotFacts {
+	for i := range e.r.Facts.Robots {
+		if e.r.Facts.Robots[i].Name == r.Name {
+			return &e.r.Facts.Robots[i]
+		}
+	}
+	e.r.Facts.Robots = append(e.r.Facts.Robots, RobotFacts{Name: r.Name, Phase: string(r.Status.Phase), Battery: r.Status.BatteryPercent,
+		CurrentZone: r.Status.CurrentZone, EstopState: string(r.Status.EstopState)})
+	return &e.r.Facts.Robots[len(e.r.Facts.Robots)-1]
+}
+
+// zoneRobots records the robots in a zone or below it, for a zone request
+// (the robots it would hold), with no filter evaluation.
+func (e *eval) zoneRobots(zone string) {
+	for i := range e.s.Robots {
+		r := &e.s.Robots[i]
+		for _, z := range []string{r.Status.CurrentZone, r.Spec.Zone} {
+			if z != "" && slices.Contains(e.chain(z), zone) {
+				e.robotFacts(r)
+				break
+			}
+		}
+	}
 }
 
 // chain is the zone and its ancestors (bounded like Swarmada's walk).
@@ -808,6 +928,7 @@ func (e *eval) eligibility(member string, a swarmv1.FleetActionSpec, explained b
 	for i := range e.s.Robots {
 		r := &e.s.Robots[i]
 		ex := e.exclusions(r, a, leaves)
+		e.recordFit(r, member, a, ex)
 		if len(ex) == 0 {
 			eligible = append(eligible, r.Name)
 			continue
@@ -846,6 +967,35 @@ func (e *eval) eligibility(member string, a swarmv1.FleetActionSpec, explained b
 	}
 }
 
+// recordFit records what the filters read of r for member and their result.
+func (e *eval) recordFit(r *swarmv1.Robot, member string, a swarmv1.FleetActionSpec, ex []int) {
+	f := e.robotFacts(r)
+	if fl := floorOf(r, a); fl != nil && (f.Floor == nil || *fl > *f.Floor) {
+		f.Floor = fl
+	}
+	if a.RobotSelector == "" || a.RobotSelector == r.Name {
+		for _, c := range a.RequiredCapabilities {
+			if f.Capabilities == nil {
+				f.Capabilities = map[string]string{}
+			}
+			f.Capabilities[c] = ""
+			for _, rc := range r.Status.Capabilities {
+				if rc.Name == c {
+					f.Capabilities[c] = string(rc.Status)
+				}
+			}
+		}
+	}
+	if slices.Contains(ex, 9) {
+		f.Adapter = r.Spec.Adapter.Name
+		f.AdapterPhase = "not found"
+		if ad, ok := e.adapter[r.Spec.Adapter.Name]; ok {
+			f.AdapterPhase = string(ad.Status.Phase)
+		}
+	}
+	f.Members = append(f.Members, MemberFit{Member: member, Eligible: len(ex) == 0, Filters: ex})
+}
+
 func (e *eval) maintenance(p *fleetopsv1.ZoneMaintenanceParams) {
 	if p.ScopeType == "Zone" || p.ScopeType == "" {
 		if _, ok := e.zones[p.ZoneName]; !ok {
@@ -855,6 +1005,8 @@ func (e *eval) maintenance(p *fleetopsv1.ZoneMaintenanceParams) {
 			}
 		} else {
 			e.pass("zone", "FleetZone %s exists", p.ZoneName)
+			e.zoneFacts(p.ZoneName)
+			e.zoneRobots(p.ZoneName)
 		}
 	}
 	if p.ScheduledStart != nil && p.ScheduledStart.Time.Before(e.s.Now) {
@@ -879,6 +1031,8 @@ func (e *eval) zoneStop(p *fleetopsv1.ZoneStopParams) {
 		}
 		return
 	}
+	e.zoneFacts(z.Name)
+	e.zoneRobots(z.Name)
 	if _, t := z.Annotations[estopTriggered]; t || z.Status.EstopStatus == swarmv1.ZoneEstopTriggered {
 		e.block(CodeAlreadyStopped, "", "FleetZone %s already has an emergency stop in force (status.estopStatus=%s)", z.Name, z.Status.EstopStatus)
 		return
