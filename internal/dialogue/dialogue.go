@@ -302,7 +302,7 @@ func (e *Engine) Propose(st *State, in Input, snap Snapshot) Outcome {
 		if k == "start" && rightAway(v) {
 			continue
 		}
-		if v != "" && slices.Contains(catalogue.Fields, k) {
+		if strings.TrimSpace(v) != "" && slices.Contains(catalogue.Fields, k) {
 			st.set(k, v)
 		}
 	}

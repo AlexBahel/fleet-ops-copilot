@@ -770,7 +770,7 @@ func TestRefusedFieldLeftOutAndShownWhenNothingHoldsIt(t *testing.T) {
 func TestEmptyValueIsIgnoredNotRefused(t *testing.T) {
 	e := &Engine{Cat: cat(t), Allowed: defaultPolicy(t)}
 	st := newState("Move a robot over to receiving-dock-1.")
-	o := e.Propose(st, Input{Ask: "move", Fields: map[string]string{"location": "receiving-dock-1", "robot": "", "task": "", "times": ""}}, snap)
+	o := e.Propose(st, Input{Ask: "move", Fields: map[string]string{"location": "receiving-dock-1", "robot": "", "task": "", "times": " "}}, snap)
 	if o.Invalid != "" {
 		t.Fatalf("refused: %s", o.Invalid)
 	}
