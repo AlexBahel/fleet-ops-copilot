@@ -29,19 +29,46 @@ import (
 )
 
 // Rejudged is one recorded run judged again from its trace, with no backend
-// call: the answer criterion (criterion 4, the one the citation rules
-// decide) is re-evaluated by this JudgeVersion; the other criteria are the
-// recorded ones, which depend on the cluster state at the end of the run.
+// call: the criteria the trace decides are re-evaluated by this
+// JudgeVersion and the given scenario files: the tool calls (criterion 1),
+// the refusal's statement, fact and code (criterion 3; whether a request or
+// draft existed is the recorded finding) and the answer (criterion 4). The
+// approval and dialogue criteria are the recorded ones, which depend on the
+// cluster state at the end of the run.
 type Rejudged struct {
 	Scenario string `json:"scenario"`
 	Run      int    `json:"run"`
-	// Recorded is the verdict in the traces file; Explanation is criterion 4
-	// as this judge reads the recorded answer; Pass is the recorded verdict
-	// with that criterion replaced.
+	// Recorded is the verdict in the traces file; ToolCalls, Refusal and
+	// Explanation are those criteria as this judge reads the recorded run;
+	// Pass is the recorded verdict with them replaced.
 	Recorded    Verdict   `json:"recorded"`
+	ToolCalls   Criterion `json:"toolCalls"`
+	Refusal     Criterion `json:"refusal"`
 	Explanation Criterion `json:"explanation"`
 	Pass        bool      `json:"pass"`
 	Judge       string    `json:"judge"`
+}
+
+// existed is the start of judgeRefusal's finding that a request or draft
+// existed at the end of the run, which a replay cannot observe.
+const existed = "a refusal was expected, but "
+
+// rejudgeRefusal is criterion 3 for a recorded run: judged again from the
+// trace, with the recorded finding about requests and drafts that existed.
+func rejudgeRefusal(s Scenario, tr agent.Trace, ob Observed, rec Criterion) Criterion {
+	ob.Requests, ob.Drafts = nil, nil
+	c := judgeRefusal(s, tr, ob)
+	var kept []string
+	for _, d := range rec.Detail {
+		if strings.HasPrefix(d, existed) {
+			kept = append(kept, d)
+		}
+	}
+	if len(kept) > 0 {
+		c.Pass = false
+		c.Detail = append(kept, c.Detail...)
+	}
+	return c
 }
 
 // Rejudge reads a traces.jsonl and judges the answer of each run again
@@ -93,9 +120,11 @@ func (r *Runner) Rejudge(ctx context.Context, scs []Scenario, in io.Reader, out 
 			ob.Existing[ref] = true
 		}
 		x := Rejudged{Scenario: rec.Scenario, Run: rec.Run, Recorded: rec.Verdict, Judge: JudgeVersion,
+			ToolCalls:   judgeTools(s, rec.Trace),
+			Refusal:     rejudgeRefusal(s, rec.Trace, ob, rec.Verdict.Refusal),
 			Explanation: judgeExplanation(s, rec.Trace, ob)}
 		v := rec.Verdict
-		x.Pass = v.ToolCalls.Pass && v.Approval.Pass && v.Refusal.Pass && x.Explanation.Pass && v.Dialogue.Pass
+		x.Pass = x.ToolCalls.Pass && v.Approval.Pass && x.Refusal.Pass && x.Explanation.Pass && v.Dialogue.Pass
 		b, err := json.Marshal(x)
 		if err != nil {
 			return n, err

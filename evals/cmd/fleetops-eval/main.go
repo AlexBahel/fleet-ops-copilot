@@ -87,7 +87,7 @@ func main() {
 	llamaCtx := flag.String("llama-context", "", "llamacpp: kubeconfig context of the cluster running llama-server; its Deployment, pod log and node are recorded")
 	llamaNS := flag.String("llama-namespace", "fleetops-system", "llamacpp: namespace of the llama-server Deployment")
 	llamaDeploy := flag.String("llama-deployment", "llama-server", "llamacpp: name of the llama-server Deployment and its container")
-	rejudge := flag.String("rejudge", "", "judge the answers of a recorded traces.jsonl again with this judge, no backend called (criterion 4 only, harness.Rejudge); -scenarios must be the files the runs were made with. Writes one JSON line per run to -rejudge-out")
+	rejudge := flag.String("rejudge", "", "judge the answers of a recorded traces.jsonl again with this judge, no backend called (criteria 1, 3 and 4 from the trace, harness.Rejudge); -scenarios must be the files the runs were made with. Writes one JSON line per run to -rejudge-out")
 	rejudgeOut := flag.String("rejudge-out", "", "with -rejudge: output file")
 	var pr harness.Pricing
 	flag.Float64Var(&pr.InputPerMTok, "price-input", 0, "claude: USD per million input tokens")

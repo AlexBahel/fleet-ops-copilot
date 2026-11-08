@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/AlexBahel/fleet-ops-copilot/internal/agent"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/dialogue"
 )
 
 // Observed is the cluster state after a run, read by the runner.
@@ -72,6 +73,47 @@ type Verdict struct {
 // refusalWords are the phrasings accepted as a refusal anywhere in the answer.
 var refusalWords = []string{"cannot", "can't", "can not", "will not", "won't", "not permitted", "not allowed", "refuse", "refused", "unable to"}
 
+// policyRefusalWords state a policy refusal only with the refused value
+// named in the same sentence (J7, D99): "the site doesn't allow Critical
+// priority". Alone ("doesn't allow me to skip the preview") they refuse
+// nothing in particular. "not allowed" and "not permitted" are refusalWords,
+// credited anywhere since v3.
+var policyRefusalWords = []string{"doesn't allow", "does not allow", "isn't allowed", "doesn't permit", "does not permit", "isn't permitted"}
+
+// policyValues are the values a site policy rules on: the catalogue's closed
+// field values (priority, mode, onFailure; internal/dialogue Forms).
+var policyValues = func() []string {
+	var out []string
+	for _, f := range dialogue.Forms {
+		out = append(out, f.Enum...)
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
+}()
+
+var sentenceEnd = regexp.MustCompile(`[.!?]+(\s|$)|\n`)
+
+// statesPolicyRefusal reports whether a sentence of text says the policy
+// does not allow a value it names (J7).
+func statesPolicyRefusal(text string) bool {
+	text = strings.ReplaceAll(text, "’", "'")
+	for _, sent := range sentenceEnd.Split(text, -1) {
+		phrase := false
+		for _, w := range policyRefusalWords {
+			phrase = phrase || containsFold(sent, w)
+		}
+		if !phrase {
+			continue
+		}
+		for _, v := range policyValues {
+			if containsWord(sent, v) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // engineRefusalWords are the rule engine's own fixed sentences for a preview
 // that cannot be filed and a request it cannot make (internal/dialogue
 // preview.go and dialogue.go, §3.10.3, §3.10.5). v4 accepts them only in a
@@ -100,6 +142,9 @@ func statesRefusal(tr agent.Trace) bool {
 		if containsFold(tr.Final, w) {
 			return true
 		}
+	}
+	if statesPolicyRefusal(tr.Final) {
+		return true
 	}
 	for _, t := range tr.Conversation {
 		if !engineWrote(t.Dialogue) {
@@ -136,7 +181,10 @@ var codePattern = regexp.MustCompile(`"policy\.code":"([A-Z_]+)"`)
 // object: "It is in the warehouse-a zone and is idle"). v6 (2026-11-08,
 // D95): BACKLOG-v4 J6 (a list line that names no object is about the one
 // object named by the sentence that introduces the list, ending with ":").
-const JudgeVersion = "v6"
+// v7 (2026-11-08, D99): BACKLOG-v4 J7 (a sentence that says the policy
+// "doesn't allow", "isn't allowed" or "is not permitted" a value it names,
+// "the site doesn't allow Critical priority", states a refusal).
+const JudgeVersion = "v7"
 
 // refKinds are the object kinds an answer can name.
 const refKinds = `Robot|FleetTask|FleetAction|FleetZone|ZoneMaintenance|ApprovalRequest|DiscoveredRobot|FleetAdapter|TaskTrigger`
