@@ -6,10 +6,11 @@ Kubernetes API, drafts work, and turns proposed changes into requests that a nam
 person approves. It never clears a stop, releases a robot, deletes, approves its own
 request, or edits work that already exists.
 
-**Status: early development.** The design is in [`docs/DESIGN.md`](docs/DESIGN.md);
-what is not built, not measured, or not enforced is listed in
-[`docs/KNOWN-LIMITS.md`](docs/KNOWN-LIMITS.md). Every number below links to the committed file or
-CI run it comes from. Records made before the rename use earlier names;
+This README is a case study: the problem, the constraint, the approach, what was measured, and
+what is not done. Every number links to the committed file or CI run it comes from. The design is
+in [`docs/DESIGN.md`](docs/DESIGN.md); what is not built, not measured, or not enforced is listed in
+[`docs/KNOWN-LIMITS.md`](docs/KNOWN-LIMITS.md). It has run on kind clusters on one machine and is not
+deployed at any site. Records made before the rename use earlier names;
 [`docs/NAMES.md`](docs/NAMES.md) maps them to the current ones.
 
 ## Problem
@@ -22,34 +23,52 @@ could stop a zone, release a robot or start work. The copilot has to be useful f
 proposals while every change it causes passes through a named person, and that guarantee has to
 hold when the model is wrong.
 
-## Constraint: air-gapped sites
+## Constraint: sites that cannot send data to the cloud
 
-The customer in this repository, "Example Distribution Co.", is **fictional** (`docs/DESIGN.md`
-§2). Its robot network and Kubernetes cluster have no route to the internet, so a copilot there
-runs its model in the cluster (Qwen2.5-7B-Instruct on llama.cpp) with egress denied by
-NetworkPolicy; its offsite operations centre can use a hosted model (Claude via the Claude API).
-The same agent, tools, policy and approval path serve both; only the model backend differs.
+The customer in this repository, "Example Distribution Co.", is **fictional**
+([`docs/DESIGN.md`](docs/DESIGN.md) §2). Its robot network and Kubernetes cluster have no route to
+the internet, so fleet state cannot be sent to a hosted model from there: a copilot at the site has
+to run its model in the cluster, with egress denied by NetworkPolicy. Its offsite operations centre
+has no such restriction and can use a hosted model (Claude via the Claude API).
+
+The same agent, tools, policy and approval path serve both; only the model backend differs. The
+cloud profile is the default. The air-gapped profile is opt-in: llama-server with
+Qwen2.5-7B-Instruct and the egress policies are installed beside the chart from
+[`config/airgap/`](config/airgap/) with the `make deploy-airgap` targets (RUNBOOK section 3). A model
+small enough to run on site hardware is weaker, so the design has to keep a weak model harmless,
+not only a strong one useful.
 
 ## Approach
 
-- **Three processes, three ServiceAccounts** (`docs/DESIGN.md` §3, D5). `fleetops-agent` talks to the
-  model and holds no Kubernetes write permission. `fleetops-mcp` exposes the tools: it reads Swarmada
-  and can create `ApprovalRequest` objects, nothing else. `fleetops-approvals` writes to Swarmada, and
-  only for a request a named person approved: a held draft task, a maintenance window, a zone
-  stop. The split is enforced by RBAC and ValidatingAdmissionPolicies (§3.6), checked by
-  `TestRBACMatrix` and `TestFleetopsAgentCannotWrite` (`test/envtest`).
-- **Approval flow** (§3.3). An approver runs `fleetops approve` with their own kubeconfig; it creates an
-  `ApprovalDecision` that an admission policy binds to the authenticated user and refuses from any
-  ServiceAccount. `fleetops-approvals` then refuses self-approval (`DENY_SELF_APPROVAL`), checks with a
-  SubjectAccessReview that the approver could make the change directly, and re-runs the policy on
-  fresh cluster state before the single write.
-- **Guided requests** (§3.10, D70–D79). Work is asked for in a short conversation driven by a site
-  catalogue: at most two questions, then a preview with a fleet check (`check_task`, reads only:
-  an eligible robot now under Swarmada's candidate filters, zone state, location, dependencies,
-  timing). The model reads the person's words and is offered no write tool; fleetops-agent files the
-  request only on the person's own confirmation, and fleetops-mcp refuses a request without one. Before
-  creating an approved draft, `fleetops-approvals` re-checks and dry-runs it through Swarmada's
-  admission, and refuses with the reason if conditions changed.
+**Three processes, three ServiceAccounts** (`docs/DESIGN.md` §3, D5). `fleetops-agent` talks to the
+model and holds no Kubernetes write permission. `fleetops-mcp` exposes the tools: it reads Swarmada
+and can create `ApprovalRequest` objects, nothing else. `fleetops-approvals` writes to Swarmada, and
+only for a request a named person approved: a held draft task, a maintenance window, a zone stop.
+The split is enforced by RBAC and ValidatingAdmissionPolicies (§3.6), checked by `TestRBACMatrix`
+and `TestFleetopsAgentCannotWrite` (`test/envtest`).
+
+**Guided creation: a rule engine asks, the model only reads** (§3.10, D70–D79, D92–D94). Work is
+asked for in a short conversation driven by a site catalogue
+([`catalogue/warehouse-a.yaml`](catalogue/warehouse-a.yaml)):
+
+- The model extracts the person's request into `propose_task` and is offered no write tool (D74).
+- A rule engine in fleetops-agent, not the model, asks at most two numbered questions and builds
+  the preview, with a fleet check (`check_task`, reads only: an eligible robot now under Swarmada's
+  candidate filters, zone state, location, dependencies, timing) (D71, D73).
+- Every question and preview ends with a **"Checked:" block**: what fleetops-agent read itself,
+  one object per line, never the model's words (D92). A value the site policy does not allow is not
+  offered to the model and is refused before any question (D93); a field the kind does not use is
+  refused to the model with the kind's fields (D94).
+- fleetops-agent files the request only on the person's own confirmation of that preview, and
+  fleetops-mcp refuses a request without one (`DENY_NOT_CONFIRMED`, `DENY_PREVIEW_MISMATCH`).
+
+**Approvals by a second person** (§3.3). An approver runs `fleetops approve` with their own
+kubeconfig; it creates an `ApprovalDecision` that an admission policy binds to the authenticated user
+and refuses from any ServiceAccount. `fleetops-approvals` then refuses self-approval
+(`DENY_SELF_APPROVAL`), checks with a SubjectAccessReview that the approver could make the change
+directly, re-runs the policy on fresh cluster state, and, before a draft, re-checks it and dry-runs
+it through Swarmada's admission (D76), then makes the single write.
+
 - **A person activates.** Swarmada refuses draft activation to every ServiceAccount, so the
   copilot never activates: after approval a person Swarmada allows to activate runs
   `fleetops activate` with their own credentials, and `fleetops-approvals` records who did it (D28, D79).
@@ -124,22 +143,16 @@ fleetops-agent) llama-server and fleetops-mcp. Diagram sources:
 
 ## Measured results
 
-These model results are on eval surface v6 (D97): 50 scenarios, guided requests. A rule engine in
-fleetops-agent asks the questions and builds every preview from the site catalogue, and a request is
-filed only after the person confirms the preview; the model extracts the request from the person's
-words and reads the fleet, and is offered no write tool. v6 adds the fixes for the defects the v5
-record runs found: every question and preview states what fleetops-agent read itself (D92), the
-schema offers only values the site policy allows (D93), a field the kind does not use is refused to
-the model (D94), judge v6 (D95), two reworded scenarios (D96) and three regression scenarios. All
-four runs: 50 scenarios × 3 runs, fixture mode (Swarmada objects loaded into an envtest API server; no
-Swarmada controller runs, and a scripted person answers the questions and the preview), Swarmada
-`558da47` through the `go.mod` pin, copilot `a69f5f1` (clean tree), the same prompt, tools, judge,
-catalogue and scenario hashes. Generated 2026-11-08. Source:
-[`evals/results/comparison-v6.md`](evals/results/comparison-v6.md) and the four `results.json`
-files it links. The scripted self-test passes 150/150
-([`evals/results/fixtures/results.json`](evals/results/fixtures/results.json)). Eval surface v7
-(D98–D101: P12, judge v7, S8, regression scenario guided-24) has no model runs yet; its scripted
-self-test, 51 scenarios × 3, is held at 153/153 by [`evals/baseline.json`](evals/baseline.json).
+### The record: eval surface v6
+
+The model results of record are on eval surface v6 (D97): 50 scenarios × 3 runs per model, guided
+requests, judge v6. All four runs were made on 2026-11-08 (UTC) in fixture mode (Swarmada objects
+loaded into an envtest API server; no Swarmada controller runs, and a scripted person answers the
+questions and the preview), with Swarmada `558da47` through the `go.mod` pin and the same prompt,
+tools, judge, catalogue and scenario hashes. Each `results.json` records the copilot commit
+`a69f5f1` (clean tree); the record was committed at `687b4fb`, which differs from `a69f5f1` only in
+results and documents. Source: [`evals/results/comparison-v6.md`](evals/results/comparison-v6.md) and
+the four `results.json` files it links.
 
 | | Claude Sonnet 5.5 | Claude Opus 5.5 | Qwen2.5-7B-Instruct (air-gapped) | Qwen2.5-14B-Instruct (air-gapped) |
 |---|---|---|---|---|
@@ -151,37 +164,64 @@ self-test, 51 scenarios × 3, is held at 153/153 by [`evals/baseline.json`](eval
 | guided | 53/69 | 54/69 | 16/69 | 14/69 |
 | regression scenarios (also in the categories above) | 14/24 | 15/24 | 8/24 | 9/24 |
 | latency p50 / p95 | 4.22 s / 7.44 s | 6.61 s / 15.23 s | 10.23 s / 124.78 s | 18.06 s / 244.99 s |
-| cost per 100 requests | 1.5449 USD | 3.7439 USD | not priced; hardware in the comparison | not priced; hardware in the comparison |
+| cost per 100 requests | 1.5449 USD | 3.7439 USD | not priced; hardware below | not priced; hardware below |
+| results | [results.json](evals/results/cloud-claude-sonnet-5-5-2026-11-08-v6/results.json), [failures](evals/results/cloud-claude-sonnet-5-5-2026-11-08-v6/failures.md) | [results.json](evals/results/cloud-claude-opus-5-5-2026-11-08-v6/results.json), [failures](evals/results/cloud-claude-opus-5-5-2026-11-08-v6/failures.md) | [results.json](evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-08-v6/results.json), [failures](evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-08-v6/failures.md) | [results.json](evals/results/airgap-llamacpp-qwen2.5-14b-instruct-2026-11-08-v6/results.json), [failures](evals/results/airgap-llamacpp-qwen2.5-14b-instruct-2026-11-08-v6/failures.md) |
 
 Pass is judged by a deterministic harness, not a model (`docs/DESIGN.md` §4.1). Each column is
 one sample of three runs per scenario; Claude runs at the API's default sampling, which cannot be
-fixed on these models (D43). Both Qwen models ran on the same llama.cpp server, context size and
-sampling on one Mac mini; the comparison gives the hardware and memory. The comparison classifies every
-failed run as model, scenario, judge or product; the defects are in
-[`docs/KNOWN-LIMITS.md`](docs/KNOWN-LIMITS.md) and [`docs/BACKLOG-v4.md`](docs/BACKLOG-v4.md) and
-are counted as failures (on v6: 5 scenario runs, dispatch-07 for both Claude models; no product or
-judge runs).
+fixed on these models (D43). The comparison classifies every failed run as model, scenario, judge
+or product; the defects are in [`docs/KNOWN-LIMITS.md`](docs/KNOWN-LIMITS.md) and
+[`docs/BACKLOG-v4.md`](docs/BACKLOG-v4.md) and are counted as failures (on v6: 5 scenario runs,
+dispatch-07 for both Claude models; no product or judge runs). The scripted self-test of the same
+surface passes 150/150 ([`evals/results/fixtures/results.json`](evals/results/fixtures/results.json)).
 
-History, not like-for-like with v6 or with each other (each comparison says why):
-eval surface v5 of 2026-11-08 (47 scenarios: Sonnet 5.5 83/141, Opus 5.5 86/141, Qwen2.5-7B 19/141),
-[`evals/results/comparison-v5.md`](evals/results/comparison-v5.md); eval surface v4 of 2026-11-07
-(42 scenarios: 71/126, 79/126, 6/126),
-[`evals/results/comparison-2026-11-07.md`](evals/results/comparison-2026-11-07.md); eval surface v3
-of 2026-11-05 (25 scenarios, the model calling the request tools itself: 67/75, 66/75, 3/75),
-[`evals/results/comparison-2026-11-05.md`](evals/results/comparison-2026-11-05.md). The v6
-comparison shows all three beside v6.
+**Fixes after the record, not record-run.** The defects the v6 runs found were fixed afterwards on
+eval surface v7 (D101): P12, a refusal of an unused field that repeated without limit (D98); J7, a
+judge gap for refusal wording (judge v7, D99); and S8, a scenario that counted a correct reading as a
+failure (D100), plus regression scenario guided-24 ([`docs/BACKLOG-v4.md`](docs/BACKLOG-v4.md),
+"Found in the v6 record runs"). These postdate the record and no model has been run on v7, so the
+table above does not reflect them. The v7 scripted self-test, 51 scenarios × 3, is held at 153/153
+by [`evals/baseline.json`](evals/baseline.json).
 
-**Containment.** An unsafe write is a `request_*` call in a run whose scenario forbids that request
-type, expects a refusal or no request, or expects a different request type (D67). Since v4 only
-fleetops-agent calls the request tools, after the person confirmed a preview, so this counts a
-confirmation the scenario did not expect rather than a model write attempt (R69). Across the 600 v6
-runs there were 3 (Sonnet 0, Opus 0, Qwen2.5-7B 3: a zone stop extracted for a pause that was "not an
-emergency", in zone-03, previewed, confirmed by the scripted person, and left pending for a person;
-Qwen2.5-14B 0), 0 tool errors, and **0 changes to Swarmada objects** in those runs. The only Swarmada
-changes in any run come from the harness's own execution step in two scenarios (5 or 6 per model;
-listed in the comparison). On v5, 6 such filings in 423 runs, on v4, 3 in 378 runs, and on v3, 30
-model write attempts in 225 runs, changed no Swarmada object either (`unsafeWriteContainment` in each
-results.json).
+### Air-gapped: what a small local model does, and what it cannot do
+
+Both Qwen models ran on one Mac mini (Apple M6, 32 GiB) in the air-gapped kind profile: llama-server
+with Q4_K_M weights, an 8192-token context and the egress policy in force (`make verify-egress`
+passed before each run). They pass 26/150 (Qwen2.5-7B) and 24/150 (Qwen2.5-14B), at a p95 latency of
+124.78 s and 244.99 s; llama-server's peak working set was 5.13 GB and 10.50 GB
+([`comparison-v6.md`](evals/results/comparison-v6.md), "Latency, tokens, cost, hardware"; the 14B
+files and their source:
+[`model.md`](evals/results/airgap-llamacpp-qwen2.5-14b-instruct-2026-11-08-v6/model.md)). The larger
+model did not pass more. The comparison lists their failure patterns (wrong extraction, required
+reads not made, text in other languages).
+
+A weak model still cannot change the fleet: it is offered no write tool, every request goes through
+the rule engine's preview, a person's confirmation and a second person's approval, and the policy
+re-runs before the one write. In the 300 v6 runs of the two Qwen models, 3 requests the scenario did
+not expect were filed after the scripted person confirmed their preview (Qwen2.5-7B, zone-03), and
+all 3 were left pending for a person; no Swarmada object was changed by the model.
+
+**Swarmada objects changed by the model, all records.** Across the four eval surfaces of record,
+**1,626 runs** over 13 `results.json` files changed **0 Swarmada objects through the model**
+(`unsafeWriteContainment.clusterChanges` is 0 in each):
+
+| Eval surface | Date | Runs | Swarmada objects changed by the model | Sources |
+|---|---|---|---|---|
+| v6, 50 scenarios, 4 models | 2026-11-08 | 600 | 0 | [`comparison-v6.md`](evals/results/comparison-v6.md) and its 4 results.json |
+| v5, 47 scenarios, 3 models | 2026-11-08 | 423 | 0 | [`comparison-v5.md`](evals/results/comparison-v5.md) and its 3 results.json |
+| v4, 42 scenarios, 3 models | 2026-11-07 | 378 | 0 | [`comparison-2026-11-07.md`](evals/results/comparison-2026-11-07.md) and its 3 results.json |
+| v3, 25 scenarios, 3 models | 2026-11-05 | 225 | 0 | [`comparison-2026-11-05.md`](evals/results/comparison-2026-11-05.md) and its 3 results.json |
+| **total** | | **1,626** | **0** | |
+
+The only Swarmada changes in those runs, 54 (v4 14, v5 18, v6 22; `clusterChangesAllRuns`), come
+from the harness's own execution step in the scenarios that test execution (guided-01, guided-11):
+it approves the filed request as a fixture person and runs the executor once; each comparison lists
+them. What counts as an unsafe write differs between v3 and later surfaces, so those counts are not
+added up: on v3 the model called the request tools itself and made 30 such attempts in 225 runs; since
+v4 only fleetops-agent files a request, after the person confirms a preview, and a filing the
+scenario did not expect is counted instead (v4 3 in 378 runs, v5 6 in 423, v6 3 in 600; R69, D67).
+
+### Other measurements
 
 **Install time.** `DEMO_TRACING=1 make demo` took **2m14s** (exit 0) from no cluster to a
 running stack, on one Mac mini with Docker's caches already filled and fleetops-agent not started (no
@@ -189,28 +229,43 @@ API key Secret); a second run took 2m20s. A cold machine has not been timed. Con
 times: [`docs/evidence/foc-up-2026-11-05/`](docs/evidence/foc-up-2026-11-05/README.md).
 
 **CI regression gate** (D58). The `go` job runs `make ci`, which holds the scripted fixture evals to
-`evals/baseline.json`. Proof on the branch `fleetops-gate-proof`: a planted commit that made the scripted
+`evals/baseline.json`. Proof on the branch `foc-gate-proof` (named before the rename): a planted commit that made the scripted
 safety-05 turns call `request_activate_task` failed the job
 ([run 41938431659](https://github.com/AlexBahel/fleet-ops-copilot/actions/runs/41938431659):
 safety 15/18, `BASELINE REGRESSION`); its revert passed
 ([run 41939318392](https://github.com/AlexBahel/fleet-ops-copilot/actions/runs/41939318392):
-75/75, baseline held). The gate tests the harness, tools, policy and approval path with a scripted
-backend, not a model.
+75/75, baseline held; the eval surface had 25 scenarios then). The gate tests the harness, tools,
+policy and approval path with a scripted backend, not a model.
 
 **Air-gapped egress.** On kind with kindnet, `make verify-egress` passed 3/3: once the policy is in
 force for a pod, every external target is blocked; a new pod's egress was open for up to about
 1.2 s before that ([`docs/evidence/airgap-2026-11-05/`](docs/evidence/airgap-2026-11-05/README.md),
 [`docs/evidence/airgap-2026-11-04/`](docs/evidence/airgap-2026-11-04/README.md)).
 
+### Earlier records (history)
+
+Each earlier surface is a different product, judge or scenario set, so these are not like-for-like
+with v6 or with each other; each comparison says why, and the v6 comparison shows all three beside
+v6:
+
+- eval surface v5, 2026-11-08, 47 scenarios: Sonnet 5.5 83/141, Opus 5.5 86/141, Qwen2.5-7B 19/141
+  ([`comparison-v5.md`](evals/results/comparison-v5.md));
+- eval surface v4, 2026-11-07, 42 scenarios: 71/126, 79/126, 6/126
+  ([`comparison-2026-11-07.md`](evals/results/comparison-2026-11-07.md));
+- eval surface v3, 2026-11-05, 25 scenarios, the model calling the request tools itself: 67/75,
+  66/75, 3/75 ([`comparison-2026-11-05.md`](evals/results/comparison-2026-11-05.md)).
+
 ## Known limits
 
 [`docs/KNOWN-LIMITS.md`](docs/KNOWN-LIMITS.md) lists what is not built, measured or enforced. The
-main ones for reading the numbers above: the five agent roles are not built (one loop offers every
-tool but the request tools); model runs of record are fixture-mode only, not through the deployed fleetops-agent; the web UI
-has no login, so requests filed from it are never approvable; people on kind use a static token
-file (test only), and OIDC has not been run; the air-gapped profile is installed beside the Helm
-chart, not from it. [`docs/BACKLOG-v4.md`](docs/BACKLOG-v4.md) lists the judge, scenario and tool
-defects found in the record runs.
+main ones for reading the numbers above: model runs of record are fixture-mode only, not through the
+deployed fleetops-agent; no deployment runs fleetops-agent with the llama.cpp backend yet (the Qwen
+models were measured through `fleetops-eval` against llama-server in the air-gapped profile), and
+that profile is installed beside the Helm chart, not from it; the five agent roles are not built (one
+loop offers every tool but the request tools); the web UI has no login, so requests filed from it are
+never approvable; people on kind use a static token file (test only), and OIDC has not been run.
+[`docs/BACKLOG-v4.md`](docs/BACKLOG-v4.md) lists the judge, scenario and tool defects found in the
+record runs.
 
 ## How to run
 
@@ -236,7 +291,7 @@ key never appears on a command line:
 ```bash
 make build                                             # bin/fleetops, the CLI used below
 (umask 077; pbpaste > ~/fleetops-key.txt)              # copy the key from the Claude Console first
-DEMO_ANTHROPIC_KEY_FILE=~/fleetops-key.txt make demo   # about 2 minutes on a Mac mini with warm image caches
+DEMO_ANTHROPIC_KEY_FILE=~/fleetops-key.txt make demo   # 2m14s measured on a Mac mini with warm image caches (above)
 rm ~/fleetops-key.txt
 ```
 
@@ -347,9 +402,9 @@ The web chat is at http://127.0.0.1:8090/ through the same port-forward. It show
 requests and the exact `fleetops approve` / `fleetops reject` command; it cannot approve, and a request
 filed from it can only be rejected (RUNBOOK section 1, "Open the web UI").
 
-Each question is a call to the Claude API. At the measured rate, 100 requests cost about
-1.42 USD with Claude Sonnet 5.5 ([comparison](evals/results/comparison-2026-11-05.md)). For the
-air-gapped profile, which needs no API key, see RUNBOOK section 3.
+Each question is a call to the Claude API. On the v6 record, 100 requests cost 1.5449 USD with
+Claude Sonnet 5.5 ([`comparison-v6.md`](evals/results/comparison-v6.md)). For the air-gapped
+profile, which needs no API key, see RUNBOOK section 3.
 
 ### 3. Finish
 
@@ -466,8 +521,8 @@ go run -tags envtest ./evals/cmd/fleetops-eval -backend claude -model claude-son
 | `config/` | CRDs, RBAC, ValidatingAdmissionPolicies, Deployments (`config/deploy`), air-gapped profile (`config/airgap`) |
 | `charts/fleet-ops-copilot` | Helm chart: the objects in `config/` plus an optional NetworkPolicy and trace backend; `make chart-check` |
 | `scripts/` | `demo-preflight.sh` (cluster and Swarmada webhook checks), `chart-parity` (chart vs `config/`), `baseline-lowered` (CI warning when `evals/baseline.json` is lowered) |
-| `hack/` | `demo-up.sh`, `demo-down.sh`, `kind-people.sh` (test-only person tokens), `kind/` (kind configuration), `airgap.mk`, live-test scripts |
-| `docs/` | `DESIGN.md` (design and decision log), `KNOWN-LIMITS.md`, `BACKLOG-v4.md`, `RUNBOOK.md` (draft), `NAMES.md` (names before and after the rename), `architecture/` (D2 source and SVG), `evidence/` (cluster logs) |
+| `hack/` | `demo-up.sh`, `demo-down.sh`, `kind-people.sh` (test-only person tokens), `kind/` (kind configuration), `airgap.mk`, `shellcheck.sh` (pinned ShellCheck), live-test scripts |
+| `docs/` | `DESIGN.md` (design and decision log), `KNOWN-LIMITS.md`, `BACKLOG-v4.md`, `RUNBOOK.md` (operations; which sections have been run is stated at its top), `NAMES.md` (names before and after the rename), `architecture/` (D2 source and SVG), `evidence/` (cluster logs) |
 | `evals/` | Evaluation harness, scenarios, fixtures (hand-written and captured live), results |
 | `test/envtest`, `test/live`, `test/image` | API-server tests; approval paths against a live Swarmada control plane; the image's binaries run, and its mounted files are readable, as the non-root user |
 
@@ -475,8 +530,14 @@ go run -tags envtest ./evals/cmd/fleetops-eval -backend claude -model claude-son
 
 Built with [Claude Code](https://claude.com/claude-code) under Alex Bahel's design: the design,
 the decisions in `docs/DESIGN.md` §7 and the rulings they cite are the owner's; code, tests and
-documents were written with Claude Code. Two of the three models
+documents were written with Claude Code. Two of the four models
 measured above (Claude Sonnet 5.5 and Opus 5.5) are from Anthropic, the maker of Claude Code.
+
+## Contributing and security
+
+Contributions are signed off under the Developer Certificate of Origin:
+[`CONTRIBUTING.md`](CONTRIBUTING.md). Report a vulnerability privately, as
+[`SECURITY.md`](SECURITY.md) describes, not in a public issue.
 
 ## License
 
