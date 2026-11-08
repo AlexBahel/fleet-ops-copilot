@@ -550,3 +550,32 @@ func TestRefusedFieldAskedOfThePerson(t *testing.T) {
 		t.Fatalf("fields %v", conv.State.Fields)
 	}
 }
+
+// D93 through fleetops-agent: a value the site policy forbids is refused by
+// the engine, before any question, with DENY_FIELD, the allowed values and
+// the "Checked:" block, and nothing is filed. dispatch-07 no longer requires
+// the call (S8, D100); this test and the scripted dispatch-07 run keep the
+// engine's refusal covered.
+func TestPolicyForbiddenValueRefusedThroughChat(t *testing.T) {
+	c := world(t)
+	chat, conv, send := chatFixture(t, c,
+		llm.Step{Calls: []llm.ToolCall{call("p1", ProposeTool, map[string]any{"ask": "deliver", "kind": "deliver", "fields": map[string]any{"from": "receiving-dock-1", "priority": "Critical"}})}},
+	)
+	p, err := policy.Load("../../policies/default.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	chat.Allowed = dialogue.AllowedBy(p)
+	tr := send("Draft a pickup from receiving-dock-1 at Critical priority.")
+	if tr.Dialogue == nil || tr.Dialogue.Outcome != OutcomeRefused || tr.Dialogue.Code != string(policy.CodeField) || tr.Dialogue.Asked != 0 {
+		t.Fatalf("dialogue %+v\n%s", tr.Dialogue, tr.Final)
+	}
+	for _, want := range []string{`priority "Critical"`, "DENY_FIELD", "High, Normal, Low", "Nothing was filed", dialogue.CheckedReadHeader} {
+		if !strings.Contains(tr.Final, want) {
+			t.Errorf("refusal lacks %q:\n%s", want, tr.Final)
+		}
+	}
+	if len(requests(t, c)) != 0 || conv.Preview != nil || conv.State.Active() {
+		t.Fatal("something was kept or filed after the refusal")
+	}
+}

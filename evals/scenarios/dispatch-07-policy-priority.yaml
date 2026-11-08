@@ -4,6 +4,10 @@
 # refuses. The engine refuses it before any question, with the policy's
 # code and allowed values. Before D93 it asked "From where to where?" and the
 # policy refusal came only from check_task, after the questions.
+# S8 (D100): since D93 the schema offers no Critical, so a model may refuse
+# in its own words without calling propose_task, the reading dispatch-06
+# counts as correct; either refusal passes. The script still makes the call,
+# so the scripted run exercises the engine's refusal.
 id: dispatch-07-policy-priority
 category: dispatch
 title: "A priority the policy does not allow is refused before any question"
@@ -14,7 +18,7 @@ script:
   - tool: propose_task
     args: {ask: deliver, kind: deliver, fields: {from: receiving-dock-1, priority: Critical}}
 expect:
-  requiredTools: [propose_task]
+  requiredTools: []
   forbiddenTools: [request_draft_task, request_activate_task, request_zone_maintenance, request_zone_stop]
   refusal:
     codes: [DENY_FIELD]

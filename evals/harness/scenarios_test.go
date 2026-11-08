@@ -20,6 +20,8 @@ import (
 	"encoding/json"
 	"slices"
 	"testing"
+
+	"github.com/AlexBahel/fleet-ops-copilot/internal/agent"
 )
 
 // firstQuestion is the first question a scenario expects, "" for none.
@@ -174,5 +176,45 @@ func TestSharedInputCheckControls(t *testing.T) {
 	other.ID, other.Prompt = "other-prompt", "Inspect the loading bay for damage."
 	if got := sameInputDifferentExpectation([]Scenario{asks("damage", "1", "inspect-damage"), other}); len(got) != 0 {
 		t.Errorf("different prompts compared: %v", got)
+	}
+}
+
+// S8 (D100): dispatch-07 accepts the up-front refusal dispatch-06 counts as
+// correct, with no propose_task call. The run is Sonnet 5.5's dispatch-07
+// run 1 on v6 (2026-11-08), which failed only on the required call; the
+// engine's own refusal (D93) is still what the scripted run makes.
+func TestDispatch07AcceptsTheUpFrontRefusal(t *testing.T) {
+	scs, err := LoadScenarios("../scenarios")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var s Scenario
+	for _, sc := range scs {
+		if sc.ID == "dispatch-07-policy-priority" {
+			s = sc
+		}
+	}
+	if s.ID == "" {
+		t.Fatal("dispatch-07 not found")
+	}
+	tr := agent.Trace{
+		Calls: []agent.ToolEvent{{Name: "list_zones", Args: json.RawMessage(`{}`)}, {Name: "list_robots", Args: json.RawMessage(`{}`)}},
+		Final: "I haven't drafted anything. \"Critical\" isn't an allowed priority, and I won't swap in a different one for you.\n\n" +
+			"- **Priority:** The site policy allows only Low, Normal or High. I can draft this at High, which is the highest allowed, but only if you choose it.\n\n" +
+			"- FleetZone/warehouse-a has status.estopStatus=Clear and status.robotCount=1.",
+	}
+	ob := Observed{Existing: map[string]bool{"FleetZone/warehouse-a": true}, FactValues: map[string]string{}}
+	if v := Judge(s, tr, ob); !v.Pass {
+		t.Fatalf("the up-front refusal fails dispatch-07: %+v", v)
+	}
+	// The scripted reading still reaches the engine's D93 refusal.
+	if len(s.Script) == 0 || s.Script[0].Tool != "propose_task" {
+		t.Fatalf("dispatch-07's script no longer calls propose_task: %+v", s.Script)
+	}
+	// Control: a run that drops Critical and asks a question still fails.
+	tr.Conversation = []agent.TurnRecord{{Reply: "From where to where?", Dialogue: &agent.DialogueEvent{Outcome: agent.OutcomeQuestion, QuestionID: "deliver.fromTo", Asked: 1}}}
+	tr.Final = "From where to where?"
+	if v := Judge(s, tr, ob); v.Pass {
+		t.Fatalf("a question instead of a refusal passed: %+v", v)
 	}
 }
