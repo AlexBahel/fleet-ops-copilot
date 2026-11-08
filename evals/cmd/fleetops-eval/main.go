@@ -55,6 +55,7 @@ import (
 	"github.com/AlexBahel/fleet-ops-copilot/evals/harness"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/agent"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/catalogue"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/dialogue"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/llm"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/mcpserver"
@@ -431,7 +432,7 @@ func run(c runConfig) error {
 	res.BackendSettings = c.settings
 	// The tool list as the harness's fleetops-mcp serves it (R46): with
 	// -live-context the deployed fleetops-mcp serves its own, from its flags.
-	digest, err := mcpserver.ToolsDigest(ctx, mcpserver.New(&tools.Service{Engine: policy.New(pol), DefaultNamespace: testenv.SwarmNS}), agent.ProposeMCPTool(cat))
+	digest, err := mcpserver.ToolsDigest(ctx, mcpserver.New(&tools.Service{Engine: policy.New(pol), DefaultNamespace: testenv.SwarmNS}), agent.ProposeMCPTool(cat, dialogue.AllowedBy(pol)))
 	if err != nil {
 		return err
 	}

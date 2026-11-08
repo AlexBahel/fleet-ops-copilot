@@ -25,6 +25,10 @@ spec:
     metadata:
       labels:
         {{- include "fleetops.workloadLabels" (dict "name" "fleetops-agent" "root" .) | nindent 8 }}
+      annotations:
+        # Restart on a policy change (helm upgrade): propose_task offers only
+        # the values the policy allows (docs/DESIGN.md D93).
+        checksum/policy: {{ include "fleetops.policy" . | sha256sum }}
     spec:
       serviceAccountName: fleetops-agent
       securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
@@ -40,6 +44,7 @@ spec:
             - -namespaces={{ join "," .Values.swarmadaNamespaces }}
             - -max-concurrent={{ .Values.agent.maxConcurrent }}
             - -catalogue=/etc/fleetops/catalogue/site.yaml
+            - -policy=/etc/fleetops/policy/default.yaml
             - -audit={{ .Values.audit.dir }}/fleetops-agent.jsonl
             {{- with include "fleetops.otlpEndpoint" . }}
             - -otlp-endpoint={{ . }}
@@ -56,10 +61,13 @@ spec:
           securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
           volumeMounts:
             - {name: catalogue, mountPath: /etc/fleetops/catalogue, readOnly: true}
+            - {name: policy, mountPath: /etc/fleetops/policy, readOnly: true}
             - {name: audit, mountPath: {{ .Values.audit.dir }}}
       volumes:
         - name: catalogue
           configMap: {name: fleetops-catalogue}
+        - name: policy
+          configMap: {name: fleetops-policy}
         - name: audit
           emptyDir: {}
 ---

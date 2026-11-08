@@ -32,6 +32,7 @@ import (
 	"github.com/AlexBahel/fleet-ops-copilot/internal/audit"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/catalogue"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/conversation"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/dialogue"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/llm"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/mcpserver"
 )
@@ -75,6 +76,8 @@ type AgentRunner struct {
 	Tracer      trace.Tracer
 	// Catalogue enables guided requests (D70); nil leaves plain answers.
 	Catalogue *catalogue.Catalogue
+	// Allowed is what the site policy allows for the closed fields (D93).
+	Allowed dialogue.Allowed
 	// Store holds conversations; nil makes one.
 	Store *conversation.Store
 	// Audit receives catalogue_review entries.
@@ -138,7 +141,7 @@ func (a *AgentRunner) Run(ctx context.Context, in ChatInput) (ChatOutput, error)
 		return out, ErrBusy
 	}
 	defer conv.Unlock()
-	chat := &agent.Chat{Catalogue: a.Catalogue, MaxTurns: a.MaxTurns, Tracer: a.Tracer, Audit: a.Audit, Redact: a.Redact}
+	chat := &agent.Chat{Catalogue: a.Catalogue, Allowed: a.Allowed, MaxTurns: a.MaxTurns, Tracer: a.Tracer, Audit: a.Audit, Redact: a.Redact}
 	if in.FollowUp != "" {
 		var req fleetopsv1.ApprovalRequest
 		if a.Requests == nil {

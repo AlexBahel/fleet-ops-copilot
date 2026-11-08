@@ -47,6 +47,7 @@ import (
 	"github.com/AlexBahel/fleet-ops-copilot/internal/authn"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/catalogue"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/conversation"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/dialogue"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/llm"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/mcpserver"
@@ -248,7 +249,7 @@ func (r *Runner) runOnce(ctx context.Context, s Scenario, n int) (RunResult, err
 // person's reply to each question and preview (§4.4), through the same
 // agent.Chat as fleetops-agent. The returned trace combines every message.
 func (r *Runner) converse(ctx context.Context, cs *mcp.ClientSession, be llm.Backend, s Scenario, session string) (agent.Trace, error) {
-	chat := &agent.Chat{Catalogue: r.Catalogue, Tracer: r.AgentTracer}
+	chat := &agent.Chat{Catalogue: r.Catalogue, Allowed: dialogue.AllowedBy(r.Policy), Tracer: r.AgentTracer}
 	conv := &conversation.Conversation{Owner: s.Operator, Backend: be}
 	all := agent.Trace{Prompt: s.Prompt, Started: time.Now()}
 	var replies []string

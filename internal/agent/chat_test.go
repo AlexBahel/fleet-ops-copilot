@@ -35,6 +35,7 @@ import (
 	fleetopsv1 "github.com/AlexBahel/fleet-ops-copilot/api/v1alpha1"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/catalogue"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/conversation"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/dialogue"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/llm"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/mcpserver"
@@ -307,7 +308,7 @@ func TestProposeSchemaEnumeratesTheCatalogue(t *testing.T) {
 			AdditionalProperties json.RawMessage            `json:"additionalProperties"`
 		} `json:"properties"`
 	}
-	if err := json.Unmarshal(ProposeSpec(cat).InputSchema, &s); err != nil {
+	if err := json.Unmarshal(ProposeSpec(cat, nil).InputSchema, &s); err != nil {
 		t.Fatal(err)
 	}
 	var asks, kinds []string
@@ -443,5 +444,39 @@ func TestInvalidStartAskedAgainThenFiled(t *testing.T) {
 	rs := requests(t, c)
 	if len(rs) != 1 || rs[0].Spec.ZoneMaintenance == nil || rs[0].Spec.ZoneMaintenance.Mode != "Immediate" || rs[0].Spec.ZoneMaintenance.ScheduledStart != nil {
 		t.Fatalf("requests %+v", rs)
+	}
+}
+
+// P11 (D93): the schema offers only the catalogue values the site policy
+// allows: no priority Critical under policies/default.yaml.
+func TestProposeSchemaOffersOnlyWhatThePolicyAllows(t *testing.T) {
+	cat, err := catalogue.Load("../../catalogue/warehouse-a.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := policy.Load("../../policies/default.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var s struct {
+		Properties map[string]struct {
+			Properties map[string]struct {
+				Enum        []string `json:"enum"`
+				Description string   `json:"description"`
+			} `json:"properties"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(ProposeSpec(cat, dialogue.AllowedBy(p)).InputSchema, &s); err != nil {
+		t.Fatal(err)
+	}
+	prio := s.Properties["fields"].Properties["priority"]
+	if strings.Join(prio.Enum, ",") != "Low,Normal,High" || strings.Contains(prio.Description, "Critical") {
+		t.Fatalf("priority %+v", prio)
+	}
+	if err := json.Unmarshal(ProposeSpec(cat, nil).InputSchema, &s); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(s.Properties["fields"].Properties["priority"].Enum, ","); got != "Low,Normal,High,Critical" {
+		t.Fatalf("no policy: %s", got)
 	}
 }

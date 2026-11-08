@@ -23,6 +23,7 @@ import (
 
 	"github.com/AlexBahel/fleet-ops-copilot/internal/catalogue"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/feasibility"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/policy"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/tools"
 )
 
@@ -513,5 +514,65 @@ func TestStartNowKeepsTheMode(t *testing.T) {
 	}
 	if zm := o.Proposal.Input.(tools.ZoneMaintenanceInput); zm.Mode != "Graceful" || !strings.Contains(strings.Join(o.Proposal.Lines, "\n"), "Mode: Graceful (default)") {
 		t.Fatalf("no mode given: input %+v\n%s", zm, strings.Join(o.Proposal.Lines, "\n"))
+	}
+}
+
+func defaultPolicy(t *testing.T) Allowed {
+	t.Helper()
+	p, err := policy.Load("../../policies/default.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return AllowedBy(p)
+}
+
+// P11 (D93): a value the catalogue knows but the site policy forbids is
+// refused before any question, with the policy's code and allowed values,
+// and nothing of the call is applied. On the v5 surface the engine asked
+// "From where to where?" and the refusal came only from check_task.
+func TestPolicyForbiddenValueRefusedBeforeAnyQuestion(t *testing.T) {
+	e := &Engine{Cat: cat(t), Allowed: defaultPolicy(t)}
+	st := newState("Draft an urgent pickup at receiving-dock-1 with Critical priority so it jumps the queue.")
+	o := e.Propose(st, Input{Ask: "deliver", Kind: "deliver", Fields: map[string]string{"from": "receiving-dock-1", "priority": "Critical"}}, snap)
+	if o.Refused == "" || o.Code != string(policy.CodeField) || o.Question != nil || o.Proposal != nil {
+		t.Fatalf("outcome %+v", o)
+	}
+	for _, want := range []string{`priority "Critical"`, "DENY_FIELD", "draftTask.allowedPriorities", "High, Normal, Low", "Nothing was filed"} {
+		if !strings.Contains(o.Refused, want) {
+			t.Errorf("refusal lacks %q: %s", want, o.Refused)
+		}
+	}
+	if len(st.Fields) != 0 || len(st.Asked) != 0 {
+		t.Fatalf("state changed: %+v", st)
+	}
+	// The refusal states what the engine read (D92).
+	if len(o.Checked) == 0 || !strings.Contains(o.RenderRefusal(), "Robot/sim-robot-002: status.phase=Idle") {
+		t.Fatalf("refusal text:\n%s", o.RenderRefusal())
+	}
+	// Control: an allowed value goes on to the question.
+	st = newState("Draft a pickup at receiving-dock-1 at High priority.")
+	o = e.Propose(st, Input{Ask: "deliver", Fields: map[string]string{"from": "receiving-dock-1", "priority": "High"}}, snap)
+	if o.Question == nil || o.Question.ID != "deliver.fromTo" {
+		t.Fatalf("allowed value: %+v", o)
+	}
+	// Control: with no policy given, every catalogue value is allowed.
+	o = (&Engine{Cat: cat(t)}).Propose(newState("x"), Input{Ask: "move", Fields: map[string]string{"location": "staging-shelf-a", "priority": "Critical"}}, snap)
+	if o.Proposal == nil {
+		t.Fatalf("no policy: %+v", o)
+	}
+}
+
+// D93: the forms the engine and the schema state are the catalogue's
+// values the policy allows.
+func TestFormsFollowThePolicy(t *testing.T) {
+	f := FormsFor(defaultPolicy(t))
+	if got := strings.Join(f["priority"].Enum, ","); got != "Low,Normal,High" || strings.Contains(f["priority"].Forms, "Critical") || f["priority"].Valid("Critical") {
+		t.Fatalf("priority form %+v", f["priority"])
+	}
+	if got := strings.Join(f["mode"].Enum, ","); got != "Graceful,Immediate" {
+		t.Fatalf("mode form %+v", f["mode"])
+	}
+	if got := strings.Join(FormsFor(nil)["priority"].Enum, ","); got != "Low,Normal,High,Critical" {
+		t.Fatalf("no policy: %s", got)
 	}
 }

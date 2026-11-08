@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/AlexBahel/fleet-ops-copilot/internal/catalogue"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/policy"
 )
 
 // FieldForm is what a request field holds: the description propose_task's
@@ -69,6 +70,105 @@ var Forms = map[string]FieldForm{
 	"dock": {Desc: "the charging dock's waypoint name"},
 	"name": {Desc: "the draft's name, only when the person gives one (lower-case letters, digits and '-')",
 		Forms: "lower-case letters, digits and '-'", valid: func(v string) bool { return dnsName.MatchString(v) }},
+}
+
+// PolicyValues are the values the site policy allows for a closed field,
+// and the policy rule that says so (D93).
+type PolicyValues struct {
+	Allowed []string
+	Rule    string
+}
+
+// Allowed maps a closed field to what the site policy allows for it; a
+// field it does not name takes every value of its form.
+type Allowed map[string]PolicyValues
+
+// AllowedBy is what policy p allows for the closed fields it rules: the
+// action priority of a drafted task and the maintenance mode.
+func AllowedBy(p *policy.File) Allowed {
+	if p == nil {
+		return nil
+	}
+	return Allowed{
+		"priority": {Allowed: p.DraftTask.AllowedPriorities, Rule: "draftTask.allowedPriorities"},
+		"mode":     {Allowed: p.ZoneMaintenance.AllowedModes, Rule: "zoneMaintenance.allowedModes"},
+	}
+}
+
+// forbids reports whether the policy forbids v for field f: v has the
+// field's form (a catalogue value) but is not among the allowed ones.
+func (a Allowed) forbids(f, v string) bool {
+	pv, ok := a[f]
+	return ok && v != "" && Forms[f].Valid(v) && !slices.Contains(pv.Allowed, v)
+}
+
+// FormsFor is Forms narrowed to what the policy allows: a closed field's
+// values are the catalogue's values the policy also allows, in the
+// catalogue's order, and its description and valid forms name only those
+// (D93). propose_task's schema is built from it.
+func FormsFor(a Allowed) map[string]FieldForm {
+	out := make(map[string]FieldForm, len(Forms))
+	for name, f := range Forms {
+		if pv, ok := a[name]; ok && len(f.Enum) > 0 {
+			var vals []string
+			for _, v := range f.Enum {
+				if slices.Contains(pv.Allowed, v) {
+					vals = append(vals, v)
+				}
+			}
+			f.Enum = vals
+			if name == "priority" {
+				f.Forms = orList(vals)
+				f.Desc = "the action priority: " + f.Forms + " (the site policy allows no other)"
+			} else {
+				f.Forms = orList(vals)
+			}
+		}
+		out[name] = f
+	}
+	return out
+}
+
+func orList(vs []string) string {
+	switch len(vs) {
+	case 0:
+		return "no value"
+	case 1:
+		return vs[0]
+	}
+	return strings.Join(vs[:len(vs)-1], ", ") + " or " + vs[len(vs)-1]
+}
+
+// forbidden refuses a value the site policy forbids, before anything of
+// the call is applied and before any question (D93): the refusal names the
+// value, the policy's code and rule, and the values it allows.
+func (e *Engine) forbidden(in Input) string {
+	check := func(fs map[string]string) string {
+		names := make([]string, 0, len(fs))
+		for k := range fs {
+			names = append(names, k)
+		}
+		slices.Sort(names)
+		for _, f := range names {
+			if v := fs[f]; e.Allowed.forbids(f, v) {
+				pv := e.Allowed[f]
+				return fmt.Sprintf("Not possible here: %s %q is not allowed by the site policy (%s; %s: %s). Nothing was filed; ask again with one of those values.",
+					f, v, policy.CodeField, pv.Rule, strings.Join(pv.Allowed, ", "))
+			}
+		}
+		return ""
+	}
+	if msg := check(in.Fields); msg != "" {
+		return msg
+	}
+	if in.SomethingElse != nil {
+		for _, s := range in.SomethingElse.Steps {
+			if msg := check(s.Fields); msg != "" {
+				return msg
+			}
+		}
+	}
+	return ""
 }
 
 // rightAway reports whether a start value means "as soon as possible":

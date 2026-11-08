@@ -114,7 +114,7 @@ spec:
           image: fleet-ops-copilot:dev
           imagePullPolicy: IfNotPresent
           command: [/usr/local/bin/fleetops-agent]
-          args: [-backend=claude, -listen=:8090, -mcp-url=http://fleetops-mcp:8080/mcp, -namespaces=warehouse-a, -max-concurrent=4, -catalogue=/etc/fleetops/catalogue/site.yaml, -audit=/var/lib/fleetops/audit/fleetops-agent.jsonl]
+          args: [-backend=claude, -listen=:8090, -mcp-url=http://fleetops-mcp:8080/mcp, -namespaces=warehouse-a, -max-concurrent=4, -catalogue=/etc/fleetops/catalogue/site.yaml, -policy=/etc/fleetops/policy/default.yaml, -audit=/var/lib/fleetops/audit/fleetops-agent.jsonl]
           env:
             - name: ANTHROPIC_API_KEY
               valueFrom:
@@ -127,10 +127,13 @@ spec:
           securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
           volumeMounts:
             - {name: catalogue, mountPath: /etc/fleetops/catalogue, readOnly: true}
+            - {name: policy, mountPath: /etc/fleetops/policy, readOnly: true}
             - {name: audit, mountPath: /var/lib/fleetops/audit}
       volumes:
         - name: catalogue
           configMap: {name: fleetops-catalogue}
+        - name: policy
+          configMap: {name: fleetops-policy}
         - name: audit
           emptyDir: {}
 ---

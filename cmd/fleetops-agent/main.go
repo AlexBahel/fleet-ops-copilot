@@ -49,8 +49,10 @@ import (
 	"github.com/AlexBahel/fleet-ops-copilot/internal/audit"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/catalogue"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/conversation"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/dialogue"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/fleet"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/llm"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/policy"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/redact"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/tracing"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/webui"
@@ -64,7 +66,7 @@ func main() {
 
 type config struct {
 	listen, mcpURL, backend, model, effort, llamaURL, script, namespaces, otlp string
-	catalogue, audit                                                           string
+	catalogue, policy, audit                                                   string
 	maxTurns, maxConcurrent                                                    int
 	chatTimeout                                                                time.Duration
 }
@@ -80,6 +82,7 @@ func parseFlags(args []string) (config, error) {
 	fs.StringVar(&c.llamaURL, "llama-url", "", "llamacpp: llama-server base URL (default $"+llm.EnvLlamaCppURL+")")
 	fs.StringVar(&c.script, "script", "", "scripted: JSON file {\"steps\":[{\"calls\":[{\"name\":..,\"args\":{..}}]},{\"final\":..}]}, replayed from the start for every conversation")
 	fs.StringVar(&c.catalogue, "catalogue", "", "site catalogue file (docs/DESIGN.md §3.10.1); empty disables guided requests, and nothing can then be filed from a chat")
+	fs.StringVar(&c.policy, "policy", "", "policy file (the one fleetops-mcp enforces): propose_task offers only the values it allows for priority and mode, and the engine refuses others before any question (docs/DESIGN.md D93); empty allows every catalogue value")
 	fs.StringVar(&c.audit, "audit", "", "JSONL audit file for catalogue_review entries (\"something else\" answers); empty records none")
 	fs.StringVar(&c.namespaces, "namespaces", "warehouse-a", "comma-separated namespaces whose ApprovalRequests the panel shows")
 	fs.IntVar(&c.maxTurns, "max-turns", 12, "model turns per request")
@@ -230,6 +233,14 @@ func run(args []string) error {
 			return err
 		}
 	}
+	var allowed dialogue.Allowed
+	if c.policy != "" {
+		pol, err := policy.Load(c.policy)
+		if err != nil {
+			return err
+		}
+		allowed = dialogue.AllowedBy(pol)
+	}
 	var aw *audit.Writer
 	if c.audit != "" {
 		if aw, err = audit.Open(c.audit, red); err != nil {
@@ -240,7 +251,7 @@ func run(args []string) error {
 		Runner: &webui.AgentRunner{
 			Transport: webui.MCPURL(c.mcpURL), NewBackend: newBackend, BackendName: backendName,
 			MaxTurns: c.maxTurns, Tracer: tracing.Tracer(tp),
-			Catalogue: cat, Store: conversation.New(), Audit: aw, Requests: k, Redact: red.String,
+			Catalogue: cat, Allowed: allowed, Store: conversation.New(), Audit: aw, Requests: k, Redact: red.String,
 		},
 		Requests: k, Namespaces: splitList(c.namespaces), MaxConcurrent: c.maxConcurrent,
 		ChatTimeout: c.chatTimeout, Redactor: red, Log: logger,

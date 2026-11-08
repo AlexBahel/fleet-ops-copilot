@@ -80,21 +80,26 @@ const ProposeTool = "propose_task"
 type Chat struct {
 	// Catalogue enables guided requests; nil leaves only plain answers.
 	Catalogue *catalogue.Catalogue
-	MaxTurns  int
-	Tracer    trace.Tracer
+	// Allowed is what the site policy allows for the closed fields: the
+	// schema offers only those values and the engine refuses others up
+	// front (D93). nil allows every catalogue value.
+	Allowed  dialogue.Allowed
+	MaxTurns int
+	Tracer   trace.Tracer
 	// Audit receives catalogue_review entries; nil records none.
 	Audit *audit.Writer
 	// Redact masks secrets in the conversation text kept between messages.
 	Redact func(string) string
 }
 
-// ProposeSpec is the propose_task tool as the model sees it.
-func ProposeSpec(cat *catalogue.Catalogue) llm.ToolSpec {
+// ProposeSpec is the propose_task tool as the model sees it, its closed
+// values narrowed to what the site policy allows (D93).
+func ProposeSpec(cat *catalogue.Catalogue, allowed dialogue.Allowed) llm.ToolSpec {
 	schema, err := jsonschema.For[dialogue.Input](nil)
 	if err != nil {
 		panic(err)
 	}
-	enumerate(schema, cat)
+	enumerate(schema, cat, dialogue.FormsFor(allowed))
 	b, _ := json.Marshal(schema)
 	var asks, kinds, steps, gaps []string
 	for _, a := range cat.Asks {
@@ -128,8 +133,9 @@ func ProposeSpec(cat *catalogue.Catalogue) llm.ToolSpec {
 // enumerate narrows propose_task's schema to the site catalogue (D85): the
 // asks, kinds, basic steps, gaps and lookFor words as enums, and fields as
 // an object with exactly catalogue.Fields, each described, closed values
-// as enums, the kinds that use it named.
-func enumerate(s *jsonschema.Schema, cat *catalogue.Catalogue) {
+// as enums (the values the site policy allows, D93), the kinds that use it
+// named.
+func enumerate(s *jsonschema.Schema, cat *catalogue.Catalogue, forms map[string]dialogue.FieldForm) {
 	var asks, kinds, gaps []string
 	for _, a := range cat.Asks {
 		asks = append(asks, a.Name)
@@ -150,7 +156,7 @@ func enumerate(s *jsonschema.Schema, cat *catalogue.Catalogue) {
 	fields := func(desc string) *jsonschema.Schema {
 		f := &jsonschema.Schema{Type: "object", Description: desc, Properties: map[string]*jsonschema.Schema{}, AdditionalProperties: &jsonschema.Schema{Not: &jsonschema.Schema{}}}
 		for _, name := range catalogue.Fields {
-			form := dialogue.Forms[name]
+			form := forms[name]
 			var used []string
 			for _, k := range cat.Kinds {
 				if slices.Contains(k.Fields(), name) {
@@ -183,8 +189,8 @@ func enumerate(s *jsonschema.Schema, cat *catalogue.Catalogue) {
 }
 
 // ProposeTool as an mcp.Tool, for the tools digest (mcpserver.ToolsDigest).
-func ProposeMCPTool(cat *catalogue.Catalogue) *mcp.Tool {
-	sp := ProposeSpec(cat)
+func ProposeMCPTool(cat *catalogue.Catalogue, allowed dialogue.Allowed) *mcp.Tool {
+	sp := ProposeSpec(cat, allowed)
 	var schema any
 	_ = json.Unmarshal(sp.InputSchema, &schema)
 	return &mcp.Tool{Name: sp.Name, Description: sp.Description, InputSchema: schema}
@@ -256,7 +262,7 @@ func followUpName(orig string) string {
 }
 
 func (c *Chat) engine(operator string) *dialogue.Engine {
-	e := &dialogue.Engine{Cat: c.Catalogue}
+	e := &dialogue.Engine{Cat: c.Catalogue, Allowed: c.Allowed}
 	if c.Audit != nil {
 		e.Review = func(r dialogue.ReviewEntry) {
 			_, _ = c.Audit.Append(audit.Entry{Kind: audit.KindCatalogueReview, Actor: operator, Message: r.Text,
@@ -313,7 +319,7 @@ func (c *Chat) turn(ctx context.Context, cs *mcp.ClientSession, conv *conversati
 	var ev *DialogueEvent
 	var extra []ToolEvent
 	if c.Catalogue != nil {
-		loop.Local = []LocalTool{{Spec: ProposeSpec(c.Catalogue), Call: func(ctx context.Context, args json.RawMessage) (string, string, error) {
+		loop.Local = []LocalTool{{Spec: ProposeSpec(c.Catalogue, c.Allowed), Call: func(ctx context.Context, args json.RawMessage) (string, string, error) {
 			var in dialogue.Input
 			if err := json.Unmarshal(args, &in); err != nil {
 				return "", "", fmt.Errorf("propose_task arguments: %w", err)
@@ -355,6 +361,11 @@ func (c *Chat) render(ctx context.Context, cs *mcp.ClientSession, conv *conversa
 	switch {
 	case out.Question != nil:
 		return out.Question.Render(), &DialogueEvent{Outcome: OutcomeQuestion, QuestionID: out.Question.ID, Kind: conv.State.Kind, Asked: asked}, nil
+	case out.Refused != "":
+		// A value the site policy forbids, refused before any question (D93).
+		ev := &DialogueEvent{Outcome: OutcomeRefused, Code: out.Code, Kind: conv.State.Kind, Asked: asked}
+		conv.Reset()
+		return out.RenderRefusal(), ev, nil
 	case out.NotPossible != "":
 		ev := &DialogueEvent{Outcome: OutcomeNotPossible, Asked: asked}
 		if se := conv.State.SomethingElse; se != nil {

@@ -9,9 +9,9 @@
       "pass": 21
     },
     "dispatch": {
-      "scenarios": 6,
-      "runs": 18,
-      "pass": 18
+      "scenarios": 7,
+      "runs": 21,
+      "pass": 21
     },
     "guided": {
       "scenarios": 22,
@@ -30,8 +30,8 @@
     }
   },
   "total": {
-    "scenarios": 48,
-    "runs": 144,
-    "pass": 144
+    "scenarios": 49,
+    "runs": 147,
+    "pass": 147
   }
 }

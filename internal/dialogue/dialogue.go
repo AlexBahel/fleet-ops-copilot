@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/AlexBahel/fleet-ops-copilot/internal/catalogue"
+	"github.com/AlexBahel/fleet-ops-copilot/internal/policy"
 	"github.com/AlexBahel/fleet-ops-copilot/internal/tools"
 )
 
@@ -218,6 +219,23 @@ type Outcome struct {
 	// Invalid is for the model, not the person: the call named a field the
 	// catalogue does not know, and nothing of it was applied (D85).
 	Invalid string `json:"invalid,omitempty"`
+	// Refused is for the person: a value the site policy forbids, refused
+	// before any question, with the policy code in Code (D93); Checked is
+	// the fleet state the engine read (D92).
+	Refused string   `json:"refused,omitempty"`
+	Code    string   `json:"code,omitempty"`
+	Checked []string `json:"checked,omitempty"`
+}
+
+// CheckedReadHeader opens a refusal's "Checked:" block.
+const CheckedReadHeader = "Checked (fleet state read now):"
+
+// RenderRefusal is a refusal's text: the refusal, then what the engine read.
+func (o Outcome) RenderRefusal() string {
+	if c := renderChecked(CheckedReadHeader, o.Checked); c != "" {
+		return o.Refused + "\n" + c
+	}
+	return o.Refused
 }
 
 // ReviewEntry is a "something else" answer for the catalogue review log.
@@ -235,6 +253,9 @@ type ReviewEntry struct {
 // Engine walks one catalogue.
 type Engine struct {
 	Cat *catalogue.Catalogue
+	// Allowed is what the site policy allows for the closed fields (D93);
+	// nil allows every catalogue value.
+	Allowed Allowed
 	// Review receives every interpreted "something else" answer (D72).
 	Review func(ReviewEntry)
 }
@@ -247,6 +268,9 @@ func (e *Engine) Propose(st *State, in Input, snap Snapshot) Outcome {
 	}
 	if msg := e.unknownFields(st, in); msg != "" {
 		return Outcome{Invalid: msg}
+	}
+	if msg := e.forbidden(in); msg != "" {
+		return Outcome{Refused: msg, Code: string(policy.CodeField), Checked: snap.Checked(in.Ask)}
 	}
 	for k, v := range in.Fields {
 		if k == "start" && rightAway(v) {
@@ -494,7 +518,7 @@ func (e *Engine) next(st *State, snap Snapshot) Outcome {
 		if len(st.Asked) >= catalogue.MaxQuestions {
 			break
 		}
-		rq := Question{ID: q.ID, Text: invalidNote(st, q.Fills) + q.Text, Checked: snap.Checked(st.Ask)}
+		rq := Question{ID: q.ID, Text: e.invalidNote(st, q.Fills) + q.Text, Checked: snap.Checked(st.Ask)}
 		for i, c := range choices {
 			c.N = i + 1
 			rq.Choices = append(rq.Choices, c)
@@ -541,11 +565,12 @@ func (e *Engine) answered(st *State, q catalogue.Question) bool {
 
 // invalidNote opens a question asked again for a refused value: the value
 // and the field's valid forms (D88).
-func invalidNote(st *State, fills []string) string {
+func (e *Engine) invalidNote(st *State, fills []string) string {
+	forms := FormsFor(e.Allowed)
 	var out []string
 	for _, f := range fills {
 		if v, ok := st.Invalid[f]; ok {
-			out = append(out, fmt.Sprintf("The %s %q cannot be used: give %s.", f, v, Forms[f].Forms))
+			out = append(out, fmt.Sprintf("The %s %q cannot be used: give %s.", f, v, forms[f].Forms))
 		}
 	}
 	if len(out) == 0 {
@@ -596,7 +621,7 @@ func (e *Engine) choices(st *State, q catalogue.Question, snap Snapshot) []Choic
 	var out []Choice
 	if q.Source == nil {
 		for _, c := range q.Choices {
-			if c.SomethingElse {
+			if c.SomethingElse || e.forbidsAny(c.Set) {
 				continue
 			}
 			out = append(out, Choice{Label: c.Label, Kind: c.Kind, Set: c.Set})
@@ -659,6 +684,17 @@ func (e *Engine) choices(st *State, q catalogue.Question, snap Snapshot) []Choic
 		}
 	}
 	return limit(out)
+}
+
+// forbidsAny reports whether the policy forbids a value a choice sets: the
+// choice is not offered (D93).
+func (e *Engine) forbidsAny(set map[string]string) bool {
+	for f, v := range set {
+		if e.Allowed.forbids(f, v) {
+			return true
+		}
+	}
+	return false
 }
 
 func limit(cs []Choice) []Choice {
@@ -735,7 +771,7 @@ func (e *Engine) proposal(st *State, wps map[string]Waypoint) Outcome {
 		line := fieldLine(f, v, def, k, wps)
 		if bad, ok := st.Invalid[f]; ok {
 			// Past the cap, or no question fills it: the default is used (D88).
-			line += fmt.Sprintf(" — %q could not be used: give %s (choose 3 to change it)", bad, Forms[f].Forms)
+			line += fmt.Sprintf(" — %q could not be used: give %s (choose 3 to change it)", bad, FormsFor(e.Allowed)[f].Forms)
 		}
 		p.Lines = append(p.Lines, line)
 	}
