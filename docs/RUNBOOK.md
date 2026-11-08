@@ -2,8 +2,11 @@
 
 **What has been run.** Each command below follows the chart and the code on main. `make demo`
 (section 0, with the trace backend of section 8) has run on one kind cluster (2026-11-05,
-[`docs/evidence/foc-up-2026-11-05/`](evidence/foc-up-2026-11-05/README.md)); the other sections
-have not been run as a sequence. Items that depend on parts not built yet (the air-gapped profile in
+[`docs/evidence/foc-up-2026-11-05/`](evidence/foc-up-2026-11-05/README.md)). On 2026-11-08 it ran
+again with the API key Secret, followed by one `fleetops chat` conversation as sam against Sonnet 5.5
+(sections 7 and 9) that filed a request, the Jaeger export of section 8, `make test-live` and `make demo-down`
+([`docs/evidence/live-2026-11-08/`](evidence/live-2026-11-08/README.md)). The other sections have not
+been run as a sequence. Items that depend on parts not built yet (the air-gapped profile in
 the chart) say so.
 
 Conventions: every `kubectl` and `helm` command names its context explicitly. The examples use a
@@ -230,7 +233,7 @@ anyway, revoke it.
 
 | Profile | Model | Status on main |
 |---|---|---|
-| `cloud` | Claude via the Claude API | Chart value `llm.profile: cloud` (default). The chart runs fleetops-agent with `-backend=claude` (`internal/llm/claude.go`); it starts once the API key Secret exists (section 2). fleetops-agent has not yet run against the model on a cluster (docs/KNOWN-LIMITS.md); Sonnet 5.5 and Opus 5.5 were measured through `fleetops-eval` on eval surfaces v3 to v6; the record is v6 (`evals/results/comparison-v6.md`, 2026-11-08), and no model has run on v7. |
+| `cloud` | Claude via the Claude API | Chart value `llm.profile: cloud` (default). The chart runs fleetops-agent with `-backend=claude` (`internal/llm/claude.go`); it starts once the API key Secret exists (section 2). fleetops-agent has run against Sonnet 5.5 on the demo stack, one conversation with committed evidence (`docs/evidence/live-2026-11-08/`; docs/KNOWN-LIMITS.md); Sonnet 5.5 and Opus 5.5 were measured through `fleetops-eval` on eval surfaces v3 to v6; the record is v6 (`evals/results/comparison-v6.md`, 2026-11-08), and no model has run on v7. |
 | `airgap` | Qwen2.5-7B-Instruct served by `llama-server` in the cluster | Plain manifests and make targets (`config/airgap/`, `hack/airgap.mk`) and the `llamacpp` backend (`internal/llm/llamacpp.go`); not templated in the chart. Run on single-node kind clusters with kindnet (`docs/evidence/airgap-2026-11-04/`, `docs/evidence/airgap-2026-11-05/`); the `llamacpp` backend ran four evaluations against Qwen2.5-7B-Instruct through `fleetops-eval` (`evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-05/` on eval surface v3, `evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-07/` on v4, `evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-08-v5/` on v5, `evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-08-v6/` on v6), and one against Qwen2.5-14B-Instruct on v6 (`evals/results/airgap-llamacpp-qwen2.5-14b-instruct-2026-11-08-v6/`, with this manifest's model files, alias and memory changed: its `model.md`). fleetops-agent does not run with it yet (docs/KNOWN-LIMITS.md). `llm.profile: airgap` makes the chart render fail on purpose. |
 
 Until the air-gapped profile is in the chart, it is installed beside the chart with these targets,

@@ -90,20 +90,34 @@ names; [`docs/NAMES.md`](NAMES.md) maps them to the current ones.
   Jaeger. Its cloud-profile NetworkPolicy (off by default) has never been applied to a cluster,
   and `docs/RUNBOOK.md` has not been run as a sequence beyond section 0.
 - `make demo`, `make demo-down` and `make test-live` (D59, D60) have run on one machine only
-  (Mac mini, Docker Desktop, kind v0.33.0, 2026-11-05): `make demo` twice from no cluster, each
+  (Mac mini, Docker Desktop, kind v0.33.0; 2026-11-05, and again on 2026-11-08 with the sim fleet
+  kept live, `docs/evidence/live-2026-11-08/`): on 2026-11-05 `make demo` twice from no cluster, each
   time with Docker's image and build caches already filled, so a cold machine has not been timed;
   the kind cluster with the static token file, Swarmada's quickstart and webhook overlay from the
   writable module copy and the step order worked. `make test-live` passed every subtest of phase
   `webhooks`, including `requester-is-authenticated-not-asserted`, after a test fix (a closed MCP
   session reused across subtests). The two `make demo` timings and what bounds them are in
   `docs/evidence/foc-up-2026-11-05/`, and the test-live results in `docs/evidence/foc-live-2026-11-05/`;
-  the full run logs are not committed. After the webhook overlay
-  replaces the quickstart's overlay, whether the simulated adapter stays connected has not been
-  observed.
-- `fleetops-agent`, its web UI and `fleetops chat` have not run on a cluster or against a model, and whether the
-  deployed fleetops-mcp's spans reached the chart's Collector was not checked (the traces of 2026-11-05
-  came from `fleetops-eval -otlp-endpoint`, D65); they are tested with the scripted backend, envtest and an
-  in-process OTLP receiver, and the page was checked once in a browser against a local test server.
+  the full run logs are not committed. On 2026-11-08 `make demo` took 2m29s, `make test-live`
+  passed every subtest of phase `webhooks` again, and Swarmada's audit of the approved zone stop
+  showed all three simulated robots stopped (`stopped:3 unconfirmed:0`; on 2026-11-05 it was
+  `unconfirmed:3`), so the sim adapters stayed connected after the webhook overlay
+  (`docs/evidence/live-2026-11-08/`).
+- The deployed `fleetops-agent` has run against a model on a cluster twice, both times on the demo
+  stack with Sonnet 5.5 through `fleetops chat`. The 2026-11-07 check is the source of BACKLOG-v4 P4
+  and of the readings guided-15 to guided-17 replay; its logs are not committed. On 2026-11-08 one
+  guided conversation (a move, no question, the preview with its `Checked:` block, confirmed and
+  filed as a DraftTask ApprovalRequest that stayed Pending) has its transcript, the filed request, the
+  Jaeger export and the cost (0.0280 USD) in `docs/evidence/live-2026-11-08/`. There, the spans of
+  fleetops-agent and fleetops-mcp reached the chart's Collector and Jaeger. One conversation is not a
+  pass rate: the measured results are the fixture-mode runs above. The web UI has not been used on a
+  cluster: the page was checked once in a browser against a local test server. Otherwise the agent
+  is tested with the scripted backend, envtest and an in-process OTLP receiver.
+- **A message the engine answers without the model has no fleetops-agent trace.** fleetops-agent
+  starts its `fleetops.request` span only in the model loop (`internal/agent/agent.go`). The
+  confirmation that files a request does not enter it, so its tool calls appear only as fleetops-mcp
+  spans in a trace of their own, not under the conversation's request (seen on 2026-11-08,
+  `docs/evidence/live-2026-11-08/`). The ApprovalRequest still names the message's session id.
   Requester authentication (D57) has been tested only with static person tokens (envtest, and
   kind through `make test-live`) and TokenRequest ServiceAccount tokens, not with OIDC tokens or exec-plugin credentials. The chart is checked with `helm lint --strict`,
   kubeconform and `make chart-parity` (its default render equals `config/`).
@@ -293,11 +307,14 @@ names; [`docs/NAMES.md`](NAMES.md) maps them to the current ones.
   staging-shelf-a."; "Send a robot to the charging bay." was read as a charge in all nine runs, so the
   runs never reached the change after the preview the scenario tests. The recorded results are
   unchanged.
-- **Guided requests have not run on a cluster.** The dialogue, `check_task`, the confirmation
-  invariant, the execution re-check, `fleetops activate` and the follow-up are tested with the scripted
-  backend, unit tests, envtest and the fixture evaluations. In envtest the executor's dry runs reach
-  the CRD schema and the copilot's admission policies only; Swarmada's webhooks have not answered
-  one (no cluster run of D70–D81).
+- **Guided requests have run on a cluster only up to filing.** On the demo stack the dialogue,
+  `check_task`, the preview and the confirmation filed requests against Swarmada's live state
+  (2026-11-07, logs not committed; 2026-11-08, `docs/evidence/live-2026-11-08/`). No guided request
+  filed there was approved, so the execution re-check, the executor's dry run against Swarmada's
+  webhooks, `fleetops activate` and the follow-up have not run on a cluster for one. They are tested
+  with the scripted backend, unit tests, envtest and the fixture evaluations. In envtest the
+  executor's dry runs reach the CRD schema and the copilot's admission policies only. `make
+  test-live` approves and executes requests it files itself through fleetops-mcp, not guided ones.
 - **The activation record names who ran `fleetops activate`, not who sent the patch.** The record is
   bound to the authenticated person and is made just before the patch; Swarmada does not record
   who cleared `spec.draft`. fleetops-approvals links the most recent record made after the approval and

@@ -480,7 +480,8 @@ only, or prepare a follow-up request if the task fails. A follow-up is never fil
   anyway the engine maps the request itself: the model's `lookFor`, else damage when the person's
   words name damage, else the state of the location. "Not possible" stays for work no robot can do
   at all (C3, an external analysis service; C6). Scenarios guided-15 to guided-17 replay the
-  readings Sonnet 5.5 gave on the demo stack (2026-11-07); without the mapping they fail.
+  readings Sonnet 5.5 gave on the demo stack (2026-11-07; those logs are not committed, the committed
+  live check is `docs/evidence/live-2026-11-08/`); without the mapping they fail.
 - At most one follow-up question for one missing required item, and only within the cap; past the
   cap the item is shown as missing in the preview (rule 7).
 - Every "something else" answer is written to `fleetops-agent`'s audit file as a `catalogue_review`

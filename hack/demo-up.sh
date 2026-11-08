@@ -40,7 +40,7 @@
 #                            from a cluster. Still creates DEMO_DIR with the tokens and the rendered kind
 #                            configuration, and reports missing tools instead of stopping.
 #
-# Not run on a cluster when this was written (docs/KNOWN-LIMITS.md).
+# Run on kind on one machine (docs/evidence/foc-up-2026-11-05/, docs/evidence/live-2026-11-08/).
 set -euo pipefail
 
 repo="$(cd "$(dirname "$0")/.." && pwd)"
