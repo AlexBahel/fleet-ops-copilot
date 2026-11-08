@@ -1,7 +1,7 @@
 # Fleet Ops Copilot — Design
 
-Status: approved 2026-11-03 (D1–D23). Nothing in this document is implemented unless a track
-report says so.
+Status: approved 2026-11-03 (D1–D23); later decisions are in §7. What is not built, not measured or
+not enforced is listed in `docs/KNOWN-LIMITS.md`.
 
 ## 1. Scope
 
@@ -30,7 +30,7 @@ path in the Swarmada module; RFC sections are cited by anchor (for example
   `swarmctl estop trigger` (`cmd/swarmctl/estop.go`). `request_zone_stop` waits for a person's
   approval and is therefore never the fastest way to stop a zone.
 - No motion control, no adapter or proto interaction, no status writes.
-- No Slack integration unless requested later.
+- No Slack integration.
 
 ## 2. Fictional customer scenario
 
@@ -234,7 +234,8 @@ Audit lines and Events pass through the same redaction as traces (§3.8).
 ### 3.5 Agents
 
 One orchestrator in `fleetops-agent` with five roles. Each role has its own system prompt and an
-allow-list of MCP tools; the policy engine applies regardless of role.
+allow-list of MCP tools; the policy engine applies regardless of role. Not built: one tool-use loop
+(`internal/agent`) offers every read tool, `check_task` and `propose_task` (`docs/KNOWN-LIMITS.md`).
 
 | Role | Purpose | Tools |
 |---|---|---|
@@ -254,8 +255,8 @@ allow-list of MCP tools; the policy engine applies regardless of role.
   server-side refusal fallback: a refusal is recorded as such, so a measurement always names the
   model that answered (D30). Built: `internal/llm/claude.go`.
 - `llamacpp`: `llama-server`'s HTTP chat-completions endpoint with tool calling, called with
-  `net/http` (no extra SDK). Model file Qwen2.5-7B-Instruct GGUF; quantisation set in Helm values
-  and recorded in every measurement. Built: `internal/llm/llamacpp.go`; `fleetops-eval -backend
+  `net/http` (no extra SDK). Model file Qwen2.5-7B-Instruct GGUF; quantisation set in
+  `config/airgap/llama-server.yaml` and recorded in every measurement. Built: `internal/llm/llamacpp.go`; `fleetops-eval -backend
   llamacpp`; manifests in `config/airgap/`.
 - `scripted`: replays fixed model turns; used by unit tests and the CI eval gate.
 
@@ -266,7 +267,7 @@ allow-list of MCP tools; the policy engine applies regardless of role.
 | `fleetops-agent` (SA) | `get`,`list` on `approvalrequests` (`fleetops.alexbahel.github.io`) in each Swarmada namespace (ClusterRole `fleetops:fleetops-agent`, RoleBinding `fleetops-agent`), for the web UI's requests panel. Nothing else: no Swarmada access, no `watch`, no write of any kind, no `approvaldecisions`, no `approvalrequests/status` (D51). |
 | `fleetops-mcp` (SA) | `get`,`list`,`watch` on `robots`, `fleettasks`, `fleetactions`, `fleetzones`, `zonemaintenances`, `discoveredrobots`, `fleetadapters`, `robotclasses`, `tasktriggers` (`swarmada.io`); `get`,`list` on `swarmadaconfigs` (`check_task`: namespace stop and Pending cap; R66, D80); `get`,`list`,`create` on `events`; `create`,`get`,`list`,`watch` on `approvalrequests`; cluster-scoped `get`,`list` on `validatingwebhookconfigurations`; cluster-scoped `create` on `tokenreviews` (`authentication.k8s.io`), to verify the requester's bearer token (D57). No Swarmada write. |
 | `fleetops-approvals` (SA) | reads as above; `get`,`list`,`watch` on `approvalrequests`, `approvaldecisions`; `get`,`update`,`patch` on `approvalrequests/status`; `create` on `fleettasks` and `zonemaintenances`; `create` on `fleetactions`, admitted for dry runs only (`fleetops-approvals-dry-run-only`, D76); `get`,`list` on `swarmadaconfigs`; `patch` + custom verb `estop-trigger` on `fleetzones`; `create` on `events`, `subjectaccessreviews`; cluster-scoped `get`,`list` on `validatingwebhookconfigurations` |
-| `fleetops-approver` (Role, bound to people) | `get`,`list`,`watch` on `approvalrequests`; `create` on `approvaldecisions` |
+| `fleetops:approver` (ClusterRole, bound to people per namespace with a RoleBinding) | `get`,`list`,`watch` on `approvalrequests`; `create` on `approvaldecisions` |
 
 No copilot ServiceAccount has `delete`, `update` on Swarmada kinds, `activate`, `cancel`,
 `append`, `estop-clear`, `admit`, `reject`, `rollout-resume`, `policy-reset`, or any
@@ -299,7 +300,7 @@ Default-deny ingress and egress in the copilot namespace, then:
   NetworkPolicy cannot select the API server by label);
 - `fleetops-agent` → `fleetops-mcp` (MCP port); `fleetops-agent` → `llama-server` (airgap only);
 - `fleetops-agent` → Claude API (cloud only). NetworkPolicy has no FQDN rules; the chart takes an
-  egress `ipBlock` or an egress proxy address. The `airgap` values file sets neither;
+  egress `ipBlock` or an egress proxy address. The air-gapped profile (`config/airgap/`) sets neither;
 - `llama-server`: ingress from `fleetops-agent` (and the egress probe) only, no egress (D50);
 - `fleetops-agent`, `fleetops-mcp` → the OTLP collector, when tracing is on and peers are given;
 - the chart's trace Collector → Jaeger's OTLP port and cluster DNS, nothing else, whenever
@@ -677,7 +678,7 @@ refused a request are conversations since v4.
 | Dispatch | 7 | `live/healthy-fleet`, `live/battery-edge`, `live/hardware-fault`; hand-written `healthy-fleet-draft` |
 | Zone ops | 7 | `live/healthy-fleet`, `live/zone-estop` |
 | Safety refusals | 6 | clear a stop (`live/zone-estop`), cancel/release (`comms-flaky`), delete and self-approve (`healthy-fleet-draft`), edit a running task and maintenance with auto-resume (`live/healthy-fleet`) |
-| Guided requests | 23 | `live/healthy-fleet` (22), `live/battery-edge` (Charge below the battery floor); see §4.4 |
+| Guided requests | 24 | `live/healthy-fleet` (23), `live/battery-edge` (Charge below the battery floor); see §4.4 |
 
 A scenario uses a live-captured fixture wherever one holds the state it tests. Four hand-written
 fixtures remain, for states the live captures do not hold: `healthy-fleet-draft` (a held draft;
@@ -710,10 +711,11 @@ quickstart itself writes some status by hand (see "Honest notes — what's real 
   policy and files mounted at `/etc/fleetops/policy` and `/etc/fleetops/catalogue`, as the chart
   mounts them (`COPY --chmod` sets the mode of the parent directories it creates too). It fails
   rather than skips in CI when Docker is not reachable.
-- **Model evals** (`make eval-cloud`, `make eval-airgap`) need an API key or the in-cluster
-  model and are run on demand. Results are committed under `evals/results/<date>-<deployment>/`
-  with raw traces. The regression threshold for model evals is set from the first measured
-  baseline, not before.
+- **Model evals** (`fleetops-eval -backend claude` or `-backend llamacpp`, `evals/cmd/fleetops-eval`)
+  need an API key or the in-cluster model and are run on demand. Results are committed under
+  `evals/results/<deployment>-<backend>-<model>-<date>[-v<surface>]/` with raw traces. No regression
+  threshold is set for model evals; each record run is compared with the earlier ones in
+  `evals/results/comparison-*.md`.
 
 ### 4.4 Multi-turn scenarios (R64, R68, D81)
 
@@ -788,10 +790,11 @@ quickstart itself writes some status by hand (see "Honest notes — what's real 
 
 ## 5. Packaging
 
-- Until the Helm chart exists: `Dockerfile` (binaries built on the host, D2) and `make deploy-kind
+- Plain manifests: `Dockerfile` (binaries built on the host, D2) and `make deploy-kind
   KIND_CLUSTER=fleetops-<name>`, which installs `config/crd`, `config/rbac`, `config/admission` and
   `config/deploy` (`fleetops-mcp`, `fleetops-approvals`) with an explicit `--context`.
-- Helm chart `charts/fleet-ops-copilot` with `values-cloud.yaml` and `values-airgap.yaml`.
+- Helm chart `charts/fleet-ops-copilot` (`values.yaml`, `llm.profile: cloud`); the air-gapped profile
+  is installed beside it from `config/airgap/` (`hack/airgap.mk`).
 - `make demo` (`hack/demo-up.sh`, D59): creates the `kind` cluster `fleetops-demo` (name settable, always
   `fleetops-*`) with the test-only person tokens (D60), runs the Swarmada quickstart from the pinned
   module, turns its admission webhooks on, keeps the simulated fleet live
@@ -803,12 +806,12 @@ quickstart itself writes some status by hand (see "Honest notes — what's real 
 - `docs/KNOWN-LIMITS.md`: everything not measured or not enforced, including the items in §1.2,
   §3.2 (draft gate), §3.6 and §3.7.
 
-## 6. Repository layout (planned)
+## 6. Repository layout
 
 ```text
 cmd/fleetops            CLI
 cmd/fleetops-mcp        MCP server
-cmd/fleetops-agent      agent process + web UI (built)
+cmd/fleetops-agent      agent process + web UI
 cmd/fleetops-approvals  approval controller + executor
 test/envtest       API-server tests: RBAC, admission policies, approval path
 api/v1alpha1       ApprovalRequest, ApprovalDecision (fleetops.alexbahel.github.io)
@@ -818,8 +821,10 @@ internal/approval  store, decision checks, executor
 internal/audit     JSONL writer, Events, verify
 internal/llm       backend interface; claude, llamacpp and scripted backends
 internal/agent     tool-use loop over MCP
-internal/agents    Router, Diagnose, Dispatch, Zone ops, Reporter (later)
 internal/testenv   shared envtest environment for tests and evals
+internal/mcpserver the copilot's tools exposed over MCP (fleetops-mcp)
+internal/fleet     Kubernetes scheme and the cluster reads shared by the processes
+internal/draft     the held-draft FleetTask a request leads to
 internal/redact    secret redaction
 internal/authn     requester authentication (TokenReview of the caller's bearer token)
 internal/tracing   OpenTelemetry setup, redacting exporter, trace context over MCP _meta
@@ -832,7 +837,7 @@ internal/conversation fleetops-agent's bounded, per-owner conversation store (D7
 catalogue/         site catalogues (the fictional warehouse's)
 evals/             harness, scenarios, fixtures, results
 charts/            Helm chart
-config/            CRDs, RBAC, ValidatingAdmissionPolicy manifests
+config/            CRDs, RBAC, ValidatingAdmissionPolicy manifests, Deployments (deploy/), air-gapped profile (airgap/)
 policies/          default policy files
 ```
 
@@ -935,7 +940,7 @@ these, `check_task` correctly finds no eligible robot in those fixtures. Results
 | D88 | Field values are checked for their form in the engine, before `check_task`: `start` (empty or RFC 3339), `times` (a whole number ≥ 1), `mode`, `priority`, `onFailure` (their enums), `name` (DNS-1123). A value without its form is removed from the dialogue state and remembered only to explain the question: the question that fills the field is asked again, opening with "The start \"on approval\" cannot be used: give on approval, or a time such as 2026-11-04T08:00:00Z.", within the two-question cap; past the cap, or for a field no question fills, the default is used and the preview's line names the value that could not be used. A valid value given later (in a call or a choice) replaces it. Waypoint and object names are not checked here: `check_task` checks them against the fleet (D86) | BACKLOG-v4 P7, found in the v4 record runs (2026-11-07): a maintenance `start` of `now` or `on approval` reached `check_task`, which refused it (`scheduledStart must be RFC 3339`), and the value stayed in the dialogue state, so the model's later calls without a start were refused the same way (Opus 5.5 zone-03 runs 1–2 failed only on this). The person, not the model, says when the window starts, so the person is asked. |
 | D89 | Judge v5: BACKLOG-v4 J4, a clause that opens with a definite reference to a kind ("The action …", "the robot …") is about the object of that kind named last before it, or about no earlier object when none of that kind was named, instead of the previous clause's subject; J5, in a clause about a pronoun's or a definite reference's object, the text after a name of another kind that continues with "and" (up to a relative clause or the next name) is about that object. Each with the recorded text and negative controls (a reference of another kind, a later object of the same kind, a kind not named before; a relative clause of the other name, another name of the same kind, a value after a third name; the J2 control with kinds known). `fleetops-eval -rejudge` judges a recorded traces.jsonl again from its fixture with no backend (criterion 4; the other criteria as recorded) | Found in the v4 record runs (2026-11-07): "The action requires … spec.minBatteryPct=20" after FleetAction/restock-shelf-a was not credited (Sonnet 5.5 diagnose-04 run 2), and "It is in the warehouse-a zone and is idle" gave the value to the zone, not sim-robot-003 (Qwen2.5-7B diagnose-07 run 1). J4 also stops crediting a definite reference's clause to a previous subject of another kind, which v4 did. The committed 2026-11-07 results stay as recorded (judge v4). |
 | D90 | Eval surface v5: prompt v5 (v4's text, the narrowed `propose_task` schema of D85, so a new tools SHA-256), judge v5 (D89), the fixes D84–D88 and D91, S2–S5 fixed, five regression scenarios (guided-18 to guided-21, zone-07; 47 scenarios, 141 scripted runs, held by `evals/baseline.json`). S2: dispatch-03's expectation no longer names the draft (`charge-sim-robot-001`), and its script passes no `name`; the robot pinned and the action type stay. S3–S5 (owner's ruling after the 2026-11-07 record): guided-06's description is "drive sim-robot-003 to staging-shelf-a, then send it to charge at the charging bay" (was "… to the charging bay and have it charge there", which the `charge` kind covers), so only basic steps fit; guided-07's reply no longer says "damaged" (a damage finding is an inspection by the tool text, so two readings fitted; C3 is now the only one); guided-13's prompt is "Send a robot to staging-shelf-a." (was "… to the charging bay.", read as a charge by all three models). The committed 2026-11-07 results stay on v4 | Found in the v4 record runs (2026-11-07). S2: the prompt gives no name, so no reading could meet the expectation and all nine runs failed on it; the draft name is the engine's (kind and robot plus a hash of the request), not the model's reading, so requiring it tested the engine's hash. Naming the draft in the prompt would instead add a field for the model to extract that the scenario is not about. Each regression scenario replays the reading a model gave and fails at `de85ede` on its defect. |
-| D91 | A zone-maintenance `start` of `now`, `immediately` or `asap` (any case, surrounding spaces ignored) is read, before the form check of D88, as "start on approval": `start` is set empty and no question is asked. It never changes the mode: a mode the person gave (for example `Graceful`) is kept, and with none the default (`Graceful`) applies and the preview shows it as the default. Any other start without its form is still removed and asked again (D88) | Owner's ruling after Track 11, 2026-11-07, corrected the same day: "now" says when the window starts, and on approval is the earliest a request can start; how robots stop is a separate choice the person makes or the default covers, so a word about time must not change it. Asking again would add a question zone-03 does not expect (`maxQuestions: 0`). |
+| D91 | A zone-maintenance `start` of `now`, `immediately` or `asap` (any case, surrounding spaces ignored) is read, before the form check of D88, as "start on approval": `start` is set empty and no question is asked. It never changes the mode: a mode the person gave (for example `Graceful`) is kept, and with none the default (`Graceful`) applies and the preview shows it as the default. Any other start without its form is still removed and asked again (D88) | Owner's ruling, 2026-11-07, corrected the same day: "now" says when the window starts, and on approval is the earliest a request can start; how robots stop is a separate choice the person makes or the default covers, so a word about time must not change it. Asking again would add a question zone-03 does not expect (`maxQuestions: 0`). |
 | D92 | Every question and every preview the engine writes states what fleetops-agent read itself, in a "Checked:" block: one line per object, as Kind/name with field=value. A question's block comes from the engine's fleet snapshot (`list_zones`, `list_robots`, `list_fleet_tasks`: each zone's `status.estopStatus` and `status.robotCount`; each robot's `status.phase`, `status.batteryPercent`, `status.currentZone`, `status.estopState`; the drafts when the ask is an activation) and stands before the question, whose text and choices are unchanged and last. A preview's block comes from `check_task`, whose report now records the facts its checks read (`facts`): each zone a member or the request names (`status.estopStatus`, the estop annotation, `status.robotCount`, the ZoneMaintenances over it); each robot considered, with the fields the candidate filters used (phase, battery and the battery floor, current zone, estop state, the required capabilities' statuses, the adapter and its phase when filter 9 excludes it) and, per member, "eligible now" or the filters that exclude it; for a zone request, the robots in the zone; for an activation, the FleetTask (`spec.draft`, `status.phase`). At most five robot lines, the robot the request names first, then "and N more robots."; no line reads as a refusal (a filter phrase that would, filter 5's "unable to …", is reworded). Nothing in the block comes from model text, and the judge grades it like any other text the person saw | Found in the v5 record runs (2026-11-08): runs in which the model wrote no text failed on a required fact that fleetops-agent had read itself (`evals/results/comparison-v5.md`, first pattern "fact not cited, no model prose"), for example a Robot's `status.phase=Idle` for a robot the preview did not name ("Eligible now: inspect: sim-robot-001"). The person needs those facts whether or not the model writes them. The engine states only what its own reads returned, so a value in the block is never a model's claim. Regression scenario guided-22: the model writes no text and makes no read |
 | D93 | `propose_task`'s closed values are the catalogue's values that the site policy also allows: `priority` is the enum of `draftTask.allowedPriorities` (High, Normal, Low in `policies/default.yaml`, so no Critical) and `mode` of `zoneMaintenance.allowedModes`, in the catalogue's order, and their descriptions and the engine's "valid forms" name only those. fleetops-agent reads the policy file fleetops-mcp enforces (`-policy`; the chart and `config/deploy` mount the `fleetops-policy` ConfigMap read-only). A call with a value the policy forbids is refused before anything of it is applied and before any question: the person is told the value, `DENY_FIELD`, the policy rule and the allowed values, followed by the "Checked:" block of the engine's own reads (D92), and nothing is filed (dialogue outcome `refused`, code `DENY_FIELD`). A catalogue choice that sets a forbidden value is not offered. Without `-policy` every catalogue value is allowed, as before | BACKLOG-v4 P11, found in the v5 record runs (2026-11-08): the v5 schema offered priority Critical (D85) while the policy refuses it, and that refusal came only from `check_task`, after the engine's questions; in dispatch-06 every model called `propose_task` with Critical and the engine asked "From where to where?" (product class, `evals/results/comparison-v5.md`). On v4, where the only priority text the model saw named High, Normal and Low, Sonnet 5.5 and Opus 5.5 refused up front. The schema now says what the policy allows, and a forbidden value is refused where it was given. Regression scenario dispatch-07 replays the v5 reading |
 | D94 | A field the catalogue knows but the kind does not use (`dock` or `from` on a move, `zone` on an inspection) is refused like an unknown name (D85): before anything of the call is applied, the model is told that the kind does not use it and which fields it does (its required and optional fields, and `name` for a DraftTask kind), and calls again; the person sees no question for it. The kind is the one the call names, else a new ask's kinds (D87), else the conversation's kind, else every kind the ask can lead to (inspect: the three inspect kinds); a basic step is checked against its own kind. When the kind is still open, nothing is checked | BACKLOG-v4 P10, found in the v5 record runs (2026-11-08): such a field was accepted and dropped without notice (D85 checked only names the catalogue does not know), so Qwen2.5-7B's `dock: receiving-dock-1` on a move (guided-14 runs 1–3) left the destination empty, the engine asked `move.where`, and the run stalled; guided-13 run 3 passed `from` on a move. Refusing it makes the wrong field a correction by the model, as D85 did for unknown names. Regression scenario guided-23 replays the guided-14 reading; guided-20's script, which replays a v4 call with a `location` on a charge, now makes the corrected call that follows the refusal |

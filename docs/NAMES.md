@@ -4,7 +4,7 @@ The project's programs, namespace, make targets, settings and scripts were renam
 `fleetops` (and, for the local demo, `demo`). Behaviour did not change. Records made before the
 rename keep the old names as they were recorded:
 
-- `evals/results/*-2026-11-05/` (the three model runs of record) and
+- `evals/results/*-2026-11-05/` (the three v3 record runs) and
   `evals/results/comparison-2026-11-05.md` (the v3 comparison);
 - `docs/evidence/` (cluster logs and timings, including `docs/evidence/foc-up-2026-11-05/` and
   `docs/evidence/foc-live-2026-11-05/`, whose directory names also stay).
@@ -60,9 +60,9 @@ and the policy codes.
 
 ## Session labels
 
-Committed files used to cite internal session labels (`FOC-0` ... `FOC-8`). They now cite the
+Committed files used to cite internal session labels. They now cite the
 decision in `docs/DESIGN.md` §7 that the work produced, for example D1–D23 for the approved design
-and D70–D81 for guided requests. `docs/design/foc8-inventory.md` is now
+and D70–D81 for guided requests. The guided-request inventory is
 `docs/design/guided-request-inventory.md`.
 
 ## An install made under the old names

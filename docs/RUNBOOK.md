@@ -1,9 +1,10 @@
 # Fleet Ops Copilot — Runbook
 
-**Status: draft.** Each command below follows the chart and the code on main. `make demo`
-(section 0, with the trace backend of section 8) has run on one kind cluster (2026-11-05); the
-other sections have not been run as a sequence. Items that depend on parts not built yet (the
-air-gapped profile in the chart) say so.
+**What has been run.** Each command below follows the chart and the code on main. `make demo`
+(section 0, with the trace backend of section 8) has run on one kind cluster (2026-11-05,
+[`docs/evidence/foc-up-2026-11-05/`](evidence/foc-up-2026-11-05/README.md)); the other sections
+have not been run as a sequence. Items that depend on parts not built yet (the air-gapped profile in
+the chart) say so.
 
 Conventions: every `kubectl` and `helm` command names its context explicitly. The examples use a
 kind cluster `fleetops-<name>`, context `kind-fleetops-<name>`, a kubeconfig file that holds only that
@@ -11,7 +12,7 @@ cluster (`$KUBECONFIG`), the copilot namespace `fleetops-system`, and the Swarma
 `warehouse-a`.
 
 ```bash
-export KUBECONFIG=$PWD/local/fleetops-<name>.kubeconfig   # dedicated file, mode 600
+export KUBECONFIG=$HOME/.kube/fleetops-<name>.kubeconfig   # dedicated file, mode 600, outside the repository
 CTX=kind-fleetops-<name>
 ```
 
@@ -70,8 +71,8 @@ tokens (verified requesters, section 7). It needs `bin/fleetops` (built by the t
 - Swarmada v0.4 running in the cluster, **with its admission webhooks served** (section 6).
   Without Swarmada's `FleetTask` webhook the copilot refuses every draft with
   `DENY_DRAFT_GATE_ABSENT` (docs/DESIGN.md §3.2, D22).
-- The image `fleet-ops-copilot:<tag>` available to the nodes. Until the Swarmada module is pinned,
-  it is built from binaries compiled on the host (`make image`, docs/DESIGN.md D2).
+- The image `fleet-ops-copilot:<tag>` available to the nodes. It is
+  built from binaries compiled on the host (`make image`, docs/DESIGN.md D2).
 - Helm 3.8 or newer.
 
 ### Check the cluster first
@@ -229,7 +230,7 @@ anyway, revoke it.
 
 | Profile | Model | Status on main |
 |---|---|---|
-| `cloud` | Claude via the Claude API | Chart value `llm.profile: cloud` (default). The chart runs fleetops-agent with `-backend=claude` (`internal/llm/claude.go`); it starts once the API key Secret exists (section 2). fleetops-agent has not yet run against the model on a cluster (docs/KNOWN-LIMITS.md); Sonnet 5.5 and Opus 5.5 were measured through `fleetops-eval` (`evals/results/comparison-2026-11-05.md`). |
+| `cloud` | Claude via the Claude API | Chart value `llm.profile: cloud` (default). The chart runs fleetops-agent with `-backend=claude` (`internal/llm/claude.go`); it starts once the API key Secret exists (section 2). fleetops-agent has not yet run against the model on a cluster (docs/KNOWN-LIMITS.md); Sonnet 5.5 and Opus 5.5 were measured through `fleetops-eval` on eval surfaces v3 to v6; the record is v6 (`evals/results/comparison-v6.md`, 2026-11-08), and no model has run on v7. |
 | `airgap` | Qwen2.5-7B-Instruct served by `llama-server` in the cluster | Plain manifests and make targets (`config/airgap/`, `hack/airgap.mk`) and the `llamacpp` backend (`internal/llm/llamacpp.go`); not templated in the chart. Run on single-node kind clusters with kindnet (`docs/evidence/airgap-2026-11-04/`, `docs/evidence/airgap-2026-11-05/`); the `llamacpp` backend ran four evaluations against Qwen2.5-7B-Instruct through `fleetops-eval` (`evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-05/` on eval surface v3, `evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-07/` on v4, `evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-08-v5/` on v5, `evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-08-v6/` on v6), and one against Qwen2.5-14B-Instruct on v6 (`evals/results/airgap-llamacpp-qwen2.5-14b-instruct-2026-11-08-v6/`, with this manifest's model files, alias and memory changed: its `model.md`). fleetops-agent does not run with it yet (docs/KNOWN-LIMITS.md). `llm.profile: airgap` makes the chart render fail on purpose. |
 
 Until the air-gapped profile is in the chart, it is installed beside the chart with these targets,

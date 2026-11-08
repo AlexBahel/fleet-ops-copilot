@@ -1,7 +1,7 @@
 # Backlog for v4
 
 What the record runs of 2026-11-05 (Sonnet 5.5, Opus 5.5 and Qwen2.5-7B-Instruct, 25 scenarios × 3,
-judge v3) showed needs a change. Nothing here is done. The scores in
+judge v3) showed needs a change. Each row states its status; a row marked Done names the decision that made it. The scores in
 `evals/results/comparison-2026-11-05.md` stand as recorded (ruling R49); its footnote lists the
 affected runs, and `docs/KNOWN-LIMITS.md` states each defect.
 
@@ -50,7 +50,7 @@ diagnose-07 runs 1–3); none from pass to fail (`docs/DESIGN.md` §4.4).
 | P4 | The demo stack left the fleet offline: the quickstart stops its sim adapter on exit, so nothing can be filed (R65 check) | Live check of D70–D81, 2026-11-07 | Done (R73): `hack/demo-sim-fleet.sh`, all three robots; make demo starts the quickstart's sim adapter for sim-robot-001 (its port-forward and `adapters/simulation/sim_adapter.py` with the quickstart's arguments) as a host process with a pidfile under `DEMO_DIR`; make demo-down stops it; make test-live checks a robot is Idle first |
 | P3 | `fleetops activate` needs `fleetops:approver` to create its Activation record, which also grants deciding requests | D79 (R71, R72) | A narrow `fleetops:activator` ClusterRole: `create` on `approvaldecisions` limited by admission to `type: Activation` (the `fleetops-decisions` policy checking the caller's role, or a separate `approvaldecisions/activation` subresource-style verb via `authorizer` in CEL), `get` on `approvalrequests`; no Verdict decisions (R72) |
 
-## Not yet examined
+## Not yet examined (v3 runs, 2026-11-05)
 
 - zone-03 failed in both Claude runs (Sonnet 5.5 three runs, Opus 5.5 two). It is not classified as a
   model, judge, scenario or product failure.

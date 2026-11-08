@@ -8,9 +8,9 @@ Q4_K_M, two shards) served by `llama-server`. The agent calls it through
 No credential is involved.
 
 **Status:** the manifests are checked against the Kubernetes schemas with
-kubeconform (`make validate-airgap`). They have not been applied to a cluster
-yet; the resource values and the pod security settings below are the first
-values to try, not measured ones.
+kubeconform (`make validate-airgap`) and have been applied on single-node kind
+clusters with kindnet (`docs/evidence/airgap-2026-11-04/`,
+`docs/evidence/airgap-2026-11-05/`); they have not run on any other CNI.
 
 ## Files
 

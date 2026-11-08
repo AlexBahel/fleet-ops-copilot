@@ -80,15 +80,15 @@ names; [`docs/NAMES.md`](NAMES.md) maps them to the current ones.
   names the Qwen2.5-7B-Instruct files; the 14B run used it with the model files, alias and memory
   request and limit changed (that directory's `model.md`). fleetops-agent has not run with it
   (see "Not built yet").
-- The air-gapped manifests (`config/airgap/`) and the `hack/airgap.mk` targets have run on one
-  single-node kind cluster (kind v0.33.0, CNI kindnet, Docker Desktop on arm64;
-  `docs/evidence/airgap-2026-11-04/`), on no other CNI or node.
+- The air-gapped manifests (`config/airgap/`) and the `hack/airgap.mk` targets have run on
+  single-node kind clusters (kind v0.33.0, CNI kindnet, Docker Desktop on arm64;
+  `docs/evidence/airgap-2026-11-04/`, `docs/evidence/airgap-2026-11-05/`), on no other CNI or node.
 - The Helm chart (`charts/fleet-ops-copilot`) with its optional tracing backend (OpenTelemetry
   Collector and Jaeger, D61) has been installed by `make demo` on one single-node kind cluster
   (2026-11-05, `docs/evidence/airgap-2026-11-05/`): both backend pods became ready with the pod
   security settings and probes as rendered, and the Collector received OTLP and exported it to
   Jaeger. Its cloud-profile NetworkPolicy (off by default) has never been applied to a cluster,
-  and `docs/RUNBOOK.md` (draft) has not been run as a sequence beyond section 0.
+  and `docs/RUNBOOK.md` has not been run as a sequence beyond section 0.
 - `make demo`, `make demo-down` and `make test-live` (D59, D60) have run on one machine only
   (Mac mini, Docker Desktop, kind v0.33.0, 2026-11-05): `make demo` twice from no cluster, each
   time with Docker's image and build caches already filled, so a cold machine has not been timed;
@@ -403,7 +403,7 @@ names; [`docs/NAMES.md`](NAMES.md) maps them to the current ones.
   `ApprovalRequest`, Events and audit file.
 - **Activation is done by a person, outside the copilot.** After approval the copilot gives the
   command (`fleetops activate`, D79) and watches for the task to leave `Draft`, without a deadline. It
-  records the activator from the annotation `fleetops activate` sets; an activation made another way
+  records the activator from the Activation `ApprovalDecision` that `fleetops activate` creates (D79); an activation made another way
   (`kubectl patch`) is recorded as unknown. The web UI does not perform it (D52).
 - **The write shown in the web UI** is the body `fleetops-approvals` sends (D53); fields the API server
   defaults and anything Swarmada's mutating webhooks add are not shown.

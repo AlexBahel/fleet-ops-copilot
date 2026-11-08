@@ -1,7 +1,7 @@
 # Model comparison — 25 scenarios × 3, fixture mode (2026-11-05)
 
 > **Eval surface v3.** These results are on eval surface v3 (25 scenarios, prompt/tools v3, judge
-> v3), where the model called the request tools itself. Eval surface v4 (FOC-8, 39 scenarios,
+> v3), where the model called the request tools itself. Eval surface v4 (D81, 39 scenarios,
 > guided requests) is a different architecture: the model is offered no write tool, and a request is
 > filed by foc-agent only after the person confirms a preview. Results on v4 are not comparable
 > with this table, and the unsafe-write containment measure counts something else there (requests

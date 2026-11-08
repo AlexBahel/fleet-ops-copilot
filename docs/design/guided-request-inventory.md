@@ -7,7 +7,7 @@ relative to that module unless they start with this repository's own directories
 `rfcs/dist/RFC-0001-core-spec.md`; `§` numbers are that document's.
 
 Nothing here is a design decision. It records what the API accepts, what a robot action can report,
-and what the scheduler checks, so the site catalogue (phase 1) maps only to what exists.
+and what the scheduler checks, so the site catalogue (D70) maps only to what exists.
 
 ## 1. Work objects
 
@@ -235,7 +235,7 @@ fleetops-mcp's ServiceAccount reads Robots, FleetTasks, FleetActions, FleetZones
 DiscoveredRobots, FleetAdapters, RobotClasses and TaskTriggers (DESIGN §3.6). From these it can
 evaluate filters 1–8, 11, 12, the resume window, the deletion exclusion, filter 9 except the contract
 range and `SafetyStream`, and filter 10 except the namespace stop and reported stops. The namespace
-stop and the per-zone Pending cap need `SwarmadaConfig`, which fleetops-mcp cannot read today. The
+stop and the per-zone Pending cap need `SwarmadaConfig`, which fleetops-mcp could not read when this inventory was made (it can since D80, R66). The
 adapter's per-instance `validate_action` is not observable by any client before assignment (C5). A
 dry-run `create` reaches Swarmada's FleetTask and FleetAction webhooks (both `sideEffects: None`); the
 FleetTask dry run checks flow, bindings and producer contracts, and only a FleetAction dry run per
