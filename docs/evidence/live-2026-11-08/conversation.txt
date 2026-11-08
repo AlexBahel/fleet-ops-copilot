@@ -1,0 +1,34 @@
+# sam, 2026-11-08T21:35:59Z (UTC), with the token kubeconfig make demo wrote ($DEMO_DIR/persons/sam.kubeconfig)
+$ fleetops chat --new --context sam@fleetops-demo "Send a robot to staging-shelf-a."
+  tool list_zones
+  tool list_robots
+  tool propose_task
+  tool list_zones
+  tool list_robots
+  tool list_fleet_tasks
+  tool check_task
+I'll read the current zone and robot state first.
+
+Preview — Move a robot to a location (catalogue kind move)
+  Location: staging-shelf-a (FleetZone warehouse-a, x 12.1, y 8.1)
+  Priority: Normal (default)
+  On failure: retries up to 3 times, then alerts (default)
+  Robot: any eligible robot with navigation (default)
+  Start: when a person activates the draft (default)
+  Draft name: move-staging-shelf-a-f548
+Checks: likely feasible. Eligible now: move: sim-robot-001, sim-robot-003.
+Checked:
+  FleetZone/warehouse-a: status.estopStatus=Clear, status.robotCount=3, no ZoneMaintenance Active or Scheduled over it.
+  Robot/sim-robot-001: status.phase=Idle, status.batteryPercent=99, status.currentZone=warehouse-a, navigation=Active; eligible now.
+  Robot/sim-robot-002: status.phase=InProgress, status.batteryPercent=99, status.currentZone=warehouse-a, navigation=Active; not eligible now: filter 1 (not Idle).
+  Robot/sim-robot-003: status.phase=Idle, status.batteryPercent=99, status.currentZone=warehouse-a, navigation=Active; eligible now.
+Checked against current fleet state; Swarmada's own acceptance is checked at execution.
+1 Confirm · 2 Confirm, and prepare a follow-up request if it fails · 3 Change something — describe it · 4 Cancel
+(session web-0d7fb28b0dcac981)
+
+# sam, the next message of the same conversation
+$ fleetops chat --context sam@fleetops-demo "1"
+  tool request_draft_task REQUIRE_APPROVAL -> ApprovalRequest/areq-wn452
+Filed ApprovalRequest/areq-wn452 (move). It waits for a named person: fleetops approve areq-wn452 -n warehouse-a, or fleetops reject areq-wn452 -n warehouse-a. Next step: a person with create on fleettasks runs: fleetops approve <request>; fleetops-approvals then re-checks the fleet and creates the draft, which dispatches nothing until it is activated (request_activate_task)
+(session web-f2dc7cd538e2f5b1)
+# 2026-11-08T21:36:08Z (UTC)

@@ -1,0 +1,650 @@
+{
+ "result": {
+  "resourceSpans": [
+   {
+    "resource": {
+     "attributes": [
+      {
+       "key": "service.name",
+       "value": {
+        "stringValue": "fleetops-mcp"
+       }
+      }
+     ]
+    },
+    "scopeSpans": [
+     {
+      "scope": {
+       "name": "github.com/AlexBahel/fleet-ops-copilot"
+      },
+      "spans": [
+       {
+        "traceId": "e3e6b41c3ca63206f23082a9d65581a9",
+        "spanId": "d3a85744ffe6e80c",
+        "parentSpanId": "2699f56f2488d0a3",
+        "flags": 257,
+        "name": "policy.decide",
+        "kind": 1,
+        "startTimeUnixNano": "1794173768324568179",
+        "endTimeUnixNano": "1794173768324573179",
+        "attributes": [
+         {
+          "key": "fleetops.namespace",
+          "value": {
+           "stringValue": "warehouse-a"
+          }
+         },
+         {
+          "key": "fleetops.policy.code",
+          "value": {
+           "stringValue": "REQUIRE_APPROVAL"
+          }
+         },
+         {
+          "key": "fleetops.policy.effect",
+          "value": {
+           "stringValue": "RequireApproval"
+          }
+         },
+         {
+          "key": "fleetops.policy.op",
+          "value": {
+           "stringValue": "draft_task"
+          }
+         },
+         {
+          "key": "gen_ai.tool.name",
+          "value": {
+           "stringValue": "request_draft_task"
+          }
+         }
+        ],
+        "status": {}
+       },
+       {
+        "traceId": "e3e6b41c3ca63206f23082a9d65581a9",
+        "spanId": "2699f56f2488d0a3",
+        "flags": 257,
+        "name": "mcp.tool",
+        "kind": 2,
+        "startTimeUnixNano": "1794173768315921429",
+        "endTimeUnixNano": "1794173768342627929",
+        "attributes": [
+         {
+          "key": "gen_ai.tool.name",
+          "value": {
+           "stringValue": "request_draft_task"
+          }
+         }
+        ],
+        "status": {}
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "resource": {
+     "attributes": [
+      {
+       "key": "service.name",
+       "value": {
+        "stringValue": "fleetops-mcp"
+       }
+      }
+     ]
+    },
+    "scopeSpans": [
+     {
+      "scope": {
+       "name": "github.com/AlexBahel/fleet-ops-copilot"
+      },
+      "spans": [
+       {
+        "traceId": "8158d5d7f78f002cbeb99b4ff0607e7c",
+        "spanId": "7973de94e876b7d9",
+        "flags": 257,
+        "name": "mcp.tool",
+        "kind": 2,
+        "startTimeUnixNano": "1794173768314725221",
+        "endTimeUnixNano": "1794173768314734096",
+        "attributes": [
+         {
+          "key": "gen_ai.tool.name",
+          "value": {
+           "stringValue": "whoami"
+          }
+         }
+        ],
+        "status": {}
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "resource": {
+     "attributes": [
+      {
+       "key": "service.name",
+       "value": {
+        "stringValue": "fleetops-mcp"
+       }
+      }
+     ]
+    },
+    "scopeSpans": [
+     {
+      "scope": {
+       "name": "github.com/AlexBahel/fleet-ops-copilot"
+      },
+      "spans": [
+       {
+        "traceId": "9e51e50c0ab55e0cb38541d9033f4fe8",
+        "spanId": "a81d82b162dcd5e2",
+        "parentSpanId": "4ed683b6e0e5f177",
+        "flags": 769,
+        "name": "mcp.tool",
+        "kind": 2,
+        "startTimeUnixNano": "1794173761565526926",
+        "endTimeUnixNano": "1794173761570392843",
+        "attributes": [
+         {
+          "key": "gen_ai.tool.name",
+          "value": {
+           "stringValue": "list_zones"
+          }
+         }
+        ],
+        "status": {}
+       },
+       {
+        "traceId": "9e51e50c0ab55e0cb38541d9033f4fe8",
+        "spanId": "f1ec6dda268eee79",
+        "parentSpanId": "442e55ca907b277b",
+        "flags": 769,
+        "name": "mcp.tool",
+        "kind": 2,
+        "startTimeUnixNano": "1794173761570779135",
+        "endTimeUnixNano": "1794173761572339385",
+        "attributes": [
+         {
+          "key": "gen_ai.tool.name",
+          "value": {
+           "stringValue": "list_robots"
+          }
+         }
+        ],
+        "status": {}
+       },
+       {
+        "traceId": "9e51e50c0ab55e0cb38541d9033f4fe8",
+        "spanId": "01c2ec90ac46cd4e",
+        "parentSpanId": "eecd59a3cc8e9f1f",
+        "flags": 769,
+        "name": "mcp.tool",
+        "kind": 2,
+        "startTimeUnixNano": "1794173762895833344",
+        "endTimeUnixNano": "1794173762898412344",
+        "attributes": [
+         {
+          "key": "gen_ai.tool.name",
+          "value": {
+           "stringValue": "list_zones"
+          }
+         }
+        ],
+        "status": {}
+       },
+       {
+        "traceId": "9e51e50c0ab55e0cb38541d9033f4fe8",
+        "spanId": "1858ae0f237efd8e",
+        "parentSpanId": "eecd59a3cc8e9f1f",
+        "flags": 769,
+        "name": "mcp.tool",
+        "kind": 2,
+        "startTimeUnixNano": "1794173762898990760",
+        "endTimeUnixNano": "1794173762902461177",
+        "attributes": [
+         {
+          "key": "gen_ai.tool.name",
+          "value": {
+           "stringValue": "list_robots"
+          }
+         }
+        ],
+        "status": {}
+       },
+       {
+        "traceId": "9e51e50c0ab55e0cb38541d9033f4fe8",
+        "spanId": "4d1ecbc7ad68e5c7",
+        "parentSpanId": "eecd59a3cc8e9f1f",
+        "flags": 769,
+        "name": "mcp.tool",
+        "kind": 2,
+        "startTimeUnixNano": "1794173762903813052",
+        "endTimeUnixNano": "1794173762905797885",
+        "attributes": [
+         {
+          "key": "gen_ai.tool.name",
+          "value": {
+           "stringValue": "list_fleet_tasks"
+          }
+         }
+        ],
+        "status": {}
+       },
+       {
+        "traceId": "9e51e50c0ab55e0cb38541d9033f4fe8",
+        "spanId": "e78379a36b71701b",
+        "parentSpanId": "eecd59a3cc8e9f1f",
+        "flags": 769,
+        "name": "mcp.tool",
+        "kind": 2,
+        "startTimeUnixNano": "1794173762907267844",
+        "endTimeUnixNano": "1794173762922973844",
+        "attributes": [
+         {
+          "key": "gen_ai.tool.name",
+          "value": {
+           "stringValue": "check_task"
+          }
+         }
+        ],
+        "status": {}
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "resource": {
+     "attributes": [
+      {
+       "key": "service.name",
+       "value": {
+        "stringValue": "fleetops-agent"
+       }
+      }
+     ]
+    },
+    "scopeSpans": [
+     {
+      "scope": {
+       "name": "github.com/AlexBahel/fleet-ops-copilot"
+      },
+      "spans": [
+       {
+        "traceId": "9e51e50c0ab55e0cb38541d9033f4fe8",
+        "spanId": "14e5060adccb9a16",
+        "parentSpanId": "eecd59a3cc8e9f1f",
+        "flags": 257,
+        "name": "llm.chat",
+        "kind": 3,
+        "startTimeUnixNano": "1794173759673631800",
+        "endTimeUnixNano": "1794173761565160634",
+        "attributes": [
+         {
+          "key": "fleetops.backend",
+          "value": {
+           "stringValue": "claude:claude-sonnet-5-5"
+          }
+         },
+         {
+          "key": "fleetops.latency_ms",
+          "value": {
+           "doubleValue": 1891.513
+          }
+         },
+         {
+          "key": "fleetops.tool_calls",
+          "value": {
+           "intValue": "2"
+          }
+         },
+         {
+          "key": "fleetops.turn",
+          "value": {
+           "intValue": "1"
+          }
+         },
+         {
+          "key": "gen_ai.operation.name",
+          "value": {
+           "stringValue": "chat"
+          }
+         },
+         {
+          "key": "gen_ai.response.finish_reasons",
+          "value": {
+           "arrayValue": {
+            "values": [
+             {
+              "stringValue": "tool_use"
+             }
+            ]
+           }
+          }
+         },
+         {
+          "key": "gen_ai.usage.cache_creation.input_tokens",
+          "value": {
+           "intValue": "8833"
+          }
+         },
+         {
+          "key": "gen_ai.usage.cache_read.input_tokens",
+          "value": {
+           "intValue": "0"
+          }
+         },
+         {
+          "key": "gen_ai.usage.input_tokens",
+          "value": {
+           "intValue": "4"
+          }
+         },
+         {
+          "key": "gen_ai.usage.output_tokens",
+          "value": {
+           "intValue": "66"
+          }
+         }
+        ],
+        "status": {}
+       },
+       {
+        "traceId": "9e51e50c0ab55e0cb38541d9033f4fe8",
+        "spanId": "4ed683b6e0e5f177",
+        "parentSpanId": "eecd59a3cc8e9f1f",
+        "flags": 257,
+        "name": "tool.call",
+        "kind": 3,
+        "startTimeUnixNano": "1794173761565169801",
+        "endTimeUnixNano": "1794173761570664259",
+        "attributes": [
+         {
+          "key": "fleetops.latency_ms",
+          "value": {
+           "doubleValue": 5.452
+          }
+         },
+         {
+          "key": "fleetops.tool.is_error",
+          "value": {
+           "boolValue": false
+          }
+         },
+         {
+          "key": "gen_ai.operation.name",
+          "value": {
+           "stringValue": "execute_tool"
+          }
+         },
+         {
+          "key": "gen_ai.tool.call.id",
+          "value": {
+           "stringValue": "toolu_01XPUvzHhVnKxRKuQMUN5FTb"
+          }
+         },
+         {
+          "key": "gen_ai.tool.name",
+          "value": {
+           "stringValue": "list_zones"
+          }
+         }
+        ],
+        "status": {}
+       },
+       {
+        "traceId": "9e51e50c0ab55e0cb38541d9033f4fe8",
+        "spanId": "442e55ca907b277b",
+        "parentSpanId": "eecd59a3cc8e9f1f",
+        "flags": 257,
+        "name": "tool.call",
+        "kind": 3,
+        "startTimeUnixNano": "1794173761570671260",
+        "endTimeUnixNano": "1794173761572709969",
+        "attributes": [
+         {
+          "key": "fleetops.latency_ms",
+          "value": {
+           "doubleValue": 2.01
+          }
+         },
+         {
+          "key": "fleetops.tool.is_error",
+          "value": {
+           "boolValue": false
+          }
+         },
+         {
+          "key": "gen_ai.operation.name",
+          "value": {
+           "stringValue": "execute_tool"
+          }
+         },
+         {
+          "key": "gen_ai.tool.call.id",
+          "value": {
+           "stringValue": "toolu_018uHhE7NDA1A3nqsQvXPST1"
+          }
+         },
+         {
+          "key": "gen_ai.tool.name",
+          "value": {
+           "stringValue": "list_robots"
+          }
+         }
+        ],
+        "status": {}
+       },
+       {
+        "traceId": "9e51e50c0ab55e0cb38541d9033f4fe8",
+        "spanId": "232403b66c798f76",
+        "parentSpanId": "eecd59a3cc8e9f1f",
+        "flags": 257,
+        "name": "llm.chat",
+        "kind": 3,
+        "startTimeUnixNano": "1794173761572716343",
+        "endTimeUnixNano": "1794173762895062302",
+        "attributes": [
+         {
+          "key": "fleetops.backend",
+          "value": {
+           "stringValue": "claude:claude-sonnet-5-5"
+          }
+         },
+         {
+          "key": "fleetops.latency_ms",
+          "value": {
+           "doubleValue": 1322.321
+          }
+         },
+         {
+          "key": "fleetops.tool_calls",
+          "value": {
+           "intValue": "1"
+          }
+         },
+         {
+          "key": "fleetops.turn",
+          "value": {
+           "intValue": "2"
+          }
+         },
+         {
+          "key": "gen_ai.operation.name",
+          "value": {
+           "stringValue": "chat"
+          }
+         },
+         {
+          "key": "gen_ai.response.finish_reasons",
+          "value": {
+           "arrayValue": {
+            "values": [
+             {
+              "stringValue": "tool_use"
+             }
+            ]
+           }
+          }
+         },
+         {
+          "key": "gen_ai.usage.cache_creation.input_tokens",
+          "value": {
+           "intValue": "1317"
+          }
+         },
+         {
+          "key": "gen_ai.usage.cache_read.input_tokens",
+          "value": {
+           "intValue": "8833"
+          }
+         },
+         {
+          "key": "gen_ai.usage.input_tokens",
+          "value": {
+           "intValue": "2"
+          }
+         },
+         {
+          "key": "gen_ai.usage.output_tokens",
+          "value": {
+           "intValue": "107"
+          }
+         }
+        ],
+        "status": {}
+       },
+       {
+        "traceId": "9e51e50c0ab55e0cb38541d9033f4fe8",
+        "spanId": "eecd59a3cc8e9f1f",
+        "flags": 257,
+        "name": "fleetops.request",
+        "kind": 1,
+        "startTimeUnixNano": "1794173759665283800",
+        "endTimeUnixNano": "1794173762924094010",
+        "attributes": [
+         {
+          "key": "fleetops.answer.chars",
+          "value": {
+           "intValue": "1253"
+          }
+         },
+         {
+          "key": "fleetops.backend",
+          "value": {
+           "stringValue": "claude:claude-sonnet-5-5"
+          }
+         },
+         {
+          "key": "fleetops.latency_ms",
+          "value": {
+           "doubleValue": 3258.826
+          }
+         },
+         {
+          "key": "fleetops.operator",
+          "value": {
+           "stringValue": ""
+          }
+         },
+         {
+          "key": "fleetops.prompt.chars",
+          "value": {
+           "intValue": "32"
+          }
+         },
+         {
+          "key": "fleetops.session.id",
+          "value": {
+           "stringValue": "web-0d7fb28b0dcac981"
+          }
+         },
+         {
+          "key": "fleetops.tool_calls",
+          "value": {
+           "intValue": "3"
+          }
+         },
+         {
+          "key": "fleetops.turns",
+          "value": {
+           "intValue": "2"
+          }
+         },
+         {
+          "key": "gen_ai.usage.cache_creation.input_tokens",
+          "value": {
+           "intValue": "10150"
+          }
+         },
+         {
+          "key": "gen_ai.usage.cache_read.input_tokens",
+          "value": {
+           "intValue": "8833"
+          }
+         },
+         {
+          "key": "gen_ai.usage.input_tokens",
+          "value": {
+           "intValue": "6"
+          }
+         },
+         {
+          "key": "gen_ai.usage.output_tokens",
+          "value": {
+           "intValue": "173"
+          }
+         }
+        ],
+        "status": {}
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "resource": {
+     "attributes": [
+      {
+       "key": "service.name",
+       "value": {
+        "stringValue": "fleetops-mcp"
+       }
+      }
+     ]
+    },
+    "scopeSpans": [
+     {
+      "scope": {
+       "name": "github.com/AlexBahel/fleet-ops-copilot"
+      },
+      "spans": [
+       {
+        "traceId": "4169b3da8b6fdb7755946f0fde7f312a",
+        "spanId": "ae6324f2427e6d18",
+        "flags": 257,
+        "name": "mcp.tool",
+        "kind": 2,
+        "startTimeUnixNano": "1794173759654012717",
+        "endTimeUnixNano": "1794173759663225176",
+        "attributes": [
+         {
+          "key": "gen_ai.tool.name",
+          "value": {
+           "stringValue": "whoami"
+          }
+         }
+        ],
+        "status": {}
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}
