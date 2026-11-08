@@ -15,17 +15,20 @@ change under the project's license (Apache-2.0). Commits without it are not merg
 ## Before opening a pull request
 
 ```bash
-make vet lint test test-envtest eval-fixtures
+make ci
 ```
 
-All five must pass. `make help` lists every target.
+It must pass. It builds, vets, lints, runs the pinned ShellCheck, the unit tests, the envtest tests
+and the fixture evals; the CI `go` job runs it, and the `hygiene` job also checks the Apache-2.0
+header of every Go file and the `Signed-off-by:` line of every commit. Changes to the chart also need
+`make chart-check`. `make help` lists every target.
 
-`make eval-fixtures` also holds the run to `evals/baseline.json` (per category: scenarios,
-runs, passing runs). It fails when a category passes fewer runs than recorded or when the
-scenario count or a category's counts change. A change that adds, removes or moves a scenario
-runs `make eval-baseline` and commits the rewritten `evals/baseline.json` in the same commit;
-the scenario count is 25 (`docs/DESIGN.md` §4.2, D58). CI also prints a warning annotation for every
-category a change lowers in that file against its base commit (D62); `make baseline-lowered
+The fixture evals (`make eval-fixtures`) hold the run to `evals/baseline.json` (per category:
+scenarios, runs, passing runs). They fail when a category passes fewer runs than recorded or when
+the scenario count or a category's counts change (D58). A change that adds, removes or moves a
+scenario runs `make eval-baseline` and commits the rewritten `evals/baseline.json` in the same
+commit; the scenario count is 51 on eval surface v7 (`docs/DESIGN.md` §4.2, D101). CI also prints a
+warning annotation for every category a change lowers in that file against its base commit (D62); `make baseline-lowered
 BASE=<revision>` shows the same locally. Lowering a category is allowed, and the warning asks the
 reviewer to look at it.
 
@@ -44,3 +47,7 @@ reviewer to look at it.
 - Every number in a report cites the file that holds its evidence. Numbers are
   measured, not estimated.
 - Wording in public files is neutral and claims nothing the code does not do.
+
+## Security
+
+Report a vulnerability privately, as [`SECURITY.md`](SECURITY.md) describes, not in a public issue.
