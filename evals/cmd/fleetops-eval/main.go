@@ -66,11 +66,17 @@ import (
 	"github.com/AlexBahel/fleet-ops-copilot/internal/tracing"
 )
 
+// defaultOut is the results file when -out is not given: the ignored directory
+// make eval-fixtures writes to (D102), so a run without -out changes no tracked
+// file. The committed self-test is written only by make record-selftest, which
+// passes -out evals/results/fixtures/results.json.
+const defaultOut = "evals/results/tmp/selftest/results.json"
+
 func main() {
 	scenarios := flag.String("scenarios", "evals/scenarios", "scenario directory")
 	fixtures := flag.String("fixtures", "evals/fixtures", "fixture directory")
 	runs := flag.Int("runs", 3, "runs per scenario (N)")
-	out := flag.String("out", "evals/results/fixtures/results.json", "results file")
+	out := flag.String("out", defaultOut, "results file")
 	traces := flag.String("traces", "", "trace file (default: traces.jsonl next to -out)")
 	policyPath := flag.String("policy", "policies/default.yaml", "policy file")
 	cataloguePath := flag.String("catalogue", "catalogue/warehouse-a.yaml", "site catalogue fleetops-agent reads (D70); its SHA-256 is recorded")
