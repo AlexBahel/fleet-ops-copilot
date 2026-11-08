@@ -238,6 +238,8 @@ names; [`docs/NAMES.md`](NAMES.md) maps them to the current ones.
 - **Eval surface v6 results are not comparable with v5.** The record runs of 2026-11-08 on v6 run
   on the v6 product, judge and scenarios (D92–D97); `evals/results/comparison-v6.md` sets the v5, v4
   and v3 records beside them as history only. Qwen2.5-14B-Instruct has a v6 record only.
+- **Eval surface v7 has no record runs.** It fixes P12, J7 and S8 (D98–D101); the v6 results
+  of 2026-11-08 stay the current record, and no model has been measured on v7.
 - **Defects found in the v6 record runs of 2026-11-08.** The v6 scores stand as recorded; nothing
   was re-judged or re-run. Each failed run's class is in `failures.md` beside its results.json; the
   items are in `docs/BACKLOG-v4.md` (S8, J7, P12).
@@ -247,17 +249,20 @@ names; [`docs/NAMES.md`](NAMES.md) maps them to the current ones.
     their own words without the call, the reading dispatch-06 expects and passed 3 of 3 for both.
     Counted as the scenario class (S8). The engine's D93 refusal ran in none of the 600 runs: the
     Qwen models passed High instead of Critical or wrote the call as text; it runs in the scripted
-    self-test only.
+    self-test only. Fixed in v7: dispatch-07 accepts either refusal (S8, D100).
   - **Judge, a refusal without a listed phrase.** "I haven't drafted the pickup because the site
     doesn't allow Critical priority" (Opus 5.5 dispatch-07 run 2) is not credited as a refusal:
     the judge accepts only the phrases of `refusalWords` (`evals/harness/judge.go`) and the engine's
-    sentences (J7). The run is counted as the scenario class (S8).
+    sentences (J7). The run is counted as the scenario class (S8). Fixed in judge v7: such a
+    sentence is credited when it names the value (J7, D99).
   - **A refused field can be refused without end.** D94 refuses a field the kind does not use and
     asks the model to call again without it; nothing limits how often the same refusal repeats, and a
     field with an empty value is refused like one with a value. Qwen2.5-7B kept such a field in 26
     runs (172 refused calls; 5 runs ended at the 12-turn limit, 1 on the context size), Qwen2.5-14B
     in 13 runs (33 refused calls), the Claude models in none. The extraction was wrong first, so the
-    runs are counted as model failures (P12).
+    runs are counted as model failures (P12). Fixed in v7: after two refusals of a field in one
+    message the person is asked which field holds its value, or the preview says it was left out;
+    an empty value is ignored (D98).
   - **The air-gapped profile's 8192-token context was reached** in 4 runs (Qwen2.5-7B guided-08 run
     2; Qwen2.5-14B guided-08 run 3, guided-18 runs 2 and 3), after refusal loops or repeated reads;
     the run ends with llama-server's HTTP 400. Qwen2.5-7B sent twice the input tokens of its v5 run

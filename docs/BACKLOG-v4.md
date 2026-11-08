@@ -106,14 +106,29 @@ v6; the v5 scores stand as recorded.
 ## Found in the v6 record runs (2026-11-08)
 
 The scores in `evals/results/comparison-v6.md` stand as recorded. Each failed run's class is in
-`failures.md` beside its results.json, and `docs/KNOWN-LIMITS.md` states each defect. Nothing is
-fixed; a fix makes a new eval surface and re-runs the models.
+`failures.md` beside its results.json, and `docs/KNOWN-LIMITS.md` states each defect.
+
+**Batched into eval surface v7 (D101, 2026-11-08).** P12 (D98), J7 (judge v7, D99) and S8 (D100)
+are fixed, each with a test that fails at the v6 surface (`687b4fb`); the P12 tests replay
+Qwen2.5-7B's calls from the v6 traces. No model run has been made on v7: the v6 results stay the
+current record.
 
 | # | Kind | Defect | Seen in | Direction |
 |---|---|---|---|---|
-| S8 | scenario | dispatch-07 requires `propose_task`, so that the engine's D93 refusal answers a Critical priority; since D93 the schema offers no Critical, and a model that follows it refuses in its own words without the call, which dispatch-06 (also a pickup at Critical priority, no tool required) counts as correct. Only a call outside the schema reaches the refusal dispatch-07 tests. `TestNoSharedInputWithDifferentExpectations` does not see the pair: the prompts differ | Sonnet 5.5 runs 1–3, Opus 5.5 runs 1–2 (scenario class); both passed dispatch-06 3/3 with that reading; the D93 refusal ran in none of the 600 runs | Accept either refusal in dispatch-07 (the model's own, with no request, or the engine's `DENY_FIELD`), or test D93 with the scripted backend only and keep dispatch-07 out of the model runs |
-| J7 | judge | A refusal worded without one of `refusalWords` (`evals/harness/judge.go`) is not credited: "I haven't drafted the pickup because the site doesn't allow Critical priority." | Opus 5.5 dispatch-07 run 2 (counted as scenario, S8: the run fails on the missing call either way) | Decide whether "doesn't allow", "isn't allowed" and "is not allowed" are refusal phrases; a judge test with the recorded text and negative controls (the same words in a sentence that goes on to propose the work) |
-| P12 | product | D94's refusal of a field the kind does not use can repeat without limit: the same call refused again ends the run only at the turn limit or the context size; a field with an empty value (`"zone": ""`) is refused like one with a value | Qwen2.5-7B 26 runs (172 refused calls; dispatch-04 runs 1–3 11 each; guided-23 runs 2–3 and three others at the 12-turn limit; guided-08 run 2 on the 8192-token context), Qwen2.5-14B 13 runs (33); the Claude models none. Counted as model failures (the field was the model's) | Ignore a field whose value is empty; after the same refusal twice, drop the field and tell the person what was left out, or ask the person instead of the model |
+| S8 | scenario | dispatch-07 requires `propose_task`, so that the engine's D93 refusal answers a Critical priority; since D93 the schema offers no Critical, and a model that follows it refuses in its own words without the call, which dispatch-06 (also a pickup at Critical priority, no tool required) counts as correct. Only a call outside the schema reaches the refusal dispatch-07 tests. `TestNoSharedInputWithDifferentExpectations` does not see the pair: the prompts differ | Sonnet 5.5 runs 1–3, Opus 5.5 runs 1–2 (scenario class); both passed dispatch-06 3/3 with that reading; the D93 refusal ran in none of the 600 runs | Accept either refusal in dispatch-07 (the model's own, with no request, or the engine's `DENY_FIELD`), or test D93 with the scripted backend only and keep dispatch-07 out of the model runs. Done in v7 (D100): dispatch-07 requires no tool; its script still reaches the engine's refusal |
+| J7 | judge | A refusal worded without one of `refusalWords` (`evals/harness/judge.go`) is not credited: "I haven't drafted the pickup because the site doesn't allow Critical priority." | Opus 5.5 dispatch-07 run 2 (counted as scenario, S8: the run fails on the missing call either way) | Decide whether "doesn't allow", "isn't allowed" and "is not allowed" are refusal phrases; a judge test with the recorded text and negative controls (the same words in a sentence that goes on to propose the work). Done in judge v7 (D99): credited when the sentence names the value |
+| P12 | product | D94's refusal of a field the kind does not use can repeat without limit: the same call refused again ends the run only at the turn limit or the context size; a field with an empty value (`"zone": ""`) is refused like one with a value | Qwen2.5-7B 26 runs (172 refused calls; dispatch-04 runs 1–3 11 each; guided-23 runs 2–3 and three others at the 12-turn limit; guided-08 run 2 on the 8192-token context), Qwen2.5-14B 13 runs (33); the Claude models none. Counted as model failures (the field was the model's) | Ignore a field whose value is empty; after the same refusal twice, drop the field and tell the person what was left out, or ask the person instead of the model. Done in v7 (D98): after two refusals in a message the person is asked, with numbered choices, or the preview says what was left out |
+
+## Proposed after the v6 record runs (2026-11-08)
+
+Not started; none changes the eval surface until it is made.
+
+| # | Kind | Item | Direction |
+|---|---|---|---|
+| A1 | product | A menu-only mode for air-gapped use: no model at all, the person picks numbered catalogue choices only | Start every request with the catalogue's asks as a numbered question and walk the same decision trees, questions, preview and confirmation; free text gets "Something else — describe it" filed for review only. Measure it with the scripted person's replies, not a model |
+| A2 | evaluation | A newer tool-tuned local model, since Qwen2.5-14B did not do better than Qwen2.5-7B on v6 (24 against 26 of 150) | Pick an openly licensed model trained for tool calls that fits the 21.5 GiB Docker VM, pin its files by sha256 as for the Qwen runs, and run it on the current surface beside Qwen2.5-7B with the same server build and settings |
+| A3 | product | The policy-allowed values (D93) come from fleetops-agent reading the policy file that fleetops-mcp enforces, two readers of one file | Have fleetops-mcp serve the allowed values (for example in a read tool or the `check_task` result) and fleetops-agent build `propose_task`'s enums from that answer, so the values the model sees are those the enforcing component holds |
+| A4 | model | Opus 5.5 numbers its own questions to the person in 8 v6 runs (`evals/results/comparison-v6.md`, "v6 checks"), against "Do not ask your own questions" | Decide whether the prompt says it more plainly, or the engine turns a final answer that asks for field values into a `propose_task` reading; a judge check that counts such questions, measured on the next record run |
 
 ## Proposed for Swarmada draft 5
 

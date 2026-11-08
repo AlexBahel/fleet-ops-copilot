@@ -137,7 +137,9 @@ Swarmada controller runs, and a scripted person answers the questions and the pr
 catalogue and scenario hashes. Generated 2026-11-08. Source:
 [`evals/results/comparison-v6.md`](evals/results/comparison-v6.md) and the four `results.json`
 files it links. The scripted self-test passes 150/150
-([`evals/results/fixtures/results.json`](evals/results/fixtures/results.json)).
+([`evals/results/fixtures/results.json`](evals/results/fixtures/results.json)). Eval surface v7
+(D98–D101: P12, judge v7, S8, regression scenario guided-24) has no model runs yet; its scripted
+self-test, 51 scenarios × 3, is held at 153/153 by [`evals/baseline.json`](evals/baseline.json).
 
 | | Claude Sonnet 5.5 | Claude Opus 5.5 | Qwen2.5-7B-Instruct (air-gapped) | Qwen2.5-14B-Instruct (air-gapped) |
 |---|---|---|---|---|

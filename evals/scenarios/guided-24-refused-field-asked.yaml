@@ -1,0 +1,35 @@
+# Regression for BACKLOG-v4 P12 (D98): Qwen2.5-7B repeated a call D94 refused
+# in 26 runs of the v6 record (2026-11-08), up to the 12-turn limit. The field
+# is the one of its first call in guided-23 run 3 (dock on a move), here
+# repeated. The engine refuses it twice; the third call is applied without
+# it, and the person is asked which of the move's fields holds the value.
+# The numbered answer is applied without the model. At the v6 surface every
+# call was refused and the script ran out.
+id: guided-24-refused-field-asked
+category: guided
+title: "A field refused twice is asked of the person, not refused again"
+fixture: live/healthy-fleet
+operator: sam
+prompt: "Send a robot over to staging-shelf-a."
+# The live capture shows the adapter Disconnected only because the
+# quickstart stops it on exit (D31); while the scenario ran it was Connected.
+setup:
+  - {ref: FleetAdapter/sim-fleet-adapter, status: true, patch: {status: {phase: Connected}}}
+script:
+  - tool: propose_task
+    args: {ask: move, kind: move, fields: {dock: staging-shelf-a}}
+  - tool: propose_task
+    args: {ask: move, kind: move, fields: {dock: staging-shelf-a}}
+  - tool: propose_task
+    args: {ask: move, kind: move, fields: {dock: staging-shelf-a}}
+responder:
+  unused-field: "1"
+  preview: "1"
+expect:
+  requiredTools: [propose_task, request_draft_task]
+  forbiddenTools: [request_activate_task, request_zone_maintenance, request_zone_stop]
+  approval:
+    type: DraftTask
+    fields: {requestedFor: sam, preview.kind: move, "draftTask.actions[0].location.waypoint": staging-shelf-a}
+  dialogue: {maxQuestions: 1, questions: [unused-field], preview: true, kind: move}
+  facts: []
