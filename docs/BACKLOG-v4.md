@@ -87,8 +87,13 @@ v5; the v4 scores stand as recorded.
 ## Found in the v5 record runs (2026-11-08)
 
 The scores in `evals/results/comparison-v5.md` stand as recorded. Each failed run's class is in
-`failures.md` beside its results.json, and `docs/KNOWN-LIMITS.md` states each defect. Nothing is
-fixed; a fix to the judge, a scenario, the prompt or the tools makes a new eval surface.
+`failures.md` beside its results.json, and `docs/KNOWN-LIMITS.md` states each defect.
+
+**Batched into eval surface v6 (D97, 2026-11-08).** J6 (judge v6, D95), S6 and S7 (D96), P10 (D94)
+and P11 (D93) are fixed, each with a test that fails at the v5 surface, P10 and P11 each with a
+regression scenario (guided-23, dispatch-07); the engine also states the facts it read in every
+question and preview (D92, regression scenario guided-22). The three model runs are repeated on
+v6; the v5 scores stand as recorded.
 
 | # | Kind | Defect | Seen in | Direction |
 |---|---|---|---|---|

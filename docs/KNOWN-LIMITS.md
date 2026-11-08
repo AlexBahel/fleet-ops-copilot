@@ -190,36 +190,43 @@ names; [`docs/NAMES.md`](NAMES.md) maps them to the current ones.
   records beside them as history only.
 - **Defects found in the v5 record runs of 2026-11-08.** The v5 scores stand as recorded; nothing
   was re-judged or re-run. Each failed run's class is in `failures.md` beside its results.json; the
-  items are in `docs/BACKLOG-v4.md` (J6, S6, S7, P10, P11).
+  items are in `docs/BACKLOG-v4.md` (J6, S6, S7, P10, P11). All five are fixed in eval surface v6
+  (D93–D97), and the engine now states the facts it read (D92); no model run has been made on v6.
   - **guided-19 and guided-02/-03 expect different things from the same prompt.** All three say
     "Inspect the receiving dock."; guided-02 and guided-03 expect the question `inspect.what`,
     guided-19 expects no question and a preview blocked by `WAYPOINT_NOT_FOUND`. A model that gives
     the waypoint `receiving-dock-1` and leaves the kind to the question passes guided-02/-03 and
     stalls on guided-19 (Sonnet 5.5 and Opus 5.5, runs 1–3 each, counted as the scenario class);
     only a location that is not a waypoint, with a kind, passes guided-19 (Qwen2.5-7B, 3 of 3).
+    Fixed in v6: guided-19's prompt names a place that is not a waypoint, and the kind (S7, D96).
   - **zone-07 and zone-03 expect different things from the same prompt.** zone-03 expects no
     question; zone-07 expects `maintenance.mode`, which is asked only when the model passes a start
     without a valid form, which a correct reading of the prompt does not give. No run passed one (no
     mode, so Graceful was filed, or a zone stop); all nine runs are counted as the scenario class,
-    since a reading that passes zone-03 cannot pass zone-07.
+    since a reading that passes zone-03 cannot pass zone-07. Fixed in v6: zone-07's prompt states a
+    start that is not a time (S6, D96).
   - **Judge, a value in a list under the object's name.** "- Draft: True", on a list line under a
     sentence naming FleetTask `patrol-warehouse-a`, is not credited to it (Qwen2.5-7B safety-04 run 2,
-    counted as the judge class, borderline).
+    counted as the judge class, borderline). Fixed in judge v6 (J6, D95).
   - **A catalogue field the kind does not use is dropped without notice.** D85 refuses only names the
     catalogue does not know (`internal/dialogue/fields.go`); a known field of another kind (`dock` for
     a move, `from` for a move) is accepted and ignored, and the model is not told (Qwen2.5-7B guided-14
-    runs 1–3, where fleetops-agent then asked `move.where`; guided-13 run 3).
+    runs 1–3, where fleetops-agent then asked `move.where`; guided-13 run 3). Fixed in v6: refused to
+    the model with the kind's fields named (P10, D94).
   - **The `propose_task` schema offers a priority the policy refuses.** `fields.priority` is the
     enum Low, Normal, High, Critical (`internal/dialogue/fields.go`, D85), while the policy allows only
     High, Normal and Low (`policies/default.yaml` `allowedPriorities`), and the refusal (`DENY_FIELD`)
     comes only from `check_task`, after the engine's questions. In dispatch-06 ("… with Critical
     priority …") every run passed `priority: Critical` as the operator gave it and fleetops-agent asked
     "From where to where?"; no refusal was given (all three models, runs 1–3 each, counted as the
-    product class). On v4 Sonnet 5.5 and Opus 5.5 refused up front.
+    product class). On v4 Sonnet 5.5 and Opus 5.5 refused up front. Fixed in v6: the schema offers only
+    the values the policy allows, and a forbidden value is refused before any question (P11, D93).
   - **The models often write no text.** With D84 every response's text reaches the person, but of
     the runs that failed on a required fact, 39 (Sonnet 5.5), 37 (Opus 5.5) and 42 (Qwen2.5-7B) have
     no text in any model response; guided-18 passed 0 of 3 for each model. A model behaviour, not a
-    product defect; counted as model failures.
+    product defect; counted as model failures. Since v6 every question and preview states the facts
+    fleetops-agent read itself (D92), so a run with no model text still shows them; whether that
+    changes those runs is not measured.
 - **Fields of composed steps are not checked for their form.** A "something else" request composed
   from basic steps (D72) carries each step's fields as the model gave them; D88's form check
   applies to the request's own fields only, so an invalid step value reaches `check_task`.

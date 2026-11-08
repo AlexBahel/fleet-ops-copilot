@@ -46,8 +46,10 @@ import (
 // model reads a request through propose_task and is offered no write tool;
 // the copilot asks, previews and files after the person's confirmation.
 // v5 (2026-11-07, D90) keeps the v4 text; propose_task's schema is
-// narrowed to the site catalogue (D85).
-const SystemPromptVersion = "v5"
+// narrowed to the site catalogue (D85). v6 (2026-11-08, D97) keeps the v4
+// text; propose_task's closed values are narrowed to the site policy (D93)
+// and check_task's result carries the facts its checks read (D92).
+const SystemPromptVersion = "v6"
 
 // SystemPrompt is the instruction every backend receives.
 const SystemPrompt = `You are an operations assistant for a Swarmada robot fleet.

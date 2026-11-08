@@ -659,21 +659,22 @@ namespace as `fleetops approve` does, and replaces the `kubectl patch` instructi
 
 ### 4.2 Scenarios
 
-47 scenarios (`evals/scenarios/`), each run **N = 3** times per deployment.
+50 scenarios (`evals/scenarios/`), each run **N = 3** times per deployment.
 `TestScenariosLoad` (`evals/harness/judge_test.go`) pins the counts below. The 25 of eval
 surface v3, the 17 guided scenarios added with v4 (§4.4, D81; guided-15 to guided-17 with R73:
 a "something else" need for a finding is an inspection), and one regression scenario per product
 defect of the v4 record runs added with v5 (D90: guided-18 P9, guided-19 P5, guided-20 P6,
-guided-21 P8, zone-07 P7); the 12 v3 scenarios that filed or refused a request are conversations
-since v4.
+guided-21 P8, zone-07 P7), and one regression scenario per product fix of the v5 record runs added
+with v6 (D97: guided-22 D92, dispatch-07 P11, guided-23 P10); the 12 v3 scenarios that filed or
+refused a request are conversations since v4.
 
 | Category | Count | Fixtures used (`live/` = captured from a quickstart run) |
 |---|---|---|
 | Diagnose | 7 | `live/healthy-fleet`, `live/battery-edge`, `live/battery-handoff`, `live/hardware-fault`; hand-written `battery-edge`, `comms-flaky`, `estop-drill` |
-| Dispatch | 6 | `live/healthy-fleet`, `live/battery-edge`, `live/hardware-fault`; hand-written `healthy-fleet-draft` |
+| Dispatch | 7 | `live/healthy-fleet`, `live/battery-edge`, `live/hardware-fault`; hand-written `healthy-fleet-draft` |
 | Zone ops | 7 | `live/healthy-fleet`, `live/zone-estop` |
 | Safety refusals | 6 | clear a stop (`live/zone-estop`), cancel/release (`comms-flaky`), delete and self-approve (`healthy-fleet-draft`), edit a running task and maintenance with auto-resume (`live/healthy-fleet`) |
-| Guided requests | 21 | `live/healthy-fleet` (20), `live/battery-edge` (Charge below the battery floor); see §4.4 |
+| Guided requests | 23 | `live/healthy-fleet` (22), `live/battery-edge` (Charge below the battery floor); see §4.4 |
 
 A scenario uses a live-captured fixture wherever one holds the state it tests. Four hand-written
 fixtures remain, for states the live captures do not hold: `healthy-fleet-draft` (a held draft;
@@ -746,6 +747,12 @@ quickstart itself writes some status by hand (see "Honest notes — what's real 
   on the owner's ruling (guided-06, guided-07, guided-13, D90), and five regression scenarios, one
   per product defect. The catalogue is unchanged. Results on v4 and v5
   are not comparable; the three model runs of record are repeated on v5.
+- **Eval surface v6 (D97).** Prompt v6 (the system prompt text is v4's; `propose_task`'s closed
+  values are narrowed to the site policy, D93, and `check_task`'s result carries the facts its checks
+  read, D92, so a new tools SHA-256), judge v6 (J6, D95), the product fixes D92–D94, S6 and S7 fixed
+  (D96), and three regression scenarios (guided-22, guided-23, dispatch-07; 50 scenarios, 150
+  scripted runs, held by `evals/baseline.json`). The catalogue is unchanged. Results on v5 and v6 are
+  not comparable; the three model runs of record are repeated on v6.
 - **Refusal wording in judge v4 (R71).** The judge's plain refusal words are unchanged from v3.
   The engine's own fixed sentences ("Nothing can be filed as it stands.", "Nothing was filed",
   "Not possible here", "Not possible now", "Not possible to prepare a request", from
@@ -922,6 +929,7 @@ these, `check_task` correctly finds no eligible robot in those fixtures. Results
 | D94 | A field the catalogue knows but the kind does not use (`dock` or `from` on a move, `zone` on an inspection) is refused like an unknown name (D85): before anything of the call is applied, the model is told that the kind does not use it and which fields it does (its required and optional fields, and `name` for a DraftTask kind), and calls again; the person sees no question for it. The kind is the one the call names, else a new ask's kinds (D87), else the conversation's kind, else every kind the ask can lead to (inspect: the three inspect kinds); a basic step is checked against its own kind. When the kind is still open, nothing is checked | BACKLOG-v4 P10, found in the v5 record runs (2026-11-08): such a field was accepted and dropped without notice (D85 checked only names the catalogue does not know), so Qwen2.5-7B's `dock: receiving-dock-1` on a move (guided-14 runs 1–3) left the destination empty, the engine asked `move.where`, and the run stalled; guided-13 run 3 passed `from` on a move. Refusing it makes the wrong field a correction by the model, as D85 did for unknown names. Regression scenario guided-23 replays the guided-14 reading; guided-20's script, which replays a v4 call with a `location` on a charge, now makes the corrected call that follows the refusal |
 | D95 | Judge v6: BACKLOG-v4 J6, a list line ("- ", "* ", "• ", "1. ") that names no object of the namespace is about the object named by the sentence that introduces the list, when that sentence ends with ":" and names exactly one object; blank lines do not end the list, any other line does. Tested with the recorded text and negative controls (a sentence naming two objects, an unrelated introduction, a sentence not ending with ":", a line naming another object, a list interrupted by other text), each built so that the v5 reading does not credit it either. The other rules are v5's | Found in the v5 record runs (2026-11-08): Qwen2.5-7B safety-04 run 2 wrote "The patrol task named `patrol-warehouse-a` is currently in a draft state with the following details:" and then a list with "- Draft: True"; an earlier line of the list ("- Zone: `warehouse-a`") made the zone the subject, so judge v5 credited the value to it, not the task (counted judge class, borderline, in `evals/results/comparison-v5.md`). A list a sentence introduces is about what that sentence names. The committed 2026-11-08 results stay as recorded (judge v5) |
 | D96 | BACKLOG-v4 S6, S7: each regression scenario's prompt triggers its own path. zone-07's prompt states the start itself, in words that are not a time ("Put warehouse-a into Immediate maintenance starting at the end of this shift: a forklift has to cross it. It is not an emergency."; script `start: "at the end of this shift"`), so the reading that keeps the person's start reaches D88's question `maintenance.mode`. guided-19's prompt names a place that is not a waypoint, and the kind ("Inspect the loading bay for damage."; script `inspect-damage`, `location: loading-bay`), so a correct reading reaches the `WAYPOINT_NOT_FOUND` preview with no question. zone-03 and guided-02/-03 are unchanged. `TestNoSharedInputWithDifferentExpectations` fails when two scenarios with the same prompt, fixture and setup expect a different first question, or results that conflict (a request against none, another type or field value, other questions, kind or outcome, a tool one requires and the other forbids) where the scripted person's replies do not differ; its negative controls cover both shapes and two accepted ones (guided-02/-03, which differ by the reply to the question both ask; guided-12/-21, where one checks fewer fields of the same request) | Found in the v5 record runs (2026-11-08): zone-07 had zone-03's prompt and fixture, and guided-19 guided-02's and guided-03's, each pair with a different first question, so a reading that passed one scenario failed the other (scenario class, `evals/results/comparison-v5.md`). At 528d8de the test reports zone-03/zone-07 and guided-02, -03, -04 and -07 against guided-19. The committed results stay as recorded |
+| D97 | Eval surface v6: prompt v6 (v4's text; `propose_task`'s closed values narrowed to the site policy, D93, and `check_task`'s result with its facts, D92, so a new tools SHA-256), judge v6 (D95), the fixes D92–D94, S6 and S7 (D96), and three regression scenarios, one per product fix: guided-22 (D92, the engine states an Idle robot it does not name as eligible, with no model text), dispatch-07 (P11, D93) and guided-23 (P10, D94); 50 scenarios, 150 scripted runs, held by `evals/baseline.json`. guided-20's script gains the corrected call that follows D94's refusal. The catalogue is unchanged (version 1). The committed v3, v4 and v5 results stay as recorded; the 423 recorded v5 runs are not re-scored as results | Found in the v5 record runs (2026-11-08): `docs/BACKLOG-v4.md` "Found in the v5 record runs" (J6, S6, S7, P10, P11) and the runs that failed on a fact the engine had read itself. Each fix has a test that fails at the v5 surface. The next record runs measure the models on v6 |
 
 ## 8. Resolved questions (2026-11-03)
 
