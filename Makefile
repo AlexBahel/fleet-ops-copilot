@@ -1,3 +1,6 @@
+# Copyright 2026 Alex Bahel
+# Licensed under the Apache License, Version 2.0 (see LICENSE).
+#
 # Fleet Ops Copilot. `make help` lists targets.
 
 ENVTEST_K8S_VERSION ?= 1.37.0

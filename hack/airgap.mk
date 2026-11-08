@@ -1,3 +1,6 @@
+# Copyright 2026 Alex Bahel
+# Licensed under the Apache License, Version 2.0 (see LICENSE).
+#
 # Air-gapped profile targets (docs/DESIGN.md §2, §3.5, §3.7), included by the
 # Makefile. Same rules as the live-cluster targets there: only kind clusters
 # named fleetops-*, and every kubectl names its context explicitly.
