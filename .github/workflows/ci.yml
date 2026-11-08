@@ -74,6 +74,11 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
       - name: make ci
         run: make ci
+      # make ci writes only ignored files (its self-test to evals/results/tmp/selftest/).
+      - name: make ci left the tracked files unchanged
+        run: |
+          git status --porcelain
+          test -z "$(git status --porcelain)"
       # R60: build the binaries under umask 077 and the image, and run each
       # binary in it as user 65532. The runner has Docker; the test fails
       # rather than skips when it cannot reach it.
@@ -85,4 +90,4 @@ jobs:
         if: always()
         with:
           name: fixture-eval-results
-          path: evals/results/fixtures/
+          path: evals/results/tmp/selftest/

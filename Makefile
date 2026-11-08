@@ -10,7 +10,7 @@ SETUP_ENVTEST_VERSION ?= v0.0.0-20260305142021-f9589b9f2b9d
 GO ?= go
 BIN := bin
 
-.PHONY: help build vet lint shellcheck fmt test test-envtest eval-fixtures eval-baseline generate check-no-local all ci envtest-assets image deploy-kind test-live-go demo demo-down test-live baseline-lowered
+.PHONY: help build vet lint shellcheck fmt test test-envtest eval-fixtures record-selftest eval-baseline generate check-no-local all ci envtest-assets image deploy-kind test-live-go demo demo-down test-live baseline-lowered
 
 help: ## List targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
@@ -46,7 +46,15 @@ test-envtest: envtest-assets ## API-server tests: RBAC, admission policies, appr
 	KUBEBUILDER_ASSETS="$$(setup-envtest use $(ENVTEST_K8S_VERSION) -p path)" \
 		$(GO) test -tags envtest -count=1 -timeout 600s ./test/envtest/...
 
-eval-fixtures: envtest-assets ## Fixture evaluations with the scripted backend, held to evals/baseline.json; writes evals/results/fixtures/results.json
+# make ci's scripted self-test goes to an ignored directory, so make ci changes
+# no tracked file; make record-selftest rewrites the committed one.
+SELFTEST_DIR ?= evals/results/tmp/selftest
+
+eval-fixtures: envtest-assets ## Fixture evaluations with the scripted backend, held to evals/baseline.json; writes $(SELFTEST_DIR)/ (ignored, never committed)
+	KUBEBUILDER_ASSETS="$$(setup-envtest use $(ENVTEST_K8S_VERSION) -p path)" \
+		$(GO) run -tags envtest ./evals/cmd/fleetops-eval -scenarios evals/scenarios -runs 3 -out $(SELFTEST_DIR)/results.json -baseline evals/baseline.json
+
+record-selftest: envtest-assets ## The same run, rewriting the committed evals/results/fixtures/results.json and traces.jsonl
 	KUBEBUILDER_ASSETS="$$(setup-envtest use $(ENVTEST_K8S_VERSION) -p path)" \
 		$(GO) run -tags envtest ./evals/cmd/fleetops-eval -scenarios evals/scenarios -runs 3 -out evals/results/fixtures/results.json -baseline evals/baseline.json
 

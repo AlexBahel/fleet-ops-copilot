@@ -23,6 +23,11 @@ and the fixture evals; the CI `go` job runs it, and the `hygiene` job also check
 header of every Go file and the `Signed-off-by:` line of every commit. Changes to the chart also need
 `make chart-check`. `make help` lists every target.
 
+`make ci` changes no tracked file: the fixture evals write their results to
+`evals/results/tmp/selftest/`, which is ignored, and CI fails when `git status` is not clean after
+`make ci`. The committed harness self-test, `evals/results/fixtures/results.json` and its
+`traces.jsonl`, changes only through `make record-selftest`, committed on its own.
+
 The fixture evals (`make eval-fixtures`) hold the run to `evals/baseline.json` (per category:
 scenarios, runs, passing runs). They fail when a category passes fewer runs than recorded or when
 the scenario count or a category's counts change (D58). A change that adds, removes or moves a
