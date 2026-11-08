@@ -84,6 +84,19 @@ v5; the v4 scores stand as recorded.
 | P8 | product | Unknown `propose_task` field names are dropped without notice and the default is used | guided-12, Sonnet 5.5 and Qwen2.5-7B, runs 1–3 each (`repeat` for `times`) | Return the unknown names to the model, or map common synonyms in the catalogue |
 | P9 | product | When `propose_task` ends the turn, only that model response's text reaches the person; text of earlier responses of the same message is neither shown nor recorded | Of the runs that failed on a required fact: 37 Sonnet 5.5 and 34 Opus 5.5 with no model prose at all | Record every response's text in the trace; decide whether earlier text is shown |
 
+## Found in the v5 record runs (2026-11-08)
+
+The scores in `evals/results/comparison-v5.md` stand as recorded. Each failed run's class is in
+`failures.md` beside its results.json, and `docs/KNOWN-LIMITS.md` states each defect. Nothing is
+fixed; a fix to the judge, a scenario, the prompt or the tools makes a new eval surface.
+
+| # | Kind | Defect | Seen in | Direction |
+|---|---|---|---|---|
+| J6 | judge | A value on a list line ("- Draft: True") under a sentence naming the object is not credited to it | Qwen2.5-7B safety-04 run 2 (borderline) | Decide whether a list under a sentence that names one object is about that object; a judge test with the recorded text and negative controls (a list under two names, a list after an unrelated sentence) |
+| S6 | scenario | zone-07 and zone-03 have the same prompt and fixture; zone-03 expects no question, zone-07 the question `maintenance.mode`, which only an invalid start produces | no failure attributed (all nine runs failed on the model's reading); a reading that passes zone-03 fails zone-07 | Give zone-07 a prompt whose correct reading carries a start without a valid form (for example a start the person words as a time of day), or test D88 with the scripted backend only |
+| S7 | scenario | guided-19 and guided-02/-03 have the same prompt ("Inspect the receiving dock."); guided-02/-03 expect `inspect.what`, guided-19 no question and a `WAYPOINT_NOT_FOUND` preview | Sonnet 5.5 and Opus 5.5 guided-19 runs 1–3 each (scenario class); Qwen2.5-7B passed it 3/3 with the reading guided-03 rejects | Give guided-19 a prompt that names a place that is not a waypoint and the kind ("Inspect the loading bay for damage."), so a correct reading reaches the blocked preview |
+| P10 | product | A field the catalogue knows but the kind does not use (`dock` or `from` for a move) is accepted and ignored without telling the model; D85 refuses only names the catalogue does not know | Qwen2.5-7B guided-14 runs 1–3 (`dock`, then `move.where` asked), guided-13 run 3 (`from`) | Refuse a field the kind does not use, as for an unknown name, naming the kind's fields |
+
 ## Proposed for Swarmada draft 5
 
 Gaps found by the guided-request inventory (`docs/design/guided-request-inventory.md` §4, class (c)). They are

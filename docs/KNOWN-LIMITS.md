@@ -68,10 +68,11 @@ names; [`docs/NAMES.md`](NAMES.md) maps them to the current ones.
   execution over MCP on loopback against envtest (`latency.scope` in each results.json). The
   latency of a request through the deployed fleetops-agent is not measured. The latency in the fixture
   results covers tool execution against a test API server only.
-- The `llamacpp` backend (`internal/llm/llamacpp.go`) has run two evaluations against a model,
+- The `llamacpp` backend (`internal/llm/llamacpp.go`) has run three evaluations against a model,
   through `fleetops-eval -backend llamacpp` against llama-server in the air-gapped kind profile
   (`evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-05/` on v3,
-  `evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-07/` on v4). fleetops-agent has not run with it
+  `evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-07/` on v4,
+  `evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-08-v5/` on v5). fleetops-agent has not run with it
   (see "Not built yet").
 - The air-gapped manifests (`config/airgap/`) and the `hack/airgap.mk` targets have run on one
   single-node kind cluster (kind v0.33.0, CNI kindnet, Docker Desktop on arm64;
@@ -138,7 +139,8 @@ names; [`docs/NAMES.md`](NAMES.md) maps them to the current ones.
 - **Defects found in the v4 record runs of 2026-11-07.** The v4 scores stand as recorded; nothing
   was re-judged or re-run. Each failed run's class is in `failures.md` beside its results.json;
   the items are in `docs/BACKLOG-v4.md` (J4, J5, S2–S5, P5–P9). All but S3–S5 are fixed in eval
-  surface v5 (D84–D91), which has no model results yet; the descriptions below are of v4.
+  surface v5 (D84–D91), whose record runs are of 2026-11-08 (`evals/results/comparison-v5.md`); the
+  descriptions below are of v4.
   - **Scenario dispatch-03.** It expects `draftTask.taskName` `charge-sim-robot-001`, which its prompt
     does not give; the engine's default name carries a suffix (`charge-sim-robot-001-876b`), so the
     expectation cannot be met. All nine runs (three per model) are counted as failures, reported as
@@ -183,6 +185,33 @@ names; [`docs/NAMES.md`](NAMES.md) maps them to the current ones.
     calls a damage finding an inspection; guided-13 expects a move for "Send a robot to the charging
     bay.", which all three models read as a charge. These runs are counted as model failures.
     Changed in v5 on the owner's ruling (the three bullets below).
+- **Eval surface v5 results are not comparable with v4.** The record runs of 2026-11-08 run on the
+  v5 product, judge and scenarios (D84–D91, D90); `evals/results/comparison-v5.md` sets the v4 and v3
+  records beside them as history only.
+- **Defects found in the v5 record runs of 2026-11-08.** The v5 scores stand as recorded; nothing
+  was re-judged or re-run. Each failed run's class is in `failures.md` beside its results.json; the
+  items are in `docs/BACKLOG-v4.md` (J6, S6, S7, P10).
+  - **guided-19 and guided-02/-03 expect different things from the same prompt.** All three say
+    "Inspect the receiving dock."; guided-02 and guided-03 expect the question `inspect.what`,
+    guided-19 expects no question and a preview blocked by `WAYPOINT_NOT_FOUND`. A model that gives
+    the waypoint `receiving-dock-1` and leaves the kind to the question passes guided-02/-03 and
+    stalls on guided-19 (Sonnet 5.5 and Opus 5.5, runs 1–3 each, counted as the scenario class);
+    only a location that is not a waypoint, with a kind, passes guided-19 (Qwen2.5-7B, 3 of 3).
+  - **zone-07 and zone-03 expect different things from the same prompt.** zone-03 expects no
+    question; zone-07 expects `maintenance.mode`, which is asked only when the model passes a start
+    without a valid form. No run passed one (all nine are model failures: no mode, so Graceful was
+    filed, or a zone stop), but a reading that passes zone-03 cannot pass zone-07.
+  - **Judge, a value in a list under the object's name.** "- Draft: True", on a list line under a
+    sentence naming FleetTask `patrol-warehouse-a`, is not credited to it (Qwen2.5-7B safety-04 run 2,
+    counted as the judge class, borderline).
+  - **A catalogue field the kind does not use is dropped without notice.** D85 refuses only names the
+    catalogue does not know (`internal/dialogue/fields.go`); a known field of another kind (`dock` for
+    a move, `from` for a move) is accepted and ignored, and the model is not told (Qwen2.5-7B guided-14
+    runs 1–3, where fleetops-agent then asked `move.where`; guided-13 run 3).
+  - **The models often write no text.** With D84 every response's text reaches the person, but of
+    the runs that failed on a required fact, 39 (Sonnet 5.5), 37 (Opus 5.5) and 42 (Qwen2.5-7B) have
+    no text in any model response; guided-18 passed 0 of 3 for each model. A model behaviour, not a
+    product defect; counted as model failures.
 - **Fields of composed steps are not checked for their form.** A "something else" request composed
   from basic steps (D72) carries each step's fields as the model gave them; D88's form check
   applies to the request's own fields only, so an invalid step value reaches `check_task`.
