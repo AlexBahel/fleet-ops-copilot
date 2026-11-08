@@ -636,3 +636,140 @@ func TestFieldTheKindDoesNotUseIsRefused(t *testing.T) {
 		t.Errorf("later call: %+v", o)
 	}
 }
+
+// P12 (D98): the same field refused twice in one message is not sent back
+// to the model a third time. The calls are Qwen2.5-7B's in the v6 record
+// (2026-11-08), dispatch-01 run 1 (trace 5089adab9e12e79a6569062cb779cfc2:
+// zone "warehouse-a" on a move, refused 9 times): the third call is applied
+// without the field, and the person is asked which of the move's fields
+// holds the value, with numbered choices ending with "Something else —
+// describe it"; the question counts against the cap.
+func TestRefusedFieldAskedOfThePersonAfterTwoRefusals(t *testing.T) {
+	e := &Engine{Cat: cat(t), Allowed: defaultPolicy(t)}
+	st := newState("Prepare a task named stage-pallet-a to send a robot with navigation to staging-shelf-a in warehouse-a. Draft it only; do not start it.")
+	calls := []Input{
+		{Ask: "move", Kind: "move", Fields: map[string]string{"location": "staging-shelf-a", "zone": "warehouse-a"}},
+		{Ask: "move", Kind: "move", Fields: map[string]string{"location": "staging-shelf-a", "robot": "sim-robot-001", "zone": "warehouse-a"}},
+		{Ask: "move", Kind: "move", Fields: map[string]string{"location": "staging-shelf-a", "robot": "sim-robot-001", "zone": "warehouse-a"}},
+	}
+	for i, in := range calls[:2] {
+		if o := e.Propose(st, in, snap); o.Invalid == "" || !strings.Contains(o.Invalid, `"zone"`) {
+			t.Fatalf("call %d: want the D94 refusal, got %+v", i+1, o)
+		}
+	}
+	o := e.Propose(st, calls[2], snap)
+	if o.Invalid != "" || o.Question == nil {
+		t.Fatalf("third call: want a question to the person, got %+v", o)
+	}
+	q := o.Question
+	if q.ID != UnusedFieldQuestion || !strings.Contains(q.Text, `zone "warehouse-a"`) || !strings.Contains(q.Text, "move") {
+		t.Fatalf("question %+v", q)
+	}
+	last := q.Choices[len(q.Choices)-1]
+	if !last.SomethingElse || last.Label != catalogue.SomethingElse {
+		t.Fatalf("last choice %+v", last)
+	}
+	// The move's fields that can hold the value: not given in the call
+	// (location, robot), of the value's form (no priority, no onFailure).
+	if len(q.Choices) != 2 || q.Choices[0].Set["name"] != "warehouse-a" {
+		t.Fatalf("choices %+v", q.Choices)
+	}
+	if len(o.Checked) == 0 && len(q.Checked) == 0 {
+		t.Fatal("the question states no Checked: block (D92)")
+	}
+	if len(st.Asked) != 1 || st.Fields["location"] != "staging-shelf-a" || st.Fields["robot"] != "sim-robot-001" {
+		t.Fatalf("asked %v, fields %v", st.Asked, st.Fields)
+	}
+	if _, ok := st.Fields["zone"]; ok {
+		t.Fatal("the unused field was applied")
+	}
+	// The person's choice is applied by the engine, without the model.
+	o, needModel, ok := e.Answer(st, 1, "", snap)
+	if !ok || needModel || o.Proposal == nil || st.Fields["name"] != "warehouse-a" {
+		t.Fatalf("answer: %+v, needModel %v, ok %v, fields %v", o, needModel, ok, st.Fields)
+	}
+}
+
+// P12 (D98): when no field of the kind can hold the value, or the cap of
+// two questions is reached, the field is left out and the preview says so.
+// The calls are Qwen2.5-7B's dispatch-04 run 1 in the v6 record (trace
+// e89e129a47afc33ef68d8488e51b748f: zone "Zone/zone-001" on an inspection
+// of a location, refused 11 times).
+func TestRefusedFieldLeftOutAndShownWhenNothingHoldsIt(t *testing.T) {
+	e := &Engine{Cat: cat(t), Allowed: defaultPolicy(t)}
+	st := newState("Draft an inspection named inspect-dock-camera of receiving-dock-1 that needs the front camera.")
+	first := Input{Ask: "inspect", Kind: "inspect-location", Fields: map[string]string{"location": "receiving-dock-1", "onFailure": "Alert", "priority": "Normal", "robot": "Robot/sim-robot-002", "zone": "Zone/zone-001"},
+		SomethingElse: &SomethingElseInput{Interpretation: Known, Kind: "inspect-location", LookFor: []string{"location-state"}}}
+	again := Input{Ask: "inspect", Kind: "inspect-location", Fields: map[string]string{"location": "receiving-dock-1", "robot": "Robot/sim-robot-002", "zone": "Zone/zone-001"},
+		SomethingElse: &SomethingElseInput{Interpretation: Known, Kind: "inspect-location", LookFor: []string{"location-state"}}}
+	refused := 0
+	var o Outcome
+	for i := 0; i < 11; i++ {
+		in := again
+		if i == 0 {
+			in = first
+		}
+		o = e.Propose(st, in, snap)
+		if o.Invalid == "" {
+			break
+		}
+		refused++
+	}
+	if refused != MaxRefusals {
+		t.Fatalf("refused %d times, want %d", refused, MaxRefusals)
+	}
+	if o.Proposal == nil {
+		t.Fatalf("want the preview, got %+v", o)
+	}
+	found := false
+	for _, n := range o.Proposal.Notes {
+		found = found || (strings.Contains(n, `zone "Zone/zone-001"`) && strings.Contains(n, "Left out"))
+	}
+	if !found {
+		t.Fatalf("the preview does not say what was left out: %v", o.Proposal.Notes)
+	}
+	// Past the cap of two questions, the field is left out too.
+	st = newState("Move a robot to receiving-dock-1.")
+	st.Asked = []string{"move.where", "move.robot"}
+	in := Input{Ask: "move", Fields: map[string]string{"location": "receiving-dock-1", "zone": "warehouse-a"}}
+	for i := 0; i < MaxRefusals; i++ {
+		e.Propose(st, in, snap)
+	}
+	if o := e.Propose(st, in, snap); o.Proposal == nil || len(st.Asked) != 2 || !strings.Contains(strings.Join(o.Proposal.Notes, " "), `zone "warehouse-a"`) {
+		t.Fatalf("past the cap: %+v, asked %v", o, st.Asked)
+	}
+	// Each message counts anew.
+	st = newState("Move a robot to receiving-dock-1.")
+	in = Input{Ask: "move", Fields: map[string]string{"location": "receiving-dock-1", "zone": "warehouse-a"}}
+	e.Propose(st, in, snap)
+	e.Propose(st, in, snap)
+	st.NewMessage()
+	if o := e.Propose(st, in, snap); o.Invalid == "" {
+		t.Fatalf("a new message: want the refusal again, got %+v", o)
+	}
+}
+
+// P12 (D98): a field with an empty value is ignored, not refused. The
+// calls are Qwen2.5-7B's guided-23 run 2 in the v6 record (trace
+// 29e7fb4e341fc19958a22f5c89730c98: "task": "", "times": "" on a move,
+// refused 11 times until the 12-turn limit).
+func TestEmptyValueIsIgnoredNotRefused(t *testing.T) {
+	e := &Engine{Cat: cat(t), Allowed: defaultPolicy(t)}
+	st := newState("Move a robot over to receiving-dock-1.")
+	o := e.Propose(st, Input{Ask: "move", Fields: map[string]string{"location": "receiving-dock-1", "robot": "", "task": "", "times": ""}}, snap)
+	if o.Invalid != "" {
+		t.Fatalf("refused: %s", o.Invalid)
+	}
+	if o.Question == nil && o.Proposal == nil {
+		t.Fatalf("outcome %+v", o)
+	}
+	for _, f := range []string{"task", "times", "robot"} {
+		if _, ok := st.Fields[f]; ok {
+			t.Errorf("empty %s kept", f)
+		}
+	}
+	// Control: the same field with a value is still refused (D94).
+	if o := e.Propose(newState("x"), Input{Ask: "move", Fields: map[string]string{"location": "receiving-dock-1", "times": "2"}}, snap); o.Invalid == "" {
+		t.Fatalf("times 2 on a move: %+v", o)
+	}
+}

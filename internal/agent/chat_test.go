@@ -480,3 +480,73 @@ func TestProposeSchemaOffersOnlyWhatThePolicyAllows(t *testing.T) {
 		t.Fatalf("no policy: %s", got)
 	}
 }
+
+// P12 (D98): Qwen2.5-7B's dispatch-04 run 1 in the v6 record (trace
+// e89e129a47afc33ef68d8488e51b748f) made the same propose_task call eleven
+// times, each refused by D94 for zone "Zone/zone-001", and ended with no
+// reply. The model now sees the refusal twice; the third call is applied
+// without the field, and the person gets the preview, which says what was
+// left out (no field of the kind can hold the value).
+func TestRefusalLoopEndsAfterTwoRefusals(t *testing.T) {
+	c := world(t)
+	args := map[string]any{"ask": "inspect", "kind": "inspect-location",
+		"fields":        map[string]any{"location": "receiving-dock-1", "robot": "Robot/sim-robot-002", "zone": "Zone/zone-001"},
+		"somethingElse": map[string]any{"interpretation": "known", "kind": "inspect-location", "lookFor": []string{"location-state"}}}
+	var steps []llm.Step
+	for i := 0; i < 11; i++ {
+		steps = append(steps, llm.Step{Calls: []llm.ToolCall{call("p", ProposeTool, args)}})
+	}
+	_, conv, send := chatFixture(t, c, steps...)
+	tr := send("Draft an inspection named inspect-dock-camera of receiving-dock-1 that needs the front camera. Keep it off any robot whose camera is degraded.")
+	refused, applied := 0, 0
+	for _, e := range tr.Calls {
+		if e.Name == ProposeTool {
+			if e.IsError {
+				refused++
+			} else {
+				applied++
+			}
+		}
+	}
+	if refused != dialogue.MaxRefusals || applied != 1 {
+		t.Fatalf("propose_task refused %d, applied %d; want %d and 1", refused, applied, dialogue.MaxRefusals)
+	}
+	if tr.Dialogue == nil || tr.Dialogue.Outcome != OutcomePreview || !strings.Contains(tr.Final, `Left out: zone "Zone/zone-001"`) {
+		t.Fatalf("dialogue %+v\n%s", tr.Dialogue, tr.Final)
+	}
+	if len(requests(t, c)) != 0 || conv.Preview == nil {
+		t.Fatal("want a preview and nothing filed")
+	}
+}
+
+// P12 (D98): Qwen2.5-7B's dispatch-01 run 1 in the v6 record (trace
+// 5089adab9e12e79a6569062cb779cfc2) kept zone "warehouse-a" on a move. After
+// two refusals the person is asked which of the move's fields holds it,
+// with numbered choices ending with "Something else — describe it"; the
+// numbered answer is applied by fleetops-agent, without the model.
+func TestRefusedFieldAskedOfThePerson(t *testing.T) {
+	c := world(t)
+	first := map[string]any{"ask": "move", "kind": "move", "fields": map[string]any{"location": "staging-shelf-a", "zone": "warehouse-a"}}
+	again := map[string]any{"ask": "move", "kind": "move", "fields": map[string]any{"location": "staging-shelf-a", "robot": "sim-robot-002", "zone": "warehouse-a"}}
+	_, conv, send := chatFixture(t, c,
+		llm.Step{Calls: []llm.ToolCall{call("p1", ProposeTool, first)}},
+		llm.Step{Calls: []llm.ToolCall{call("p2", ProposeTool, again)}},
+		llm.Step{Calls: []llm.ToolCall{call("p3", ProposeTool, again)}},
+	)
+	tr := send("Prepare a task named stage-pallet-a to send a robot with navigation to staging-shelf-a in warehouse-a. Draft it only; do not start it.")
+	if tr.Dialogue == nil || tr.Dialogue.Outcome != OutcomeQuestion || tr.Dialogue.QuestionID != dialogue.UnusedFieldQuestion || tr.Dialogue.Asked != 1 {
+		t.Fatalf("dialogue %+v\n%s", tr.Dialogue, tr.Final)
+	}
+	for _, want := range []string{`zone "warehouse-a"`, "\n1 Name: \"warehouse-a\"", "\n2 " + catalogue.SomethingElse, "Checked"} {
+		if !strings.Contains(tr.Final, want) {
+			t.Errorf("question lacks %q:\n%s", want, tr.Final)
+		}
+	}
+	tr = send("1")
+	if tr.Dialogue == nil || tr.Dialogue.Outcome != OutcomePreview || !strings.Contains(tr.Final, "Draft name: warehouse-a") {
+		t.Fatalf("after the answer: %+v\n%s", tr.Dialogue, tr.Final)
+	}
+	if conv.State.Fields["robot"] != "sim-robot-002" {
+		t.Fatalf("fields %v", conv.State.Fields)
+	}
+}

@@ -146,6 +146,28 @@ type State struct {
 	// Invalid holds values refused for their form, by field (start "now"):
 	// never used, kept only to say why the question is asked again (D88).
 	Invalid map[string]string `json:"invalid,omitempty"`
+	// Refusals counts, in the current message, how often each field the
+	// kind does not use was refused to the model (D94); past MaxRefusals
+	// the person is asked instead (D98). NewMessage clears it.
+	Refusals map[string]int `json:"-"`
+	// Unused is such a field past the bound, asked of the person next;
+	// LeftOut are those dropped instead, shown in the preview (D98).
+	Unused  *UnusedField  `json:"unused,omitempty"`
+	LeftOut []UnusedField `json:"leftOut,omitempty"`
+}
+
+// NewMessage starts the per-message counts: the bound on D94's refusals
+// is per message of the person (D98).
+func (st *State) NewMessage() { st.Refusals = nil }
+
+// leaveOut records a value left out, once.
+func (st *State) leaveOut(u UnusedField) {
+	for _, l := range st.LeftOut {
+		if l.Field == u.Field && l.Value == u.Value && l.Label == u.Label {
+			return
+		}
+	}
+	st.LeftOut = append(st.LeftOut, u)
 }
 
 // set records a field value: one without its field's form is removed from
@@ -269,7 +291,8 @@ func (e *Engine) Propose(st *State, in Input, snap Snapshot) Outcome {
 	if msg := e.unknownFields(st, in); msg != "" {
 		return Outcome{Invalid: msg}
 	}
-	if msg := e.unusedFields(st, in); msg != "" {
+	msg, in := st.boundUnused(e.unusedFields(st, in), in)
+	if msg != "" {
 		return Outcome{Invalid: msg}
 	}
 	if msg := e.forbidden(in); msg != "" {
@@ -501,6 +524,26 @@ func (e *Engine) next(st *State, snap Snapshot) Outcome {
 	}
 	if st.Kind == "" && a.Kind != "" {
 		st.Kind = a.Kind
+	}
+	if u := st.Unused; u != nil {
+		// A value the model kept giving in a field the kind does not use:
+		// the person says which field holds it, within the cap (D98).
+		st.Unused = nil
+		choices := e.unusedChoices(st, *u)
+		if len(choices) == 0 || len(st.Asked) >= catalogue.MaxQuestions {
+			st.leaveOut(*u)
+		} else {
+			rq := Question{ID: UnusedFieldQuestion, Checked: snap.Checked(st.Ask),
+				Text: fmt.Sprintf("Your request gave %s %q, which %s does not use. Which of its fields holds it?", u.Field, u.Value, strings.TrimSuffix(u.Label, ","))}
+			for i, c := range choices {
+				c.N = i + 1
+				rq.Choices = append(rq.Choices, c)
+			}
+			rq.Choices = append(rq.Choices, Choice{N: len(choices) + 1, Label: catalogue.SomethingElse, SomethingElse: true})
+			st.Asked = append(st.Asked, rq.ID)
+			st.Pending = &rq
+			return Outcome{Question: &rq}
+		}
 	}
 	for _, q := range a.Questions {
 		if e.answered(st, q) {
@@ -743,6 +786,21 @@ func (e *Engine) proposal(st *State, wps map[string]Waypoint) Outcome {
 	if wps == nil {
 		wps = map[string]Waypoint{}
 	}
+	if st.Unused != nil {
+		st.leaveOut(*st.Unused)
+		st.Unused = nil
+	}
+	out := e.buildProposal(st, wps)
+	if out.Proposal != nil {
+		for _, u := range st.LeftOut {
+			out.Proposal.Notes = append(out.Proposal.Notes, leftOutNote(u))
+		}
+	}
+	return out
+}
+
+// buildProposal is proposal without the left-out notes.
+func (e *Engine) buildProposal(st *State, wps map[string]Waypoint) Outcome {
 	if st.Kind == "composed" {
 		return Outcome{Proposal: e.composed(st, wps)}
 	}

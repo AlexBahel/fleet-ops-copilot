@@ -18,6 +18,7 @@ package dialogue
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -113,32 +114,54 @@ func (e *Engine) callKinds(st *State, in Input) []*catalogue.Kind {
 	return out
 }
 
-// unusedFields refuses a field the catalogue knows but the kind does not
+// unused is one group of fields the kind does not use: the call's own
+// fields (step -1) or a basic step's.
+type unused struct {
+	label  string
+	fields []string // the kind's fields
+	step   int
+	bad    []string // sorted
+}
+
+// key names a field of the group for the per-message refusal count (D98).
+func (u unused) key(f string) string {
+	if u.step < 0 {
+		return f
+	}
+	return fmt.Sprintf("step %d %s", u.step+1, f)
+}
+
+// refusal is D94's text for the model.
+func (u unused) refusal() string {
+	quoted := make([]string, len(u.bad))
+	for i, b := range u.bad {
+		quoted[i] = strconv.Quote(b)
+	}
+	return fmt.Sprintf("propose_task was not applied: %s does not use the field %s. Its fields are: %s. Which of them did the person's words mean? Call propose_task again with those field names only; a detail none of them holds is not part of this request.",
+		u.label, strings.Join(quoted, ", "), strings.Join(u.fields, ", "))
+}
+
+// unusedFields finds the fields the catalogue knows but the kind does not
 // use (dock or from on a move), before anything of the call is applied
 // (D94), as unknownFields does for a name the catalogue does not know: the
 // model is told the kind's fields and calls again. A basic step is checked
-// against its own kind.
-func (e *Engine) unusedFields(st *State, in Input) string {
-	type use struct {
-		label  string
-		fields []string
-	}
-	refuse := func(u use, fs map[string]string) string {
-		var bad []string
-		for f := range fs {
-			if !slices.Contains(u.fields, f) {
-				bad = append(bad, strconv.Quote(f))
+// against its own kind. A field with an empty value is ignored, not
+// refused (D98). The call's own fields come first, then each step's.
+func (e *Engine) unusedFields(st *State, in Input) []unused {
+	var out []unused
+	check := func(u unused, fs map[string]string) {
+		for f, v := range fs {
+			if strings.TrimSpace(v) != "" && !slices.Contains(u.fields, f) {
+				u.bad = append(u.bad, f)
 			}
 		}
-		if len(bad) == 0 {
-			return ""
+		if len(u.bad) > 0 {
+			slices.Sort(u.bad)
+			out = append(out, u)
 		}
-		slices.Sort(bad)
-		return fmt.Sprintf("propose_task was not applied: %s does not use the field %s. Its fields are: %s. Which of them did the person's words mean? Call propose_task again with those field names only; a detail none of them holds is not part of this request.",
-			u.label, strings.Join(bad, ", "), strings.Join(u.fields, ", "))
 	}
 	if ks := e.callKinds(st, in); len(ks) > 0 && len(in.Fields) > 0 {
-		u := use{}
+		u := unused{step: -1}
 		var names []string
 		for _, k := range ks {
 			names = append(names, k.Name)
@@ -155,20 +178,109 @@ func (e *Engine) unusedFields(st *State, in Input) string {
 				u.label = fmt.Sprintf("the ask %s (kinds %s)", st.Ask, strings.Join(names, ", "))
 			}
 		}
-		if msg := refuse(u, in.Fields); msg != "" {
-			return msg
-		}
+		check(u, in.Fields)
 	}
 	if in.SomethingElse != nil {
 		for i, s := range in.SomethingElse.Steps {
 			if k, ok := e.Cat.KindByName(s.Kind); ok {
-				if msg := refuse(use{label: fmt.Sprintf("step %d, the kind %s,", i+1, k.Name), fields: kindFields(k)}, s.Fields); msg != "" {
-					return msg
-				}
+				check(unused{label: fmt.Sprintf("step %d, the kind %s,", i+1, k.Name), fields: kindFields(k), step: i}, s.Fields)
 			}
 		}
 	}
-	return ""
+	return out
+}
+
+// MaxRefusals is how often, in one message, the same field the kind does
+// not use is refused to the model; the next call carrying it is applied
+// without it, and the person is asked (D98).
+const MaxRefusals = 2
+
+// UnusedFieldQuestion is the id of the question that asks the person which
+// field holds a value the model kept giving in a field the kind does not
+// use (D98).
+const UnusedFieldQuestion = "unused-field"
+
+// UnusedField is a value given in a field the kind does not use, past
+// MaxRefusals: asked of the person, or left out and shown in the preview.
+type UnusedField struct {
+	Field  string   `json:"field"`
+	Value  string   `json:"value"`
+	Label  string   `json:"label"`
+	Fields []string `json:"fields,omitempty"`
+}
+
+// boundUnused applies D98 to the call's unused fields: under the bound, the
+// first group is refused to the model and counted; past it (a field of
+// that group already refused MaxRefusals times in this message), the call
+// goes on without every unused field, the first such field of the call's
+// own fields is kept for the person's question, and the others are left
+// out. It returns the refusal for the model, or the call to apply.
+func (st *State) boundUnused(groups []unused, in Input) (string, Input) {
+	if len(groups) == 0 {
+		return "", in
+	}
+	g := groups[0]
+	past := ""
+	for _, f := range g.bad {
+		if st.Refusals[g.key(f)] >= MaxRefusals {
+			past = f
+			break
+		}
+	}
+	if past == "" {
+		if st.Refusals == nil {
+			st.Refusals = map[string]int{}
+		}
+		for _, f := range g.bad {
+			st.Refusals[g.key(f)]++
+		}
+		return g.refusal(), in
+	}
+	out := in
+	out.Fields = maps.Clone(in.Fields)
+	if in.SomethingElse != nil {
+		se := *in.SomethingElse
+		se.Steps = append([]StepInput(nil), se.Steps...)
+		for i := range se.Steps {
+			se.Steps[i].Fields = maps.Clone(se.Steps[i].Fields)
+		}
+		out.SomethingElse = &se
+	}
+	for _, u := range groups {
+		fs := out.Fields
+		if u.step >= 0 {
+			fs = out.SomethingElse.Steps[u.step].Fields
+		}
+		for _, f := range u.bad {
+			uf := UnusedField{Field: f, Value: fs[f], Label: u.label, Fields: u.fields}
+			delete(fs, f)
+			if u.step < 0 && f == past && st.Unused == nil {
+				st.Unused = &uf
+				continue
+			}
+			st.leaveOut(uf)
+		}
+	}
+	return "", out
+}
+
+// unusedChoices are the fields of the kind that can hold u's value: not
+// already given, of the value's form, and allowed by the site policy.
+func (e *Engine) unusedChoices(st *State, u UnusedField) []Choice {
+	forms := FormsFor(e.Allowed)
+	var out []Choice
+	for _, f := range u.Fields {
+		if _, given := st.Fields[f]; given || !forms[f].Valid(u.Value) || e.Allowed.forbids(f, u.Value) {
+			continue
+		}
+		out = append(out, Choice{Label: fmt.Sprintf("%s: %q (%s)", label(f), u.Value, forms[f].Desc), Set: map[string]string{f: u.Value}})
+	}
+	return limit(out)
+}
+
+// leftOutNote is the preview's line for a value that was left out (D98).
+func leftOutNote(u UnusedField) string {
+	return fmt.Sprintf("Left out: %s %q, which %s does not use.", u.Field, u.Value, strings.TrimSuffix(u.Label, ","))
 }
 
 // PolicyValues are the values the site policy allows for a closed field,

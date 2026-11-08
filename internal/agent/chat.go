@@ -315,6 +315,8 @@ func (c *Chat) turn(ctx context.Context, cs *mcp.ClientSession, conv *conversati
 			}
 		}
 	}
+	// The bound on D94's refusals counts per message (D98).
+	conv.State.NewMessage()
 	loop := &Loop{Backend: conv.Backend, Session: cs, MaxTurns: c.MaxTurns, Tracer: c.Tracer, Offer: mcpserver.ForModel}
 	var ev *DialogueEvent
 	var extra []ToolEvent
@@ -325,7 +327,9 @@ func (c *Chat) turn(ctx context.Context, cs *mcp.ClientSession, conv *conversati
 				return "", "", fmt.Errorf("propose_task arguments: %w", err)
 			}
 			if !conv.State.Active() {
-				conv.State = dialogue.State{Message: message, Fields: map[string]string{}}
+				// A refused call applies nothing, so the request has not
+				// started; this message's refusal count carries on (D98).
+				conv.State = dialogue.State{Message: message, Fields: map[string]string{}, Refusals: conv.State.Refusals}
 			}
 			snap, calls, err := c.snapshot(ctx, cs, operator, sessionID)
 			extra = append(extra, calls...)
