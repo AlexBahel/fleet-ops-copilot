@@ -519,35 +519,38 @@ func TestRefusalLoopEndsAfterTwoRefusals(t *testing.T) {
 	}
 }
 
-// P12 (D98): Qwen2.5-7B's dispatch-01 run 1 in the v6 record (trace
-// 5089adab9e12e79a6569062cb779cfc2) kept zone "warehouse-a" on a move. After
-// two refusals the person is asked which of the move's fields holds it,
-// with numbered choices ending with "Something else — describe it"; the
-// numbered answer is applied by fleetops-agent, without the model.
+// P12 (D98): Qwen2.5-7B's first call in guided-23 run 3 of the v6 record
+// (trace 24b31da3e740e0cb5a70d474dd06d56d), dock "receiving-dock-1" on a
+// move, repeated. After two refusals the person is asked which of the
+// move's fields holds it, with numbered choices ending with "Something else
+// — describe it"; the numbered answer is applied by fleetops-agent, without
+// the model, and the request is filed only on the preview's confirmation.
 func TestRefusedFieldAskedOfThePerson(t *testing.T) {
 	c := world(t)
-	first := map[string]any{"ask": "move", "kind": "move", "fields": map[string]any{"location": "staging-shelf-a", "zone": "warehouse-a"}}
-	again := map[string]any{"ask": "move", "kind": "move", "fields": map[string]any{"location": "staging-shelf-a", "robot": "sim-robot-002", "zone": "warehouse-a"}}
-	_, conv, send := chatFixture(t, c,
-		llm.Step{Calls: []llm.ToolCall{call("p1", ProposeTool, first)}},
-		llm.Step{Calls: []llm.ToolCall{call("p2", ProposeTool, again)}},
-		llm.Step{Calls: []llm.ToolCall{call("p3", ProposeTool, again)}},
+	dock := map[string]any{"ask": "move", "kind": "move", "fields": map[string]any{"dock": "receiving-dock-1"}}
+	_, _, send := chatFixture(t, c,
+		llm.Step{Calls: []llm.ToolCall{call("p1", ProposeTool, dock)}},
+		llm.Step{Calls: []llm.ToolCall{call("p2", ProposeTool, dock)}},
+		llm.Step{Calls: []llm.ToolCall{call("p3", ProposeTool, dock)}},
 	)
-	tr := send("Prepare a task named stage-pallet-a to send a robot with navigation to staging-shelf-a in warehouse-a. Draft it only; do not start it.")
+	tr := send("Move a robot over to receiving-dock-1.")
 	if tr.Dialogue == nil || tr.Dialogue.Outcome != OutcomeQuestion || tr.Dialogue.QuestionID != dialogue.UnusedFieldQuestion || tr.Dialogue.Asked != 1 {
 		t.Fatalf("dialogue %+v\n%s", tr.Dialogue, tr.Final)
 	}
-	for _, want := range []string{`zone "warehouse-a"`, "\n1 Name: \"warehouse-a\"", "\n2 " + catalogue.SomethingElse, "Checked"} {
+	for _, want := range []string{`dock "receiving-dock-1"`, "\n1 Location: \"receiving-dock-1\"", "\n2 " + catalogue.SomethingElse, dialogue.CheckedSnapshotHeader} {
 		if !strings.Contains(tr.Final, want) {
 			t.Errorf("question lacks %q:\n%s", want, tr.Final)
 		}
 	}
 	tr = send("1")
-	if tr.Dialogue == nil || tr.Dialogue.Outcome != OutcomePreview || !strings.Contains(tr.Final, "Draft name: warehouse-a") {
+	if tr.Dialogue == nil || tr.Dialogue.Outcome != OutcomePreview || !strings.Contains(tr.Final, "Location: receiving-dock-1") {
 		t.Fatalf("after the answer: %+v\n%s", tr.Dialogue, tr.Final)
 	}
-	if conv.State.Fields["robot"] != "sim-robot-002" {
-		t.Fatalf("fields %v", conv.State.Fields)
+	if len(requests(t, c)) != 0 {
+		t.Fatal("filed before the confirmation")
+	}
+	if tr = send("1"); tr.Dialogue == nil || tr.Dialogue.Outcome != OutcomeFiled || len(requests(t, c)) != 1 {
+		t.Fatalf("confirmation: %+v\n%s", tr.Dialogue, tr.Final)
 	}
 }
 

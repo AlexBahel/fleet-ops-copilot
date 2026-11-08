@@ -265,17 +265,45 @@ func (st *State) boundUnused(groups []unused, in Input) (string, Input) {
 }
 
 // unusedChoices are the fields of the kind that can hold u's value: not
-// already given, of the value's form, and allowed by the site policy.
-func (e *Engine) unusedChoices(st *State, u UnusedField) []Choice {
+// already given, of the value's form, allowed by the site policy, and, for
+// a field that names fleet objects, a name the engine read (a waypoint, a
+// robot, a zone, a draft). The draft's own name is not offered: nothing
+// tells a value is one.
+func (e *Engine) unusedChoices(st *State, u UnusedField, snap Snapshot) []Choice {
 	forms := FormsFor(e.Allowed)
 	var out []Choice
 	for _, f := range u.Fields {
-		if _, given := st.Fields[f]; given || !forms[f].Valid(u.Value) || e.Allowed.forbids(f, u.Value) {
+		if _, given := st.Fields[f]; given || f == "name" || !forms[f].Valid(u.Value) || e.Allowed.forbids(f, u.Value) || !snap.holds(f, u.Value) {
 			continue
 		}
 		out = append(out, Choice{Label: fmt.Sprintf("%s: %q (%s)", label(f), u.Value, forms[f].Desc), Set: map[string]string{f: u.Value}})
 	}
 	return limit(out)
+}
+
+// holds reports whether v can be field f's value in this fleet: a field
+// that names fleet objects needs names the snapshot has.
+func (s Snapshot) holds(f, v string) bool {
+	switch f {
+	case "location", "from", "to", "dock":
+		_, ok := s.waypoints()[v]
+		return ok
+	case "route":
+		wps := s.waypoints()
+		for _, n := range strings.Split(v, ",") {
+			if _, ok := wps[strings.TrimSpace(n)]; !ok {
+				return false
+			}
+		}
+		return true
+	case "robot":
+		return slices.ContainsFunc(s.Robots, func(r Robot) bool { return r.Name == v })
+	case "zone":
+		return slices.Contains(s.Zones, v)
+	case "task":
+		return slices.ContainsFunc(s.Drafts, func(d Draft) bool { return d.Name == v })
+	}
+	return true
 }
 
 // leftOutNote is the preview's line for a value that was left out (D98).

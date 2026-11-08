@@ -529,7 +529,7 @@ func (e *Engine) next(st *State, snap Snapshot) Outcome {
 		// A value the model kept giving in a field the kind does not use:
 		// the person says which field holds it, within the cap (D98).
 		st.Unused = nil
-		choices := e.unusedChoices(st, *u)
+		choices := e.unusedChoices(st, *u, snap)
 		if len(choices) == 0 || len(st.Asked) >= catalogue.MaxQuestions {
 			st.leaveOut(*u)
 		} else {
