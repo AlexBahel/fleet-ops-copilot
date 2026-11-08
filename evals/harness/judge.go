@@ -133,8 +133,10 @@ var codePattern = regexp.MustCompile(`"policy\.code":"([A-Z_]+)"`)
 // before it, or about no earlier object when none of that kind was named)
 // and J5 (in a clause about a pronoun's or a definite reference's object, a
 // predicate joined by "and" after a name of another kind is about that
-// object: "It is in the warehouse-a zone and is idle").
-const JudgeVersion = "v5"
+// object: "It is in the warehouse-a zone and is idle"). v6 (2026-11-08,
+// D95): BACKLOG-v4 J6 (a list line that names no object is about the one
+// object named by the sentence that introduces the list, ending with ":").
+const JudgeVersion = "v6"
 
 // refKinds are the object kinds an answer can name.
 const refKinds = `Robot|FleetTask|FleetAction|FleetZone|ZoneMaintenance|ApprovalRequest|DiscoveredRobot|FleetAdapter|TaskTrigger`
@@ -430,6 +432,54 @@ func citesCollectively(answer, kind, value string, ob Observed) bool {
 	return false
 }
 
+// listItem matches a list line: "- ", "* ", "• " or "1. " / "1) ".
+var listItem = regexp.MustCompile(`^\s*(?:[-*•]|\d+[.)])\s+`)
+
+// citesInList is J6 (judge v6, D95): a list line that names no object of
+// the namespace is about the object named by the sentence that introduces
+// the list, when that sentence ends with ":" and names exactly that one
+// object ("The patrol task named patrol-warehouse-a ... details:" then
+// "- Draft: True"). Blank lines do not end a list; any other line does, and
+// is the next list's introduction.
+func citesInList(answer, name, value string, known []string) bool {
+	if !slices.Contains(known, name) {
+		known = append(known, name)
+	}
+	lead := ""
+	for _, line := range strings.Split(answer, "\n") {
+		t := strings.TrimSpace(line)
+		if t == "" {
+			continue
+		}
+		loc := listItem.FindStringIndex(line)
+		if loc == nil {
+			lead = t
+			continue
+		}
+		if !strings.HasSuffix(lead, ":") {
+			continue
+		}
+		var inLead []string
+		for _, n := range known {
+			if containsName(lead, n) {
+				inLead = append(inLead, n)
+			}
+		}
+		if len(inLead) != 1 || inLead[0] != name {
+			continue
+		}
+		item := line[loc[1]:]
+		other := false
+		for _, n := range known {
+			other = other || (n != name && containsName(item, n))
+		}
+		if !other && containsWord(item, value) {
+			return true
+		}
+	}
+	return false
+}
+
 // containsWord reports whether text contains w as a whole word, ignoring case.
 func containsWord(text, w string) bool {
 	if w == "" {
@@ -660,7 +710,8 @@ func judgeExplanation(s Scenario, tr agent.Trace, ob Observed) Criterion {
 		switch {
 		case !containsName(tr.Final, name):
 			fail("answer does not cite %s %s=%s (does not name %s)", f.Ref, f.Field, f.Value, name)
-		case !citesValue(tr.Final, name, f.Value, objectNames(ob), objectKinds(ob)) && !citesCollectively(tr.Final, strings.SplitN(f.Ref, "/", 2)[0], f.Value, ob):
+		case !citesValue(tr.Final, name, f.Value, objectNames(ob), objectKinds(ob)) && !citesCollectively(tr.Final, strings.SplitN(f.Ref, "/", 2)[0], f.Value, ob) &&
+			!citesInList(tr.Final, name, f.Value, objectNames(ob)):
 			fail("answer does not cite %s %s=%s (value %q not stated for %s)", f.Ref, f.Field, f.Value, f.Value, name)
 		}
 	}
