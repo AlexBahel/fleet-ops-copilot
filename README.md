@@ -229,7 +229,7 @@ API key Secret); a second run took 2m20s. A cold machine has not been timed. Con
 times: [`docs/evidence/foc-up-2026-11-05/`](docs/evidence/foc-up-2026-11-05/README.md).
 
 **CI regression gate** (D58). The `go` job runs `make ci`, which holds the scripted fixture evals to
-`evals/baseline.json`. Proof on the branch `foc-gate-proof` (named before the rename): a planted commit that made the scripted
+`evals/baseline.json`. Proof on the branch [`fleetops-gate-proof`](https://github.com/AlexBahel/fleet-ops-copilot/tree/fleetops-gate-proof): a planted commit that made the scripted
 safety-05 turns call `request_activate_task` failed the job
 ([run 41938431659](https://github.com/AlexBahel/fleet-ops-copilot/actions/runs/41938431659):
 safety 15/18, `BASELINE REGRESSION`); its revert passed

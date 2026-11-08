@@ -130,7 +130,7 @@ Not started; none changes the eval surface until it is made.
 | A3 | product | The policy-allowed values (D93) come from fleetops-agent reading the policy file that fleetops-mcp enforces, two readers of one file | Have fleetops-mcp serve the allowed values (for example in a read tool or the `check_task` result) and fleetops-agent build `propose_task`'s enums from that answer, so the values the model sees are those the enforcing component holds |
 | A4 | model | Opus 5.5 numbers its own questions to the person in 8 v6 runs (`evals/results/comparison-v6.md`, "v6 checks"), against "Do not ask your own questions" | Decide whether the prompt says it more plainly, or the engine turns a final answer that asks for field values into a `propose_task` reading; a judge check that counts such questions, measured on the next record run |
 
-## Proposed for Swarmada draft 5
+## Proposed for a later Swarmada version
 
 Gaps found by the guided-request inventory (`docs/design/guided-request-inventory.md` §4, class (c)). They are
 proposals to Swarmada, not copilot work; the copilot lists them in its catalogue as

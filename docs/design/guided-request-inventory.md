@@ -217,7 +217,7 @@ for has no field · (c) needs a Swarmada change.
 | **Survey / map** | `Custom` `explore-floor` where served (the sim serves it, with bounds in the payload) | `phase`; the declared results (`map-ref`, `covered-m2`) have no field to land in | **(b)** |
 | **Zone maintenance** | `ZoneMaintenance` (existing request type) | `phase`, `activatedAt`, `pausedRobots[]`, `windingDownRobots[]`, counts, `continuousCapabilities[]` | **(a)** |
 
-### Needs a Swarmada change (class (c), for draft 5)
+### Needs a Swarmada change (class (c), proposed for a later Swarmada version)
 
 | # | Gap | Where it shows |
 |---|---|---|

@@ -51,7 +51,7 @@ names; [`docs/NAMES.md`](NAMES.md) maps them to the current ones.
   with one member and the route in its payload.
 - What a robot found is not reported: an inspection, a patrol's observations and a survey's map
   are class (b) (`docs/design/guided-request-inventory.md`). The preview says so; a person reviews the
-  result on the robot's side. Needs a Swarmada result field for robot actions (draft 5, C1).
+  result on the robot's side. Needs a Swarmada result field for robot actions, proposed for a later Swarmada version (BACKLOG-v4, C1).
 
 ## Not measured yet
 
@@ -339,7 +339,7 @@ names; [`docs/NAMES.md`](NAMES.md) maps them to the current ones.
   (Swarmada does not either, at v0.4). "Likely feasible" can turn out wrong: the fleet changes
   between the check, the approval, the activation and the assignment. `TestFilterListPinned` fails
   when Swarmada's filter list changes at a re-pin; a Swarmada eligibility dry run is proposed for
-  draft 5 (BACKLOG-v4, C5).
+  a later Swarmada version (BACKLOG-v4, C5).
 - **The confirmation is asserted by the client.** fleetops-agent sets the confirmed preview id only
   after the person's own reply, and fleetops-mcp refuses a request without it (D74). Another MCP client
   (the evaluation harness, a local stdio client, `test/live`) sets it itself, as it sets the session
