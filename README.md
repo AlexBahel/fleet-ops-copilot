@@ -155,7 +155,8 @@ fixed on these models (D43). The comparison classifies every failed run as model
 or product; the defects are in [`docs/KNOWN-LIMITS.md`](docs/KNOWN-LIMITS.md) and
 [`docs/BACKLOG-v4.md`](docs/BACKLOG-v4.md) and are counted as failures (on v5: 15 scenario runs,
 guided-19 for both Claude models and zone-07 for all three; 9 product runs, dispatch-06 for all
-three; 1 judge run).
+three; 1 judge run). They are fixed on eval surface v6 (D92–D97: 50 scenarios, judge v6), on which
+no model run has been made yet.
 
 History, not like-for-like with v5 or with each other (each comparison says why):
 eval surface v4 of 2026-11-07 (42 scenarios: Sonnet 5.5 71/126, Opus 5.5 79/126, Qwen2.5-7B 6/126),
@@ -274,10 +275,17 @@ show what the copilot does:
 | A forbidden action, for example `"Clear the emergency stop on warehouse-a."` | It refuses and gives the reason. Clearing stops, releasing robots, deleting, approving and editing running work are never available. |
 
 Asking for work is a short conversation. `fleetops chat` keeps the conversation for the context until
-`fleetops chat --new`, so answer with the number of a choice:
+`fleetops chat --new`, so answer with the number of a choice. Every question and preview has a
+"Checked:" block: what fleetops-agent read itself, one object per line, never the model's words
+(D92). A question's block is the fleet state read for it; a preview's is what `check_task` read,
+with each robot it considered and why that robot is eligible now or not:
 
 ```text
-$ fleetops chat ... "Inspect the receiving dock."
+$ fleetops chat ... "Inspect staging-shelf-a."
+Checked (fleet state read now; eligibility is checked for the preview):
+  FleetZone/warehouse-a: status.estopStatus=Clear, status.robotCount=3.
+  Robot/sim-robot-001: status.phase=Idle, status.batteryPercent=99, status.currentZone=warehouse-a.
+  ...
 What should the robot inspect?
 1 Damage
 2 Location
@@ -285,15 +293,24 @@ What should the robot inspect?
 4 Something else — describe it
 $ fleetops chat ... 1
 Preview — Inspect for damage (catalogue kind inspect-damage)
-  Location: receiving-dock-1 (FleetZone warehouse-a, x 5.1, y 2.1)
+  Location: staging-shelf-a (FleetZone warehouse-a, x 12.1, y 8.1)
   ...
   Swarmada records arrival and completion, not what the robot found; a person reviews the result on the robot's side.
-Checks: likely feasible. Eligible now: inspect: sim-robot-002, sim-robot-003.
+Checks: likely feasible. Eligible now: inspect: sim-robot-001, sim-robot-003.
+Checked:
+  FleetZone/warehouse-a: status.estopStatus=Clear, status.robotCount=3, no ZoneMaintenance Active or Scheduled over it.
+  Robot/sim-robot-001: status.phase=Idle, status.batteryPercent=99, status.currentZone=warehouse-a, camera_front=Active, navigation=Active; eligible now.
+  Robot/sim-robot-002: status.phase=InProgress, status.batteryPercent=99, status.currentZone=warehouse-a, camera_front=Active, navigation=Active; not eligible now: filter 1 (not Idle).
+  Robot/sim-robot-003: status.phase=Idle, status.batteryPercent=99, status.currentZone=warehouse-a, camera_front=Active, navigation=Active; eligible now.
 Checked against current fleet state; Swarmada's own acceptance is checked at execution.
 1 Confirm · 2 Confirm, and prepare a follow-up request if it fails · 3 Change something — describe it · 4 Cancel
 $ fleetops chat ... 1
 Filed ApprovalRequest/areq-... (inspect-damage). It waits for a named person: ...
 ```
+
+The filters are Swarmada's candidate filters (RFC-0001 §9.4.2). A value the site policy does not
+allow (priority Critical under `policies/default.yaml`) is not offered to the model and is refused
+before any question (D93).
 
 The kinds of work the site offers, and the questions that lead to each, are in the site catalogue
 ([`catalogue/warehouse-a.yaml`](catalogue/warehouse-a.yaml)). "Something else" takes your own
