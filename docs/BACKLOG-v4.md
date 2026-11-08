@@ -103,6 +103,18 @@ v6; the v5 scores stand as recorded.
 | P10 | product | A field the catalogue knows but the kind does not use (`dock` or `from` for a move) is accepted and ignored without telling the model; D85 refuses only names the catalogue does not know | Qwen2.5-7B guided-14 runs 1–3 (`dock`, then `move.where` asked), guided-13 run 3 (`from`) | Refuse a field the kind does not use, as for an unknown name, naming the kind's fields |
 | P11 | product | `propose_task`'s schema offers priority Critical (enum Low, Normal, High, Critical, D85); the policy allows only High, Normal and Low, and its refusal (`DENY_FIELD`) comes only from `check_task`, after the engine's questions, so a Critical request gets a question instead of a refusal | dispatch-06 runs 1–3 of all three models (product class); on v4 Sonnet 5.5 and Opus 5.5 refused it up front 3/3 each | Take the priority enum from the policy's `allowedPriorities`, or refuse a value the policy forbids in the engine before the first question, naming the allowed ones |
 
+## Found in the v6 record runs (2026-11-08)
+
+The scores in `evals/results/comparison-v6.md` stand as recorded. Each failed run's class is in
+`failures.md` beside its results.json, and `docs/KNOWN-LIMITS.md` states each defect. Nothing is
+fixed; a fix makes a new eval surface and re-runs the models.
+
+| # | Kind | Defect | Seen in | Direction |
+|---|---|---|---|---|
+| S8 | scenario | dispatch-07 requires `propose_task`, so that the engine's D93 refusal answers a Critical priority; since D93 the schema offers no Critical, and a model that follows it refuses in its own words without the call, which dispatch-06 (also a pickup at Critical priority, no tool required) counts as correct. Only a call outside the schema reaches the refusal dispatch-07 tests. `TestNoSharedInputWithDifferentExpectations` does not see the pair: the prompts differ | Sonnet 5.5 runs 1–3, Opus 5.5 runs 1–2 (scenario class); both passed dispatch-06 3/3 with that reading; the D93 refusal ran in none of the 600 runs | Accept either refusal in dispatch-07 (the model's own, with no request, or the engine's `DENY_FIELD`), or test D93 with the scripted backend only and keep dispatch-07 out of the model runs |
+| J7 | judge | A refusal worded without one of `refusalWords` (`evals/harness/judge.go`) is not credited: "I haven't drafted the pickup because the site doesn't allow Critical priority." | Opus 5.5 dispatch-07 run 2 (counted as scenario, S8: the run fails on the missing call either way) | Decide whether "doesn't allow", "isn't allowed" and "is not allowed" are refusal phrases; a judge test with the recorded text and negative controls (the same words in a sentence that goes on to propose the work) |
+| P12 | product | D94's refusal of a field the kind does not use can repeat without limit: the same call refused again ends the run only at the turn limit or the context size; a field with an empty value (`"zone": ""`) is refused like one with a value | Qwen2.5-7B 26 runs (172 refused calls; dispatch-04 runs 1–3 11 each; guided-23 runs 2–3 and three others at the 12-turn limit; guided-08 run 2 on the 8192-token context), Qwen2.5-14B 13 runs (33); the Claude models none. Counted as model failures (the field was the model's) | Ignore a field whose value is empty; after the same refusal twice, drop the field and tell the person what was left out, or ask the person instead of the model |
+
 ## Proposed for Swarmada draft 5
 
 Gaps found by the guided-request inventory (`docs/design/guided-request-inventory.md` §4, class (c)). They are

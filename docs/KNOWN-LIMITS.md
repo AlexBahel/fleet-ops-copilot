@@ -57,9 +57,11 @@ names; [`docs/NAMES.md`](NAMES.md) maps them to the current ones.
 
 - Model evaluations of record exist for fixture mode only: Sonnet 5.5, Opus 5.5 and the
   air-gapped Qwen2.5-7B-Instruct, on eval surface v3 (25 scenarios × 3 each, 2026-11-05,
-  `evals/results/comparison-2026-11-05.md`) and on eval surface v4 (42 scenarios × 3 each,
-  2026-11-07, `evals/results/comparison-2026-11-07.md`), with the results.json each cites. Each is
-  one sample of three runs per scenario. No model run of record has been made in live mode
+  `evals/results/comparison-2026-11-05.md`), on eval surface v4 (42 scenarios × 3 each,
+  2026-11-07, `evals/results/comparison-2026-11-07.md`), on eval surface v5 (47 scenarios × 3 each,
+  2026-11-08, `evals/results/comparison-v5.md`) and on eval surface v6 (50 scenarios × 3 each,
+  2026-11-08, `evals/results/comparison-v6.md`, which adds the air-gapped Qwen2.5-14B-Instruct), with
+  the results.json each cites. Each is one sample of three runs per scenario. No model run of record has been made in live mode
   (`fleetops-eval -live-context`) or through the deployed fleetops-agent. `evals/results/fixtures/results.json`
   is a harness self-test with the scripted backend: it shows the harness, tools, policy and
   approval path behave as designed on fixture states, and says nothing about a model's pass rate.
@@ -68,11 +70,15 @@ names; [`docs/NAMES.md`](NAMES.md) maps them to the current ones.
   execution over MCP on loopback against envtest (`latency.scope` in each results.json). The
   latency of a request through the deployed fleetops-agent is not measured. The latency in the fixture
   results covers tool execution against a test API server only.
-- The `llamacpp` backend (`internal/llm/llamacpp.go`) has run three evaluations against a model,
+- The `llamacpp` backend (`internal/llm/llamacpp.go`) has run five evaluations against a model,
   through `fleetops-eval -backend llamacpp` against llama-server in the air-gapped kind profile
   (`evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-05/` on v3,
   `evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-07/` on v4,
-  `evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-08-v5/` on v5). fleetops-agent has not run with it
+  `evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-08-v5/` on v5,
+  `evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-08-v6/` and
+  `evals/results/airgap-llamacpp-qwen2.5-14b-instruct-2026-11-08-v6/` on v6). `config/airgap/llama-server.yaml`
+  names the Qwen2.5-7B-Instruct files; the 14B run used it with the model files, alias and memory
+  request and limit changed (that directory's `model.md`). fleetops-agent has not run with it
   (see "Not built yet").
 - The air-gapped manifests (`config/airgap/`) and the `hack/airgap.mk` targets have run on one
   single-node kind cluster (kind v0.33.0, CNI kindnet, Docker Desktop on arm64;
@@ -191,7 +197,8 @@ names; [`docs/NAMES.md`](NAMES.md) maps them to the current ones.
 - **Defects found in the v5 record runs of 2026-11-08.** The v5 scores stand as recorded; nothing
   was re-judged or re-run. Each failed run's class is in `failures.md` beside its results.json; the
   items are in `docs/BACKLOG-v4.md` (J6, S6, S7, P10, P11). All five are fixed in eval surface v6
-  (D93–D97), and the engine now states the facts it read (D92); no model run has been made on v6.
+  (D93–D97), and the engine now states the facts it read (D92); the v6 record runs of 2026-11-08
+  are in `evals/results/comparison-v6.md`.
   - **guided-19 and guided-02/-03 expect different things from the same prompt.** All three say
     "Inspect the receiving dock."; guided-02 and guided-03 expect the question `inspect.what`,
     guided-19 expects no question and a preview blocked by `WAYPOINT_NOT_FOUND`. A model that gives
@@ -225,8 +232,47 @@ names; [`docs/NAMES.md`](NAMES.md) maps them to the current ones.
     the runs that failed on a required fact, 39 (Sonnet 5.5), 37 (Opus 5.5) and 42 (Qwen2.5-7B) have
     no text in any model response; guided-18 passed 0 of 3 for each model. A model behaviour, not a
     product defect; counted as model failures. Since v6 every question and preview states the facts
-    fleetops-agent read itself (D92), so a run with no model text still shows them; whether that
-    changes those runs is not measured.
+    fleetops-agent read itself (D92), so a run with no model text still shows them. On v6, runs
+    failing on a required fact fell to 3 (Sonnet 5.5) and 2 (Opus 5.5), and guided-22 passed 3 of 3
+    for every model (`evals/results/comparison-v6.md`).
+- **Eval surface v6 results are not comparable with v5.** The record runs of 2026-11-08 on v6 run
+  on the v6 product, judge and scenarios (D92–D97); `evals/results/comparison-v6.md` sets the v5, v4
+  and v3 records beside them as history only. Qwen2.5-14B-Instruct has a v6 record only.
+- **Defects found in the v6 record runs of 2026-11-08.** The v6 scores stand as recorded; nothing
+  was re-judged or re-run. Each failed run's class is in `failures.md` beside its results.json; the
+  items are in `docs/BACKLOG-v4.md` (S8, J7, P12).
+  - **dispatch-07 cannot be passed by the reading dispatch-06 counts as correct.** dispatch-07
+    requires a `propose_task` call so that the engine's policy refusal (D93) answers it; since D93
+    the schema offers no Critical, and Sonnet 5.5 (runs 1–3) and Opus 5.5 (runs 1–2) refused it in
+    their own words without the call, the reading dispatch-06 expects and passed 3 of 3 for both.
+    Counted as the scenario class (S8). The engine's D93 refusal ran in none of the 600 runs: the
+    Qwen models passed High instead of Critical or wrote the call as text; it runs in the scripted
+    self-test only.
+  - **Judge, a refusal without a listed phrase.** "I haven't drafted the pickup because the site
+    doesn't allow Critical priority" (Opus 5.5 dispatch-07 run 2) is not credited as a refusal:
+    the judge accepts only the phrases of `refusalWords` (`evals/harness/judge.go`) and the engine's
+    sentences (J7). The run is counted as the scenario class (S8).
+  - **A refused field can be refused without end.** D94 refuses a field the kind does not use and
+    asks the model to call again without it; nothing limits how often the same refusal repeats, and a
+    field with an empty value is refused like one with a value. Qwen2.5-7B kept such a field in 26
+    runs (172 refused calls; 5 runs ended at the 12-turn limit, 1 on the context size), Qwen2.5-14B
+    in 13 runs (33 refused calls), the Claude models in none. The extraction was wrong first, so the
+    runs are counted as model failures (P12).
+  - **The air-gapped profile's 8192-token context was reached** in 4 runs (Qwen2.5-7B guided-08 run
+    2; Qwen2.5-14B guided-08 run 3, guided-18 runs 2 and 3), after refusal loops or repeated reads;
+    the run ends with llama-server's HTTP 400. Qwen2.5-7B sent twice the input tokens of its v5 run
+    (2,448,022 against 1,230,406); the "Checked:" blocks and `check_task`'s facts (D92) are part of it.
+  - **Values the Claude models could not map were left out.** In guided-19 ("the loading bay", not
+    a waypoint) and zone-07 ("starting at the end of this shift", not a time) Sonnet 5.5 and Opus 5.5
+    called `propose_task` without the location or the start in all 12 runs, so guided-19 stalled on
+    `inspect.where` and zone-07 was filed to start on approval. The prompt asks for every field the
+    person's words state; counted as model failures.
+  - **Qwen2.5-14B-Instruct wrote other languages and tool calls as text.** 22 of its 150 runs have
+    Thai or Russian text in a model response and 8 a tool call written as JSON text; Qwen2.5-7B, on
+    the same server build, context and sampling, did neither. Not investigated (measurement only).
+  - **The models sometimes write their own choices.** Against "Do not ask your own questions", one
+    run each of Qwen2.5-7B, Sonnet 5.5 and Opus 5.5 lists numbered options for the person, and Opus
+    5.5 numbers its own questions in 8 runs (`evals/results/comparison-v6.md`, "v6 checks").
 - **Fields of composed steps are not checked for their form.** A "something else" request composed
   from basic steps (D72) carries each step's fields as the model gave them; D88's form check
   applies to the request's own fields only, so an invalid step value reaches `check_task`.
