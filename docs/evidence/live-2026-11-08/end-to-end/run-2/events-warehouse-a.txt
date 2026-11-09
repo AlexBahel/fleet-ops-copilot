@@ -1,0 +1,10 @@
+LAST SEEN   TYPE      REASON                      OBJECT                           MESSAGE
+4m48s       Warning   SigningIncomplete           swarmadaconfig/swarmada-config   signature verification is required and spec.signing.trustRoots is empty, so every signature check fails closed: no FleetAdapter conformance report, firmware or model artifact can verify in this namespace. Add a trustRoot, or set spec.signing.requireSignatureVerification: false to turn verification off deliberately
+4m48s       Warning   TelemetrySinkUnconfigured   swarmadaconfig/swarmada-config   spec.telemetry.sink.type is unset; high-cadence telemetry is not being forwarded (observed-degraded). Set a real store or explicitly opt in with type: Drop.
+99s         Normal    RequestCreated              approvalrequest/areq-ggb8v       DraftTask requested for sam; awaiting a person's decision
+92s         Normal    Executed                    approvalrequest/areq-ggb8v       FleetTask/move-staging-shelf-a-f548 written after approval by dana
+92s         Normal    Approved                    approvalrequest/areq-ggb8v       approved by dana
+78s         Normal    RequestCreated              approvalrequest/areq-s454t       ActivateTask requested for sam; awaiting a person's decision
+70s         Normal    Approved                    approvalrequest/areq-s454t       approved by dana
+36s         Normal    TaskOutcome                 approvalrequest/areq-ggb8v       FleetTask/move-staging-shelf-a-f548 ended Succeeded
+30s         Normal    ActivationObserved          approvalrequest/areq-s454t       FleetTask/move-staging-shelf-a-f548 left Draft after approval by dana, activated by dana; the copilot did not perform the activation

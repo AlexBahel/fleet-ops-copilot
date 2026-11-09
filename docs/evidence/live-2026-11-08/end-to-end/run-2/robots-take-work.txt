@@ -1,0 +1,22 @@
+# 2026-11-09T01:25:42Z one move per robot, filed by the cluster admin with kubectl apply (no model, no copilot)
+$ kubectl apply -f robot-check-sim-robot-001.yaml
+fleettask.swarmada.io/robot-check-sim-robot-001 created
+$ kubectl apply -f robot-check-sim-robot-002.yaml
+fleettask.swarmada.io/robot-check-sim-robot-002 created
+$ kubectl apply -f robot-check-sim-robot-003.yaml
+fleettask.swarmada.io/robot-check-sim-robot-003 created
+# 2026-11-09T01:25:58Z
+$ kubectl get fleettasks,fleetactions
+NAME                                              PHASE       ACTIONS         DESIRED   AGE
+fleettask.swarmada.io/receiving-round-001         Succeeded   1/1 Succeeded   Running   2m38s
+fleettask.swarmada.io/robot-check-sim-robot-001   Succeeded   1/1 Succeeded   Running   16s
+fleettask.swarmada.io/robot-check-sim-robot-002   Succeeded   1/1 Succeeded   Running   16s
+fleettask.swarmada.io/robot-check-sim-robot-003   Succeeded   1/1 Succeeded   Running   16s
+
+NAME                                                       TYPE       VERB   PHASE       OUTCOME   PRIORITY   ROBOT           ZONE          AGE
+fleetaction.swarmada.io/deliver-pallet-001                 Navigate          Succeeded             High       sim-robot-001   warehouse-a   2m38s
+fleetaction.swarmada.io/inspect-receiving-dock             Navigate          Succeeded             Normal     sim-robot-002   warehouse-a   2m38s
+fleetaction.swarmada.io/receiving-round-001-inspect-dock   Navigate          Succeeded             Normal     sim-robot-001   warehouse-a   2m38s
+fleetaction.swarmada.io/robot-check-sim-robot-001-move     Navigate          Succeeded             Normal     sim-robot-001   warehouse-a   16s
+fleetaction.swarmada.io/robot-check-sim-robot-002-move     Navigate          Succeeded             Normal     sim-robot-002   warehouse-a   16s
+fleetaction.swarmada.io/robot-check-sim-robot-003-move     Navigate          Succeeded             Normal     sim-robot-003   warehouse-a   16s

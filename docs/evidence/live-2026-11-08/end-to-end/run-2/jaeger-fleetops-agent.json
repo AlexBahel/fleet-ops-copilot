@@ -1,0 +1,1036 @@
+{
+ "result": {
+  "resourceSpans": [
+   {
+    "resource": {
+     "attributes": [
+      {
+       "key": "service.name",
+       "value": {
+        "stringValue": "fleetops-agent"
+       }
+      }
+     ]
+    },
+    "scopeSpans": [
+     {
+      "scope": {
+       "name": "github.com/AlexBahel/fleet-ops-copilot"
+      },
+      "spans": [
+       {
+        "traceId": "8e79b3adcbfa2c26406f6c8bd749a05c",
+        "spanId": "30d3127aee5e4aa6",
+        "parentSpanId": "986d1aa3a50dc793",
+        "flags": 257,
+        "name": "llm.chat",
+        "kind": 3,
+        "startTimeUnixNano": "1794187602008060886",
+        "endTimeUnixNano": "1794187603519183970",
+        "attributes": [
+         {
+          "key": "fleetops.backend",
+          "value": {
+           "stringValue": "claude:claude-sonnet-5-5"
+          }
+         },
+         {
+          "key": "fleetops.latency_ms",
+          "value": {
+           "doubleValue": 1511.114
+          }
+         },
+         {
+          "key": "fleetops.tool_calls",
+          "value": {
+           "intValue": "2"
+          }
+         },
+         {
+          "key": "fleetops.turn",
+          "value": {
+           "intValue": "1"
+          }
+         },
+         {
+          "key": "gen_ai.operation.name",
+          "value": {
+           "stringValue": "chat"
+          }
+         },
+         {
+          "key": "gen_ai.response.finish_reasons",
+          "value": {
+           "arrayValue": {
+            "values": [
+             {
+              "stringValue": "tool_use"
+             }
+            ]
+           }
+          }
+         },
+         {
+          "key": "gen_ai.usage.cache_creation.input_tokens",
+          "value": {
+           "intValue": "690"
+          }
+         },
+         {
+          "key": "gen_ai.usage.cache_read.input_tokens",
+          "value": {
+           "intValue": "8833"
+          }
+         },
+         {
+          "key": "gen_ai.usage.input_tokens",
+          "value": {
+           "intValue": "4"
+          }
+         },
+         {
+          "key": "gen_ai.usage.output_tokens",
+          "value": {
+           "intValue": "83"
+          }
+         }
+        ],
+        "status": {}
+       },
+       {
+        "traceId": "8e79b3adcbfa2c26406f6c8bd749a05c",
+        "spanId": "f60043a057b5d1bd",
+        "parentSpanId": "986d1aa3a50dc793",
+        "flags": 257,
+        "name": "tool.call",
+        "kind": 3,
+        "startTimeUnixNano": "1794187603519207970",
+        "endTimeUnixNano": "1794187603524363470",
+        "attributes": [
+         {
+          "key": "fleetops.latency_ms",
+          "value": {
+           "doubleValue": 5.112
+          }
+         },
+         {
+          "key": "fleetops.tool.is_error",
+          "value": {
+           "boolValue": false
+          }
+         },
+         {
+          "key": "gen_ai.operation.name",
+          "value": {
+           "stringValue": "execute_tool"
+          }
+         },
+         {
+          "key": "gen_ai.tool.call.id",
+          "value": {
+           "stringValue": "toolu_012AQ56zGUs7iKWNVVJ9WYBB"
+          }
+         },
+         {
+          "key": "gen_ai.tool.name",
+          "value": {
+           "stringValue": "get_request"
+          }
+         }
+        ],
+        "status": {}
+       },
+       {
+        "traceId": "8e79b3adcbfa2c26406f6c8bd749a05c",
+        "spanId": "457106b682ef27d8",
+        "parentSpanId": "986d1aa3a50dc793",
+        "flags": 257,
+        "name": "tool.call",
+        "kind": 3,
+        "startTimeUnixNano": "1794187603524373303",
+        "endTimeUnixNano": "1794187603528242345",
+        "attributes": [
+         {
+          "key": "fleetops.latency_ms",
+          "value": {
+           "doubleValue": 3.81
+          }
+         },
+         {
+          "key": "fleetops.tool.is_error",
+          "value": {
+           "boolValue": false
+          }
+         },
+         {
+          "key": "gen_ai.operation.name",
+          "value": {
+           "stringValue": "execute_tool"
+          }
+         },
+         {
+          "key": "gen_ai.tool.call.id",
+          "value": {
+           "stringValue": "toolu_01RdJcTL6GnHFzktP1hHyn7X"
+          }
+         },
+         {
+          "key": "gen_ai.tool.name",
+          "value": {
+           "stringValue": "list_fleet_tasks"
+          }
+         }
+        ],
+        "status": {}
+       },
+       {
+        "traceId": "8e79b3adcbfa2c26406f6c8bd749a05c",
+        "spanId": "6d36a2da8edbf0f0",
+        "parentSpanId": "986d1aa3a50dc793",
+        "flags": 257,
+        "name": "llm.chat",
+        "kind": 3,
+        "startTimeUnixNano": "1794187603528255928",
+        "endTimeUnixNano": "1794187604938344387",
+        "attributes": [
+         {
+          "key": "fleetops.backend",
+          "value": {
+           "stringValue": "claude:claude-sonnet-5-5"
+          }
+         },
+         {
+          "key": "fleetops.latency_ms",
+          "value": {
+           "doubleValue": 1410.075
+          }
+         },
+         {
+          "key": "fleetops.tool_calls",
+          "value": {
+           "intValue": "2"
+          }
+         },
+         {
+          "key": "fleetops.turn",
+          "value": {
+           "intValue": "2"
+          }
+         },
+         {
+          "key": "gen_ai.operation.name",
+          "value": {
+           "stringValue": "chat"
+          }
+         },
+         {
+          "key": "gen_ai.response.finish_reasons",
+          "value": {
+           "arrayValue": {
+            "values": [
+             {
+              "stringValue": "tool_use"
+             }
+            ]
+           }
+          }
+         },
+         {
+          "key": "gen_ai.usage.cache_creation.input_tokens",
+          "value": {
+           "intValue": "1905"
+          }
+         },
+         {
+          "key": "gen_ai.usage.cache_read.input_tokens",
+          "value": {
+           "intValue": "9523"
+          }
+         },
+         {
+          "key": "gen_ai.usage.input_tokens",
+          "value": {
+           "intValue": "2"
+          }
+         },
+         {
+          "key": "gen_ai.usage.output_tokens",
+          "value": {
+           "intValue": "181"
+          }
+         }
+        ],
+        "status": {}
+       },
+       {
+        "traceId": "8e79b3adcbfa2c26406f6c8bd749a05c",
+        "spanId": "71b83fef45de8145",
+        "parentSpanId": "986d1aa3a50dc793",
+        "flags": 257,
+        "name": "tool.call",
+        "kind": 3,
+        "startTimeUnixNano": "1794187604938381887",
+        "endTimeUnixNano": "1794187604947521304",
+        "attributes": [
+         {
+          "key": "fleetops.latency_ms",
+          "value": {
+           "doubleValue": 9.065
+          }
+         },
+         {
+          "key": "fleetops.tool.is_error",
+          "value": {
+           "boolValue": false
+          }
+         },
+         {
+          "key": "gen_ai.operation.name",
+          "value": {
+           "stringValue": "execute_tool"
+          }
+         },
+         {
+          "key": "gen_ai.tool.call.id",
+          "value": {
+           "stringValue": "toolu_01HJdrr12sg1e2mZboWLJzH5"
+          }
+         },
+         {
+          "key": "gen_ai.tool.name",
+          "value": {
+           "stringValue": "get_zone"
+          }
+         }
+        ],
+        "status": {}
+       },
+       {
+        "traceId": "8e79b3adcbfa2c26406f6c8bd749a05c",
+        "spanId": "986d1aa3a50dc793",
+        "flags": 257,
+        "name": "fleetops.request",
+        "kind": 1,
+        "startTimeUnixNano": "1794187601999995469",
+        "endTimeUnixNano": "1794187604971393970",
+        "attributes": [
+         {
+          "key": "fleetops.answer.chars",
+          "value": {
+           "intValue": "1048"
+          }
+         },
+         {
+          "key": "fleetops.backend",
+          "value": {
+           "stringValue": "claude:claude-sonnet-5-5"
+          }
+         },
+         {
+          "key": "fleetops.latency_ms",
+          "value": {
+           "doubleValue": 2971.401
+          }
+         },
+         {
+          "key": "fleetops.operator",
+          "value": {
+           "stringValue": ""
+          }
+         },
+         {
+          "key": "fleetops.prompt.chars",
+          "value": {
+           "intValue": "45"
+          }
+         },
+         {
+          "key": "fleetops.session.id",
+          "value": {
+           "stringValue": "web-7dd77c4a00e77db4"
+          }
+         },
+         {
+          "key": "fleetops.tool_calls",
+          "value": {
+           "intValue": "4"
+          }
+         },
+         {
+          "key": "fleetops.turns",
+          "value": {
+           "intValue": "2"
+          }
+         },
+         {
+          "key": "gen_ai.usage.cache_creation.input_tokens",
+          "value": {
+           "intValue": "2595"
+          }
+         },
+         {
+          "key": "gen_ai.usage.cache_read.input_tokens",
+          "value": {
+           "intValue": "18356"
+          }
+         },
+         {
+          "key": "gen_ai.usage.input_tokens",
+          "value": {
+           "intValue": "6"
+          }
+         },
+         {
+          "key": "gen_ai.usage.output_tokens",
+          "value": {
+           "intValue": "264"
+          }
+         }
+        ],
+        "status": {}
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "resource": {
+     "attributes": [
+      {
+       "key": "service.name",
+       "value": {
+        "stringValue": "fleetops-mcp"
+       }
+      }
+     ]
+    },
+    "scopeSpans": [
+     {
+      "scope": {
+       "name": "github.com/AlexBahel/fleet-ops-copilot"
+      },
+      "spans": [
+       {
+        "traceId": "8e79b3adcbfa2c26406f6c8bd749a05c",
+        "spanId": "75844023d3594b83",
+        "parentSpanId": "f60043a057b5d1bd",
+        "flags": 769,
+        "name": "mcp.tool",
+        "kind": 2,
+        "startTimeUnixNano": "1794187603519763720",
+        "endTimeUnixNano": "1794187603523924553",
+        "attributes": [
+         {
+          "key": "gen_ai.tool.name",
+          "value": {
+           "stringValue": "get_request"
+          }
+         }
+        ],
+        "status": {}
+       },
+       {
+        "traceId": "8e79b3adcbfa2c26406f6c8bd749a05c",
+        "spanId": "2c7cd83bec604287",
+        "parentSpanId": "457106b682ef27d8",
+        "flags": 769,
+        "name": "mcp.tool",
+        "kind": 2,
+        "startTimeUnixNano": "1794187603524611053",
+        "endTimeUnixNano": "1794187603527489428",
+        "attributes": [
+         {
+          "key": "gen_ai.tool.name",
+          "value": {
+           "stringValue": "list_fleet_tasks"
+          }
+         }
+        ],
+        "status": {}
+       },
+       {
+        "traceId": "8e79b3adcbfa2c26406f6c8bd749a05c",
+        "spanId": "1c13e54045a7147c",
+        "parentSpanId": "71b83fef45de8145",
+        "flags": 769,
+        "name": "mcp.tool",
+        "kind": 2,
+        "startTimeUnixNano": "1794187604939208221",
+        "endTimeUnixNano": "1794187604946407555",
+        "attributes": [
+         {
+          "key": "gen_ai.tool.name",
+          "value": {
+           "stringValue": "get_zone"
+          }
+         }
+        ],
+        "status": {}
+       },
+       {
+        "traceId": "8e79b3adcbfa2c26406f6c8bd749a05c",
+        "spanId": "e78076dd28e36676",
+        "parentSpanId": "986d1aa3a50dc793",
+        "flags": 769,
+        "name": "mcp.tool",
+        "kind": 2,
+        "startTimeUnixNano": "1794187604948008512",
+        "endTimeUnixNano": "1794187604951379054",
+        "attributes": [
+         {
+          "key": "gen_ai.tool.name",
+          "value": {
+           "stringValue": "list_zones"
+          }
+         }
+        ],
+        "status": {}
+       },
+       {
+        "traceId": "8e79b3adcbfa2c26406f6c8bd749a05c",
+        "spanId": "040b3fee1a13bb31",
+        "parentSpanId": "986d1aa3a50dc793",
+        "flags": 769,
+        "name": "mcp.tool",
+        "kind": 2,
+        "startTimeUnixNano": "1794187604952077387",
+        "endTimeUnixNano": "1794187604955098137",
+        "attributes": [
+         {
+          "key": "gen_ai.tool.name",
+          "value": {
+           "stringValue": "list_robots"
+          }
+         }
+        ],
+        "status": {}
+       },
+       {
+        "traceId": "8e79b3adcbfa2c26406f6c8bd749a05c",
+        "spanId": "e50e82814ebe29e8",
+        "parentSpanId": "986d1aa3a50dc793",
+        "flags": 769,
+        "name": "mcp.tool",
+        "kind": 2,
+        "startTimeUnixNano": "1794187604955946512",
+        "endTimeUnixNano": "1794187604958271512",
+        "attributes": [
+         {
+          "key": "gen_ai.tool.name",
+          "value": {
+           "stringValue": "list_fleet_tasks"
+          }
+         }
+        ],
+        "status": {}
+       },
+       {
+        "traceId": "8e79b3adcbfa2c26406f6c8bd749a05c",
+        "spanId": "4dfbee753243b232",
+        "parentSpanId": "986d1aa3a50dc793",
+        "flags": 769,
+        "name": "mcp.tool",
+        "kind": 2,
+        "startTimeUnixNano": "1794187604959233054",
+        "endTimeUnixNano": "1794187604970772720",
+        "attributes": [
+         {
+          "key": "gen_ai.tool.name",
+          "value": {
+           "stringValue": "check_task"
+          }
+         }
+        ],
+        "status": {}
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "resource": {
+     "attributes": [
+      {
+       "key": "service.name",
+       "value": {
+        "stringValue": "fleetops-agent"
+       }
+      }
+     ]
+    },
+    "scopeSpans": [
+     {
+      "scope": {
+       "name": "github.com/AlexBahel/fleet-ops-copilot"
+      },
+      "spans": [
+       {
+        "traceId": "ec6d59a2d75d2f994ac395a494888837",
+        "spanId": "fb16d60603f8997f",
+        "parentSpanId": "e48b4059b8b76b58",
+        "flags": 257,
+        "name": "llm.chat",
+        "kind": 3,
+        "startTimeUnixNano": "1794187581742582376",
+        "endTimeUnixNano": "1794187583506258669",
+        "attributes": [
+         {
+          "key": "fleetops.backend",
+          "value": {
+           "stringValue": "claude:claude-sonnet-5-5"
+          }
+         },
+         {
+          "key": "fleetops.latency_ms",
+          "value": {
+           "doubleValue": 1763.666
+          }
+         },
+         {
+          "key": "fleetops.tool_calls",
+          "value": {
+           "intValue": "2"
+          }
+         },
+         {
+          "key": "fleetops.turn",
+          "value": {
+           "intValue": "1"
+          }
+         },
+         {
+          "key": "gen_ai.operation.name",
+          "value": {
+           "stringValue": "chat"
+          }
+         },
+         {
+          "key": "gen_ai.response.finish_reasons",
+          "value": {
+           "arrayValue": {
+            "values": [
+             {
+              "stringValue": "tool_use"
+             }
+            ]
+           }
+          }
+         },
+         {
+          "key": "gen_ai.usage.cache_creation.input_tokens",
+          "value": {
+           "intValue": "8833"
+          }
+         },
+         {
+          "key": "gen_ai.usage.cache_read.input_tokens",
+          "value": {
+           "intValue": "0"
+          }
+         },
+         {
+          "key": "gen_ai.usage.input_tokens",
+          "value": {
+           "intValue": "4"
+          }
+         },
+         {
+          "key": "gen_ai.usage.output_tokens",
+          "value": {
+           "intValue": "51"
+          }
+         }
+        ],
+        "status": {}
+       },
+       {
+        "traceId": "ec6d59a2d75d2f994ac395a494888837",
+        "spanId": "b747ce9c533e4485",
+        "parentSpanId": "e48b4059b8b76b58",
+        "flags": 257,
+        "name": "tool.call",
+        "kind": 3,
+        "startTimeUnixNano": "1794187583506282044",
+        "endTimeUnixNano": "1794187583514514586",
+        "attributes": [
+         {
+          "key": "fleetops.latency_ms",
+          "value": {
+           "doubleValue": 8.168
+          }
+         },
+         {
+          "key": "fleetops.tool.is_error",
+          "value": {
+           "boolValue": false
+          }
+         },
+         {
+          "key": "gen_ai.operation.name",
+          "value": {
+           "stringValue": "execute_tool"
+          }
+         },
+         {
+          "key": "gen_ai.tool.call.id",
+          "value": {
+           "stringValue": "toolu_01URvxJXQ1GvXj5YDhKZz5yF"
+          }
+         },
+         {
+          "key": "gen_ai.tool.name",
+          "value": {
+           "stringValue": "list_zones"
+          }
+         }
+        ],
+        "status": {}
+       },
+       {
+        "traceId": "ec6d59a2d75d2f994ac395a494888837",
+        "spanId": "885bda585edaa5ea",
+        "parentSpanId": "e48b4059b8b76b58",
+        "flags": 257,
+        "name": "tool.call",
+        "kind": 3,
+        "startTimeUnixNano": "1794187583514529919",
+        "endTimeUnixNano": "1794187583517895127",
+        "attributes": [
+         {
+          "key": "fleetops.latency_ms",
+          "value": {
+           "doubleValue": 3.312
+          }
+         },
+         {
+          "key": "fleetops.tool.is_error",
+          "value": {
+           "boolValue": false
+          }
+         },
+         {
+          "key": "gen_ai.operation.name",
+          "value": {
+           "stringValue": "execute_tool"
+          }
+         },
+         {
+          "key": "gen_ai.tool.call.id",
+          "value": {
+           "stringValue": "toolu_01X2M88mzo4jXxHQMe1FqwwA"
+          }
+         },
+         {
+          "key": "gen_ai.tool.name",
+          "value": {
+           "stringValue": "list_robots"
+          }
+         }
+        ],
+        "status": {}
+       },
+       {
+        "traceId": "ec6d59a2d75d2f994ac395a494888837",
+        "spanId": "ceedcbcb6b9d3308",
+        "parentSpanId": "e48b4059b8b76b58",
+        "flags": 257,
+        "name": "llm.chat",
+        "kind": 3,
+        "startTimeUnixNano": "1794187583517906836",
+        "endTimeUnixNano": "1794187584532064253",
+        "attributes": [
+         {
+          "key": "fleetops.backend",
+          "value": {
+           "stringValue": "claude:claude-sonnet-5-5"
+          }
+         },
+         {
+          "key": "fleetops.latency_ms",
+          "value": {
+           "doubleValue": 1014.153
+          }
+         },
+         {
+          "key": "fleetops.tool_calls",
+          "value": {
+           "intValue": "1"
+          }
+         },
+         {
+          "key": "fleetops.turn",
+          "value": {
+           "intValue": "2"
+          }
+         },
+         {
+          "key": "gen_ai.operation.name",
+          "value": {
+           "stringValue": "chat"
+          }
+         },
+         {
+          "key": "gen_ai.response.finish_reasons",
+          "value": {
+           "arrayValue": {
+            "values": [
+             {
+              "stringValue": "tool_use"
+             }
+            ]
+           }
+          }
+         },
+         {
+          "key": "gen_ai.usage.cache_creation.input_tokens",
+          "value": {
+           "intValue": "1375"
+          }
+         },
+         {
+          "key": "gen_ai.usage.cache_read.input_tokens",
+          "value": {
+           "intValue": "8833"
+          }
+         },
+         {
+          "key": "gen_ai.usage.input_tokens",
+          "value": {
+           "intValue": "2"
+          }
+         },
+         {
+          "key": "gen_ai.usage.output_tokens",
+          "value": {
+           "intValue": "107"
+          }
+         }
+        ],
+        "status": {}
+       },
+       {
+        "traceId": "ec6d59a2d75d2f994ac395a494888837",
+        "spanId": "e48b4059b8b76b58",
+        "flags": 257,
+        "name": "fleetops.request",
+        "kind": 1,
+        "startTimeUnixNano": "1794187581735098918",
+        "endTimeUnixNano": "1794187584555113627",
+        "attributes": [
+         {
+          "key": "fleetops.answer.chars",
+          "value": {
+           "intValue": "1186"
+          }
+         },
+         {
+          "key": "fleetops.backend",
+          "value": {
+           "stringValue": "claude:claude-sonnet-5-5"
+          }
+         },
+         {
+          "key": "fleetops.latency_ms",
+          "value": {
+           "doubleValue": 2820.022
+          }
+         },
+         {
+          "key": "fleetops.operator",
+          "value": {
+           "stringValue": ""
+          }
+         },
+         {
+          "key": "fleetops.prompt.chars",
+          "value": {
+           "intValue": "32"
+          }
+         },
+         {
+          "key": "fleetops.session.id",
+          "value": {
+           "stringValue": "web-f121a87741221720"
+          }
+         },
+         {
+          "key": "fleetops.tool_calls",
+          "value": {
+           "intValue": "3"
+          }
+         },
+         {
+          "key": "fleetops.turns",
+          "value": {
+           "intValue": "2"
+          }
+         },
+         {
+          "key": "gen_ai.usage.cache_creation.input_tokens",
+          "value": {
+           "intValue": "10208"
+          }
+         },
+         {
+          "key": "gen_ai.usage.cache_read.input_tokens",
+          "value": {
+           "intValue": "8833"
+          }
+         },
+         {
+          "key": "gen_ai.usage.input_tokens",
+          "value": {
+           "intValue": "6"
+          }
+         },
+         {
+          "key": "gen_ai.usage.output_tokens",
+          "value": {
+           "intValue": "158"
+          }
+         }
+        ],
+        "status": {}
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "resource": {
+     "attributes": [
+      {
+       "key": "service.name",
+       "value": {
+        "stringValue": "fleetops-mcp"
+       }
+      }
+     ]
+    },
+    "scopeSpans": [
+     {
+      "scope": {
+       "name": "github.com/AlexBahel/fleet-ops-copilot"
+      },
+      "spans": [
+       {
+        "traceId": "ec6d59a2d75d2f994ac395a494888837",
+        "spanId": "eb6a2a855cef2d1c",
+        "parentSpanId": "b747ce9c533e4485",
+        "flags": 769,
+        "name": "mcp.tool",
+        "kind": 2,
+        "startTimeUnixNano": "1794187583506767336",
+        "endTimeUnixNano": "1794187583514049461",
+        "attributes": [
+         {
+          "key": "gen_ai.tool.name",
+          "value": {
+           "stringValue": "list_zones"
+          }
+         }
+        ],
+        "status": {}
+       },
+       {
+        "traceId": "ec6d59a2d75d2f994ac395a494888837",
+        "spanId": "ecd3d0ba985b6cd2",
+        "parentSpanId": "885bda585edaa5ea",
+        "flags": 769,
+        "name": "mcp.tool",
+        "kind": 2,
+        "startTimeUnixNano": "1794187583514769252",
+        "endTimeUnixNano": "1794187583517262752",
+        "attributes": [
+         {
+          "key": "gen_ai.tool.name",
+          "value": {
+           "stringValue": "list_robots"
+          }
+         }
+        ],
+        "status": {}
+       },
+       {
+        "traceId": "ec6d59a2d75d2f994ac395a494888837",
+        "spanId": "65618eb44aef9cab",
+        "parentSpanId": "e48b4059b8b76b58",
+        "flags": 769,
+        "name": "mcp.tool",
+        "kind": 2,
+        "startTimeUnixNano": "1794187584532467294",
+        "endTimeUnixNano": "1794187584535124836",
+        "attributes": [
+         {
+          "key": "gen_ai.tool.name",
+          "value": {
+           "stringValue": "list_zones"
+          }
+         }
+        ],
+        "status": {}
+       },
+       {
+        "traceId": "ec6d59a2d75d2f994ac395a494888837",
+        "spanId": "e129610d76b49f66",
+        "parentSpanId": "e48b4059b8b76b58",
+        "flags": 769,
+        "name": "mcp.tool",
+        "kind": 2,
+        "startTimeUnixNano": "1794187584535702253",
+        "endTimeUnixNano": "1794187584538538545",
+        "attributes": [
+         {
+          "key": "gen_ai.tool.name",
+          "value": {
+           "stringValue": "list_robots"
+          }
+         }
+        ],
+        "status": {}
+       },
+       {
+        "traceId": "ec6d59a2d75d2f994ac395a494888837",
+        "spanId": "1861769a9376345b",
+        "parentSpanId": "e48b4059b8b76b58",
+        "flags": 769,
+        "name": "mcp.tool",
+        "kind": 2,
+        "startTimeUnixNano": "1794187584539344753",
+        "endTimeUnixNano": "1794187584541822878",
+        "attributes": [
+         {
+          "key": "gen_ai.tool.name",
+          "value": {
+           "stringValue": "list_fleet_tasks"
+          }
+         }
+        ],
+        "status": {}
+       },
+       {
+        "traceId": "ec6d59a2d75d2f994ac395a494888837",
+        "spanId": "57cca0a7288b718e",
+        "parentSpanId": "e48b4059b8b76b58",
+        "flags": 769,
+        "name": "mcp.tool",
+        "kind": 2,
+        "startTimeUnixNano": "1794187584543212753",
+        "endTimeUnixNano": "1794187584554479462",
+        "attributes": [
+         {
+          "key": "gen_ai.tool.name",
+          "value": {
+           "stringValue": "check_task"
+          }
+         }
+        ],
+        "status": {}
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

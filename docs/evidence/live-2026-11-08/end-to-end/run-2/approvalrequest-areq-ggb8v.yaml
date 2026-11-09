@@ -1,0 +1,126 @@
+apiVersion: fleetops.alexbahel.github.io/v1alpha1
+kind: ApprovalRequest
+metadata:
+  creationTimestamp: "2026-11-09T01:26:29Z"
+  generateName: areq-
+  generation: 1
+  labels:
+    fleetops.alexbahel.github.io/created-by: fleetops-mcp
+    fleetops.alexbahel.github.io/session: web-74e1c24132e7a868
+  name: areq-ggb8v
+  namespace: warehouse-a
+  resourceVersion: "2189"
+  uid: f3a8e429-b2b6-4387-8a61-15f33da4be7c
+spec:
+  checks:
+    checkedAt: "2026-11-09T01:26:29Z"
+    checks:
+    - detail: every dependsOn names a member and the graph is acyclic
+      name: dependencies
+      outcome: Passed
+    - detail: FleetZone warehouse-a exists, no stop in force on it or its ancestors,
+        no restriction denies the work
+      name: 'move: zone'
+      outcome: Passed
+    - detail: waypoint staging-shelf-a is declared in FleetZone warehouse-a
+      name: 'move: location'
+      outcome: Passed
+    - detail: FleetAdapter sim-fleet-adapter lists Navigate
+      name: 'move: adapter catalog'
+      outcome: Passed
+    - detail: sim-robot-001, sim-robot-002, sim-robot-003 pass every candidate filter
+        a read can evaluate
+      name: 'move: eligible robot now'
+      outcome: Passed
+    - name: the adapter's validate_action for the concrete action (no client can see
+        it before assignment; Swarmada draft 5, C5)
+      outcome: NotChecked
+    - name: 'filter 9: the adapter''s contract version range and SafetyStream'
+      outcome: NotChecked
+    - name: 'filter 10: stops reported by adapters, and duplicate wire robot ids'
+      outcome: NotChecked
+    verdict: likely feasible
+  draftTask:
+    actions:
+    - location:
+        waypoint: staging-shelf-a
+        x: "12.1"
+        "y": "8.1"
+        zone: warehouse-a
+      name: move
+      onFailure: Requeue
+      priority: Normal
+      requiredCapabilities:
+      - navigation
+      type: Navigate
+    purpose: 'Move a robot to a location: staging-shelf-a'
+    taskName: move-staging-shelf-a-f548
+  expiresAt: "2026-11-09T01:56:29Z"
+  policy:
+    code: REQUIRE_APPROVAL
+    effect: RequireApproval
+    message: 'a named person approves creating the draft; fleetops-approvals then
+      creates it with spec.draft: true, and it dispatches nothing until a person activates
+      it'
+  preview:
+    catalogueSHA256: 43ab5816b7c972dfd288be79e9840d28aa3a825c70e25120178eb0812869cc6a
+    catalogueVersion: 1
+    confirmedAt: "2026-11-09T01:26:29Z"
+    failureHandling: ReportOnly
+    id: 6b707d24b9ef3408391157183b9f1a29c7460cc34438f9afa777888fee217c5f
+    interpretation: Known
+    kind: move
+    resultReported: true
+  requestedBy: system:serviceaccount:fleetops-system:fleetops-mcp
+  requestedFor: sam
+  sessionID: web-74e1c24132e7a868
+  type: DraftTask
+status:
+  decidedAt: "2026-11-09T01:26:36Z"
+  decidedBy: dana
+  decisionRef: areq-ggb8v-prwgt
+  executedAt: "2026-11-09T01:26:36Z"
+  executionChecks:
+    checkedAt: "2026-11-09T01:26:36Z"
+    checks:
+    - detail: every dependsOn names a member and the graph is acyclic
+      name: dependencies
+      outcome: Passed
+    - detail: FleetZone warehouse-a exists, no stop in force on it or its ancestors,
+        no restriction denies the work
+      name: 'move: zone'
+      outcome: Passed
+    - detail: waypoint staging-shelf-a is declared in FleetZone warehouse-a
+      name: 'move: location'
+      outcome: Passed
+    - detail: FleetAdapter sim-fleet-adapter lists Navigate
+      name: 'move: adapter catalog'
+      outcome: Passed
+    - detail: sim-robot-001, sim-robot-002, sim-robot-003 pass every candidate filter
+        a read can evaluate
+      name: 'move: eligible robot now'
+      outcome: Passed
+    - name: the adapter's validate_action for the concrete action (no client can see
+        it before assignment; Swarmada draft 5, C5)
+      outcome: NotChecked
+    - name: 'filter 9: the adapter''s contract version range and SafetyStream'
+      outcome: NotChecked
+    - name: 'filter 10: stops reported by adapters, and duplicate wire robot ids'
+      outcome: NotChecked
+    dryRuns:
+    - detail: accepted by the API server (dry run; nothing stored)
+      name: FleetTask/move-staging-shelf-a-f548
+      outcome: Passed
+    - detail: accepted by the API server (dry run; nothing stored)
+      name: FleetAction/move-staging-shelf-a-f548-move
+      outcome: Passed
+    verdict: likely feasible
+  message: executed
+  outcome:
+    observedAt: "2026-11-09T01:27:32Z"
+    phase: Succeeded
+  state: Executed
+  target:
+    apiVersion: swarmada.io/v1
+    kind: FleetTask
+    name: move-staging-shelf-a-f548

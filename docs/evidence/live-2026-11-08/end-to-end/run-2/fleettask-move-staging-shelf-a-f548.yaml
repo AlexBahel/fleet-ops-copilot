@@ -1,0 +1,67 @@
+apiVersion: swarmada.io/v1
+kind: FleetTask
+metadata:
+  annotations:
+    fleetops.alexbahel.github.io/approved-by: dana
+    fleetops.alexbahel.github.io/purpose: 'Move a robot to a location: staging-shelf-a'
+    fleetops.alexbahel.github.io/requested-for: sam
+  creationTimestamp: "2026-11-09T01:26:36Z"
+  generation: 2
+  labels:
+    fleetops.alexbahel.github.io/created-by: fleetops-approvals
+    fleetops.alexbahel.github.io/request: areq-ggb8v
+    fleetops.alexbahel.github.io/session: web-74e1c24132e7a868
+  name: move-staging-shelf-a-f548
+  namespace: warehouse-a
+  resourceVersion: "2187"
+  uid: add75dc8-5dab-4286-bc2c-ebfd679684a4
+spec:
+  actions:
+  - action:
+      desiredState: Running
+      onFailure: Requeue
+      payload:
+        waypoint: staging-shelf-a
+        x: 12.1
+        "y": 8.1
+      priority: Normal
+      requiredCapabilities:
+      - navigation
+      type: Navigate
+      zone: warehouse-a
+    name: move
+    startCondition: Succeeded
+    trigger: Auto
+  completionPolicy: All
+  desiredState: Running
+  draft: false
+  failurePolicy: FailFast
+status:
+  actionSummary: 1/1 Succeeded
+  actions:
+  - actionRef: move-staging-shelf-a-f548-move
+    assignedRobot: sim-robot-002
+    dependenciesMet: true
+    name: move
+    phase: Succeeded
+  completionTime: "2026-11-09T01:27:32Z"
+  conditions:
+  - lastTransitionTime: "2026-11-09T01:27:32Z"
+    message: spec.draft was cleared; the task is dispatched as written
+    reason: Activated
+    status: "False"
+    type: AwaitingActivation
+  - lastTransitionTime: "2026-11-09T01:27:32Z"
+    message: dependency graph is acyclic and complete
+    observedGeneration: 2
+    reason: Valid
+    status: "True"
+    type: DependencyGraphValid
+  - lastTransitionTime: "2026-11-09T01:27:32Z"
+    message: completionPolicy is complete
+    observedGeneration: 2
+    reason: Valid
+    status: "True"
+    type: CompletionPolicyValid
+  observedGeneration: 2
+  phase: Succeeded

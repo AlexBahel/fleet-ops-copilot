@@ -1,0 +1,94 @@
+# Run 2, after the P13 fix. sam (token kubeconfig), Sonnet 5.5, a new conversation. Times UTC. fleetops chat output unchanged.
+# 2026-11-09T01:26:21Z
+$ fleetops chat --new --context sam@fleetops-demo "Send a robot to staging-shelf-a."
+  tool list_zones
+  tool list_robots
+  tool propose_task
+  tool list_zones
+  tool list_robots
+  tool list_fleet_tasks
+  tool check_task
+Preview — Move a robot to a location (catalogue kind move)
+  Location: staging-shelf-a (FleetZone warehouse-a, x 12.1, y 8.1)
+  Priority: Normal (default)
+  On failure: retries up to 3 times, then alerts (default)
+  Robot: any eligible robot with navigation (default)
+  Start: when a person activates the draft (default)
+  Draft name: move-staging-shelf-a-f548
+Checks: likely feasible. Eligible now: move: sim-robot-001, sim-robot-002, sim-robot-003.
+Checked:
+  FleetZone/warehouse-a: status.estopStatus=Clear, status.robotCount=3, no ZoneMaintenance Active or Scheduled over it.
+  Robot/sim-robot-001: status.phase=Idle, status.batteryPercent=99, status.currentZone=warehouse-a, navigation=Active; eligible now.
+  Robot/sim-robot-002: status.phase=Idle, status.batteryPercent=99, status.currentZone=warehouse-a, navigation=Active; eligible now.
+  Robot/sim-robot-003: status.phase=Idle, status.batteryPercent=99, status.currentZone=warehouse-a, navigation=Active; eligible now.
+Checked against current fleet state; Swarmada's own acceptance is checked at execution.
+1 Confirm · 2 Confirm, and prepare a follow-up request if it fails · 3 Change something — describe it · 4 Cancel
+(session web-f121a87741221720)
+
+# 2026-11-09T01:26:29Z
+$ fleetops chat --context sam@fleetops-demo "1"
+  tool request_draft_task REQUIRE_APPROVAL -> ApprovalRequest/areq-ggb8v
+Filed ApprovalRequest/areq-ggb8v (move). It waits for a named person: fleetops approve areq-ggb8v -n warehouse-a, or fleetops reject areq-ggb8v -n warehouse-a. Next step: a person with create on fleettasks runs: fleetops approve <request>; fleetops-approvals then re-checks the fleet and creates the draft, which dispatches nothing until it is activated (request_activate_task)
+(session web-74e1c24132e7a868)
+
+# 2026-11-09T01:26:36Z dana
+$ fleetops approve areq-ggb8v -n warehouse-a --context dana@fleetops-demo
+decision areq-ggb8v-prwgt recorded. decision recorded; fleetops-approvals will process it
+
+# 2026-11-09T01:26:41Z sam, same conversation
+$ fleetops chat --context sam@fleetops-demo "Activate the draft move-staging-shelf-a-f548."
+  tool get_request
+  tool list_fleet_tasks
+  tool get_zone
+  tool propose_task
+  tool list_zones
+  tool list_robots
+  tool list_fleet_tasks
+  tool check_task
+Draft exists and is approved; now propose activation.
+
+Preview — Activate a draft task (catalogue kind activate)
+  Task: move-staging-shelf-a-f548
+Checks: likely feasible. Eligible now: move: sim-robot-001, sim-robot-002, sim-robot-003.
+Checked:
+  FleetZone/warehouse-a: status.estopStatus=Clear, status.robotCount=3, no ZoneMaintenance Active or Scheduled over it.
+  FleetTask/move-staging-shelf-a-f548: spec.draft=true, status.phase=Draft.
+  Robot/sim-robot-001: status.phase=Idle, status.batteryPercent=99, status.currentZone=warehouse-a, navigation=Active; eligible now.
+  Robot/sim-robot-002: status.phase=Idle, status.batteryPercent=99, status.currentZone=warehouse-a, navigation=Active; eligible now.
+  Robot/sim-robot-003: status.phase=Idle, status.batteryPercent=99, status.currentZone=warehouse-a, navigation=Active; eligible now.
+Checked against current fleet state; Swarmada's own acceptance is checked at execution.
+1 Confirm · 2 Confirm, and prepare a follow-up request if it fails · 3 Change something — describe it · 4 Cancel
+(session web-7dd77c4a00e77db4)
+
+# 2026-11-09T01:26:50Z
+$ fleetops chat --context sam@fleetops-demo "1"
+  tool request_activate_task REQUIRE_APPROVAL -> ApprovalRequest/areq-s454t
+Filed ApprovalRequest/areq-s454t (activate). It waits for a named person: fleetops approve areq-s454t -n warehouse-a, or fleetops reject areq-s454t -n warehouse-a. Next step: a person with patch and activate on this fleettask runs: fleetops approve <request>; once approved, a person Swarmada allows to activate runs fleetops activate <request>. The copilot never activates; it records the activation when it sees it
+(session web-eec3df9fa407cf90)
+
+# 2026-11-09T01:26:58Z dana
+$ fleetops approve areq-s454t -n warehouse-a --context dana@fleetops-demo
+decision areq-s454t-999nz recorded. approved. The copilot does not activate; run this with your own credentials: fleetops activate areq-s454t -n warehouse-a
+
+run with your own credentials, against:
+  API server: https://127.0.0.1:63950
+  context:    dana@fleetops-demo
+  namespace:  warehouse-a
+
+  fleetops activate areq-s454t -n warehouse-a --context dana@fleetops-demo
+
+# 2026-11-09T01:27:32Z dana
+$ fleetops activate areq-s454t -n warehouse-a --context dana@fleetops-demo
+activating FleetTask move-staging-shelf-a-f548 for areq-s454t, as dana, against:
+  API server: https://127.0.0.1:63950
+  context:    dana@fleetops-demo
+  namespace:  warehouse-a
+checks: likely feasible
+  not checked: the adapter's validate_action for the concrete action (no client can see it before assignment; Swarmada draft 5, C5)
+  not checked: filter 9: the adapter's contract version range and SafetyStream
+  not checked: filter 10: stops reported by adapters, and duplicate wire robot ids
+Checked against current fleet state; Swarmada's own acceptance is checked at execution.
+recorded ApprovalDecision areq-s454t-activation-bsnxg (type Activation, by dana)
+activated FleetTask move-staging-shelf-a-f548 as dana; fleetops-approvals links areq-s454t-activation-bsnxg to areq-s454t
+
+# 2026-11-09T01:27:32Z FleetTask move-staging-shelf-a-f548: phase Succeeded (kubectl wait --for=jsonpath={.status.phase}=Succeeded: condition met)

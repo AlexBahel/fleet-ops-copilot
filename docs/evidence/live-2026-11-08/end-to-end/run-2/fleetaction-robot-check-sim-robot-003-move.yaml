@@ -1,0 +1,41 @@
+apiVersion: swarmada.io/v1
+kind: FleetAction
+metadata:
+  creationTimestamp: "2026-11-09T01:25:42Z"
+  generation: 1
+  labels:
+    swarmada.io/fleettask: robot-check-sim-robot-003
+  name: robot-check-sim-robot-003-move
+  namespace: warehouse-a
+  ownerReferences:
+  - apiVersion: swarmada.io/v1
+    blockOwnerDeletion: true
+    controller: true
+    kind: FleetTask
+    name: robot-check-sim-robot-003
+    uid: c1fdb7c2-a679-4b72-a8ad-41c82573d1af
+  resourceVersion: "1901"
+  uid: de0719d9-295d-4f8b-baa6-a19c7c363062
+spec:
+  desiredState: Running
+  onFailure: Requeue
+  payload:
+    waypoint: staging-shelf-a
+    x: 12.1
+    "y": 8.1
+  preferredRobot: sim-robot-003
+  priority: Normal
+  requiredCapabilities:
+  - navigation
+  type: Navigate
+  zone: warehouse-a
+status:
+  assignedRobot: sim-robot-003
+  assignmentGeneration: 1794187428483463
+  completedAt: "2026-11-09T01:25:57Z"
+  completionTime: "2026-11-09T01:25:57Z"
+  message: arrived at target
+  phase: Succeeded
+  progressPct: 100
+  scheduledAt: "2026-11-09T01:25:42Z"
+  startedAt: "2026-11-09T01:25:42Z"

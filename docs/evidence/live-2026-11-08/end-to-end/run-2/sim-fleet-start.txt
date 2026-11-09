@@ -1,0 +1,27 @@
+# make demo at 233a815: the sim fleet stage (demo log lines, unchanged; the state directory shown as $DEMO_DIR)
+==> demo [1m59s] Swarmada sim fleet: three live adapters
+  sim fleet: RobotClass simbot-v1 (labelled fleetops.alexbahel.github.io/demo-workaround)
+  sim fleet: client certificates of sim-fleet-adapter sim-fleet-adapter-2 sim-fleet-adapter-3 in $DEMO_DIR/sim-fleet
+  sim fleet: FleetAdapters sim-fleet-adapter-2, sim-fleet-adapter-3 (sim-fleet-adapter's spec)
+  sim fleet: sim-robot-002 points at sim-fleet-adapter-2
+  sim fleet: sim-robot-003 points at sim-fleet-adapter-3
+  sim fleet: port-forward 127.0.0.1:19443 and 3 adapters started; PIDs in $DEMO_DIR/sim-fleet/pids, logs in $DEMO_DIR/logs
+  sim fleet: every robot registered and ready for work: its Robot names its adapter, the adapter is Connected, no register refused, the Robot Idle or InProgress
+
+# $DEMO_DIR/logs/sim-adapter-sim-robot-001.log, at teardown
+ACTION_SUCCEEDED robot=sim-robot-001 action=receiving-round-001-inspect-dock
+ACTION_SUCCEEDED robot=sim-robot-001 action=robot-check-sim-robot-001-move
+
+# $DEMO_DIR/logs/sim-adapter-sim-robot-002-connect.log, at teardown
+register refused robot=sim-robot-002: PERMISSION_DENIED: not authorized for robot sim-robot-002
+
+# $DEMO_DIR/logs/sim-adapter-sim-robot-002.log, at teardown
+ACTION_SUCCEEDED robot=sim-robot-002 action=inspect-receiving-dock
+ACTION_SUCCEEDED robot=sim-robot-002 action=robot-check-sim-robot-002-move
+ACTION_SUCCEEDED robot=sim-robot-002 action=move-staging-shelf-a-f548-move
+
+# $DEMO_DIR/logs/sim-adapter-sim-robot-003-connect.log, at teardown
+register refused robot=sim-robot-003: PERMISSION_DENIED: not authorized for robot sim-robot-003
+
+# $DEMO_DIR/logs/sim-adapter-sim-robot-003.log, at teardown
+ACTION_SUCCEEDED robot=sim-robot-003 action=robot-check-sim-robot-003-move

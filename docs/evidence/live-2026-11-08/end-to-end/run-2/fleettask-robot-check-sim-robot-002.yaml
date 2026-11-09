@@ -1,0 +1,58 @@
+apiVersion: swarmada.io/v1
+kind: FleetTask
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"swarmada.io/v1","kind":"FleetTask","metadata":{"annotations":{},"name":"robot-check-sim-robot-002","namespace":"warehouse-a"},"spec":{"actions":[{"action":{"desiredState":"Running","onFailure":"Requeue","payload":{"waypoint":"staging-shelf-a","x":12.1,"y":8.1},"preferredRobot":"sim-robot-002","priority":"Normal","requiredCapabilities":["navigation"],"type":"Navigate","zone":"warehouse-a"},"name":"move","startCondition":"Succeeded","trigger":"Auto"}],"completionPolicy":"All","desiredState":"Running","failurePolicy":"FailFast"}}
+  creationTimestamp: "2026-11-09T01:25:42Z"
+  generation: 1
+  name: robot-check-sim-robot-002
+  namespace: warehouse-a
+  resourceVersion: "1874"
+  uid: 30f2fbf6-cb8f-42f4-bd5f-9569d58b86a5
+spec:
+  actions:
+  - action:
+      desiredState: Running
+      onFailure: Requeue
+      payload:
+        waypoint: staging-shelf-a
+        x: 12.1
+        "y": 8.1
+      preferredRobot: sim-robot-002
+      priority: Normal
+      requiredCapabilities:
+      - navigation
+      type: Navigate
+      zone: warehouse-a
+    name: move
+    startCondition: Succeeded
+    trigger: Auto
+  completionPolicy: All
+  desiredState: Running
+  draft: false
+  failurePolicy: FailFast
+status:
+  actionSummary: 1/1 Succeeded
+  actions:
+  - actionRef: robot-check-sim-robot-002-move
+    assignedRobot: sim-robot-002
+    dependenciesMet: true
+    name: move
+    phase: Succeeded
+  completionTime: "2026-11-09T01:25:51Z"
+  conditions:
+  - lastTransitionTime: "2026-11-09T01:25:42Z"
+    message: dependency graph is acyclic and complete
+    observedGeneration: 1
+    reason: Valid
+    status: "True"
+    type: DependencyGraphValid
+  - lastTransitionTime: "2026-11-09T01:25:42Z"
+    message: completionPolicy is complete
+    observedGeneration: 1
+    reason: Valid
+    status: "True"
+    type: CompletionPolicyValid
+  observedGeneration: 1
+  phase: Succeeded

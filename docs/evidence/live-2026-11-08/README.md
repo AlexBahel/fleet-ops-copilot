@@ -1,8 +1,8 @@
 # Live check on the demo stack, 2026-11-08
 
-Two `make demo` stacks on the Mac mini, one after the other. Times are UTC. The full logs are not
-committed because they hold local paths. The lines below are copied from them unchanged. Neither
-run measures a pass rate.
+Three `make demo` stacks on the Mac mini, one after the other; the third began after midnight UTC.
+Times are UTC. The full logs are not committed because they hold local paths. The lines below are
+copied from them unchanged. None measures a pass rate.
 
 1. **21:32–21:39, filing and `make test-live`.** One guided conversation with the deployed
    fleetops-agent against Sonnet 5.5 ended in a filed ApprovalRequest. `make test-live` (phase
@@ -11,6 +11,11 @@ run measures a pass rate.
    fleetops-approvals, an activation request from the same conversation, dana's approval of it,
    `fleetops activate` by dana, and the FleetTask **Succeeded**. See
    [End to end](#end-to-end) and [`end-to-end/`](end-to-end/).
+3. **2026-11-09 01:22–01:28 UTC, end to end after the P13 fix.** A third `make demo`, at `233a815`
+   (BACKLOG-v4 P13 fixed in `hack/demo-sim-fleet.sh`). All three robots took a move, then the
+   README's own example, "Send a robot to staging-shelf-a.", ran end to end and Succeeded on the
+   robot Swarmada picked, sim-robot-002. See [End to end, run 2](#end-to-end-run-2) and
+   [`end-to-end/run-2/`](end-to-end/run-2/).
 
 | Item | Value |
 |---|---|
@@ -237,9 +242,9 @@ What was seen:
   its Robot pointed at it. Nothing changed by 23:56. Its log after the restart is empty.
 
 So on this stack all three Robots show as live (Idle or InProgress, `AdapterLive`), and on
-2026-11-08 at 21:38 all three confirmed a zone stop. But only sim-robot-001 completes work. Why the
-other two never act is not established beyond the refused register. Listed in `docs/KNOWN-LIMITS.md`
-and BACKLOG-v4 P13.
+2026-11-08 at 21:38 all three confirmed a zone stop. But only sim-robot-001 completed work. Why the
+other two never act is not established beyond the refused register. Listed as BACKLOG-v4 P13, fixed
+since: see [End to end, run 2](#end-to-end-run-2).
 
 ### Trace and cost
 
@@ -270,3 +275,99 @@ source `https://platform.claude.com/docs/en/about-claude/pricing`, read on 2026-
 `make demo-down` at 23:58:37: exit 0, "clean ✓ — no cluster, no tracked processes, no local
 pidfile/log state". The restarted adapter was in the pidfile and stopped with the others; no
 `sim_adapter.py` process was left.
+
+## End to end, run 2
+
+| Item | Value |
+|---|---|
+| Copilot | `233a815` (branch `golive2`: main `dfba88e` and the end-to-end evidence above, plus the P13 fix); the image built from it by `make demo` |
+| Swarmada, cluster, host | as above |
+| Command | `DEMO_TRACING=1 DEMO_ANTHROPIC_KEY_FILE=<key file> make demo`: exit 0, "stack running on kind-fleetops-demo in 2m47s (167s)", 01:22:19–01:25:08 (2026-11-09) |
+| People | sam files every request with his token kubeconfig; dana approves and activates with hers |
+
+Each file in [`end-to-end/run-2/`](end-to-end/run-2/) is unchanged as `kubectl get -o yaml`, the
+API, the pod or the command printed it, unless noted. None holds a token.
+
+### The sim fleet after the fix
+
+`hack/demo-sim-fleet.sh` now points each Robot at its adapter before the adapter that stays starts
+(BACKLOG-v4 P13). Swarmada's Robot webhook admits only a Connected adapter, so for sim-robot-002 and
+-003 a short connect process of their adapter ran while the Robot was pointed, and was then stopped.
+[`run-2/sim-fleet-start.txt`](end-to-end/run-2/sim-fleet-start.txt) has the stage's output and the
+five adapter logs:
+
+- Each connect log has its one refused register ("PERMISSION_DENIED: not authorized for robot …").
+  The three adapters that stayed have none. start ended with "every robot registered and ready for
+  work".
+- Swarmada's safety audit log
+  ([`run-2/swarmada-safety-audit.jsonl`](end-to-end/run-2/swarmada-safety-audit.jsonl), 16 entries)
+  holds only `ROBOT_AUTHZ_DENIED` entries, eight from each connect process, all between 01:24:24 and
+  01:24:28 ("bound to adapter \"sim-fleet-adapter\""). Run 1 of the end-to-end check had 39.
+- The quickstart's `inspect-receiving-dock` Succeeded on sim-robot-002, which the earlier runs never
+  saw.
+
+### Every robot takes work
+
+[`run-2/robots-take-work.txt`](end-to-end/run-2/robots-take-work.txt): at 01:25:42 the cluster
+admin filed three FleetTasks with `kubectl apply`, one move to staging-shelf-a each, with
+`preferredRobot` sim-robot-001, -002 and -003. No model and no copilot took part. All three
+Succeeded, each on its own robot: sim-robot-001 and sim-robot-002 at 01:25:51, sim-robot-003 at
+01:25:57 (`run-2/fleettask-robot-check-*.yaml`, `run-2/fleetaction-robot-check-*-move.yaml`).
+
+### The README's example
+
+[`run-2/conversation.txt`](end-to-end/run-2/conversation.txt) has every command and its output.
+
+1. 01:26:21, sam: "Send a robot to staging-shelf-a." The preview names no robot ("any eligible
+   robot with navigation (default)"), says "likely feasible. Eligible now: move: sim-robot-001,
+   sim-robot-002, sim-robot-003", and has the `Checked:` block with all three Robots `Idle`. It
+   asked no question.
+2. 01:26:29, sam: "1". ApprovalRequest `areq-ggb8v` was filed (DraftTask, `requestedFor: sam`).
+3. 01:26:36, dana: `fleetops approve areq-ggb8v`. Verdict `areq-ggb8v-prwgt`. fleetops-approvals
+   re-checked ("likely feasible"), dry-ran and created the draft `move-staging-shelf-a-f548`
+   (`state: Executed`, 01:26:36).
+4. 01:26:41, sam, same conversation: "Activate the draft move-staging-shelf-a-f548." The `activate`
+   preview checks `spec.draft=true, status.phase=Draft`. At 01:26:50 sam's "1" filed ActivateTask
+   request `areq-s454t`.
+5. 01:26:58, dana: `fleetops approve areq-s454t`. Verdict `areq-s454t-999nz`.
+6. 01:27:32, dana: `fleetops activate areq-s454t`. Activation ApprovalDecision
+   `areq-s454t-activation-bsnxg` ("type Activation, by dana"); `spec.draft` cleared. The 34 s between
+   steps 5 and 6 were spent by the capture script waiting on the wrong request phase; they are not the
+   copilot's.
+7. 01:27:32, `FleetTask/move-staging-shelf-a-f548` is `phase: Succeeded`; Swarmada assigned its
+   action to **sim-robot-002** (`assignedRobot`), `completionTime` 01:27:32. fleetops-approvals
+   recorded `status.outcome.phase: Succeeded` on `areq-ggb8v` and `activatedBy: dana`,
+   `activationRef: areq-s454t-activation-bsnxg` on `areq-s454t`.
+
+Who did what: all three ApprovalDecisions
+([`run-2/approvaldecisions.yaml`](end-to-end/run-2/approvaldecisions.yaml)) have `decidedBy: dana`.
+fleetops-approvals' audit file
+([`run-2/fleetops-approvals-audit.jsonl`](end-to-end/run-2/fleetops-approvals-audit.jsonl), 5
+entries) names dana in every entry that has an actor, and `fleetops audit verify` prints
+"5 entries, chain intact" ([`run-2/audit-verify.txt`](end-to-end/run-2/audit-verify.txt)). The
+Events ([`run-2/events-warehouse-a.txt`](end-to-end/run-2/events-warehouse-a.txt)) say "approved by
+dana" and "activated by dana; the copilot did not perform the activation". As in run 1, Swarmada's
+own safety audit log has no entry for the activation.
+
+### Trace and cost, run 2
+
+[`run-2/jaeger-fleetops-agent.json`](end-to-end/run-2/jaeger-fleetops-agent.json) and
+[`run-2/jaeger-fleetops-mcp.json`](end-to-end/run-2/jaeger-fleetops-mcp.json) are Jaeger's
+`/api/v3/traces` answers for 01:22–01:30, re-indented. The two messages that reached the model each
+have one `fleetops.request` trace (`claude:claude-sonnet-5-5`, two model calls each); the two "1"
+confirmations made no model call.
+
+| Message | Input | Output | Cache write | Cache read | USD |
+|---|---|---|---|---|---|
+| "Send a robot to staging-shelf-a." | 6 | 158 | 10208 | 8833 | 0.0280 |
+| "Activate the draft …-f548." | 6 | 264 | 2595 | 18356 | 0.0110 |
+| **total** | 12 | 422 | 12803 | 27189 | **0.0390** |
+
+From request to Succeeded: **0.0390 USD**, at the rates in "Cost" above (2, 10, 2.5 and 0.1 USD per
+million input, output, cache-write and cache-read tokens), from `cost.pricing` in
+[`evals/results/cloud-claude-sonnet-5-5-2026-11-08-v6/results.json`](../../../evals/results/cloud-claude-sonnet-5-5-2026-11-08-v6/results.json):
+source `https://platform.claude.com/docs/en/about-claude/pricing`, read on 2026-11-08.
+
+### Teardown, run 2
+
+`make demo-down`: exit 0, "clean ✓ — no cluster, no tracked processes, no local pidfile/log state".
