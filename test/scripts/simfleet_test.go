@@ -27,31 +27,52 @@ import (
 	"time"
 )
 
-// simFleet sets up stubs for hack/demo-sim-fleet.sh: kubectl answers the
-// reads it makes (secrets, phases) and runs port-forward until killed;
-// python3 stands for sim_adapter.py and runs until killed. phase is what
+// simFleet sets up stubs for hack/demo-sim-fleet.sh. kubectl answers the
+// reads it makes (secrets, phases, heartbeats), keeps each Robot's
+// spec.adapter.name (every Robot names sim-fleet-adapter, as in the
+// quickstart, until the script patches it) and runs port-forward until
+// killed; a FleetAdapter is Connected once a process of it has started.
+// python3 stands for sim_adapter.py: as Swarmada does, its register is
+// refused when the Robot does not name the robot's adapter at the moment it
+// starts, and the refusal is printed once and never retried, as the sim
+// adapter does (BACKLOG-v4 P13); it then runs until killed. phase is what
 // every Robot reports.
 func simFleet(t *testing.T, phase string) (env, string, map[string]string) {
 	t.Helper()
 	e := newEnv(t)
 	applied := filepath.Join(filepath.Dir(e.home), "applied.yaml")
+	state := filepath.Join(filepath.Dir(e.home), "robots")
+	if err := os.MkdirAll(state, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	kubectl := `#!/bin/sh
 echo "kubectl $*" >> '` + e.calls + `'
+st='` + state + `'
 case "$*" in
   *" apply -f -"*) cat >> '` + applied + `' ;;
+  *"patch robot "*) echo "$*" | sed 's/.* patch robot \([^ ]*\) .*"value":"\([^"]*\)".*/\2/' > "$st/$(echo "$*" | sed 's/.* patch robot \([^ ]*\) .*/\1/')" ;;
+  *"get robot "*"spec.adapter.name"*) f="$st/$(echo "$*" | sed 's/.* get robot \([^ ]*\) .*/\1/')"; if [ -f "$f" ]; then cat "$f"; else printf sim-fleet-adapter; fi ;;
+  *"get fleetadapter"*"status.lastHeartbeat"*) date -u +%Y-%m-%dT%H:%M:%SZ ;;
   *"port-forward service/swarmada-controlstream"*)
     echo "Forwarding from 127.0.0.1:19443 -> 9445"
     trap 'kill $! 2>/dev/null; exit 0' TERM
     sleep 300 & wait ;;
   *"get secret"*"-o jsonpath"*) printf 'cert-material' | base64 ;;
   *"get robot"*"status.phase"*) printf '` + phase + `' ;;
-  *"get fleetadapter"*"status.phase"*) printf 'Connected' ;;
+  *"get fleetadapter"*"status.phase"*) f="$st/connected-$(echo "$*" | sed 's/.* get fleetadapter \([^ ]*\) .*/\1/')"; if [ -f "$f" ]; then printf Connected; else printf Pending; fi ;;
   *"get fleetadapter sim-fleet-adapter -o json"*) echo '{"apiVersion":"swarmada.io/v1","kind":"FleetAdapter","metadata":{"namespace":"warehouse-a"},"spec":{}}' ;;
 esac
 exit 0
 `
 	python := `#!/bin/sh
 echo "python3 $*" >> '` + e.calls + `'
+r="$(echo "$*" | sed 's/.*--robot-id \([^ ]*\).*/\1/')"
+case "$r" in sim-robot-001) a=sim-fleet-adapter ;; sim-robot-002) a=sim-fleet-adapter-2 ;; *) a=sim-fleet-adapter-3 ;; esac
+bound="$(cat '` + state + `'/"$r" 2>/dev/null || echo sim-fleet-adapter)"
+touch '` + state + `'/connected-"$a"
+if [ "$bound" != "$a" ] || [ "$r" = "$STUB_REFUSE" ]; then
+  echo "register refused robot=$r: PERMISSION_DENIED: not authorized for robot $r" >&2
+fi
 trap 'kill $! 2>/dev/null; exit 0' TERM
 sleep 300 & wait
 `
@@ -68,7 +89,7 @@ sleep 300 & wait
 	if err := os.WriteFile(filepath.Join(work, "swarmada", "adapters", "simulation", "sim_adapter.py"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	vars := map[string]string{"CLUSTER": "fleetops-test-1", "KUBECONFIG": e.dedicated(t), "DEMO_DIR": work, "FLEETOPS_SIM_READY_TIMEOUT": "3"}
+	vars := map[string]string{"CLUSTER": "fleetops-test-1", "KUBECONFIG": e.dedicated(t), "DEMO_DIR": work, "FLEETOPS_SIM_READY_TIMEOUT": "3", "FLEETOPS_SIM_REGISTER_GRACE": "1"}
 	return e, work, vars
 }
 
@@ -176,7 +197,7 @@ func TestSimFleetStartStop(t *testing.T) {
 		!strings.Contains(applied, "fleetops.alexbahel.github.io/demo-workaround") || !strings.Contains(applied, "does not ship it") {
 		t.Errorf("RobotClass not created as a labelled workaround:\n%s", applied)
 	}
-	if !strings.Contains(out, "every Robot live (Idle or InProgress), every FleetAdapter Connected") {
+	if !strings.Contains(out, "every robot registered and ready for work") {
 		t.Errorf("start output:\n%s", out)
 	}
 
@@ -228,7 +249,7 @@ func TestSimFleetStopLeavesOtherProcessesAlone(t *testing.T) {
 func TestSimFleetStartFailsAndCleansUp(t *testing.T) {
 	e, work, vars := simFleet(t, "Offline")
 	out, err := e.runScript(t, "hack/demo-sim-fleet.sh", vars, "start")
-	if err == nil || !strings.Contains(out, "not live after 3s: Robot/sim-robot-001") {
+	if err == nil || !strings.Contains(out, "not registered and ready for work after 3s; sim-robot-001: Robot phase Offline") {
 		t.Fatalf("want a failure naming the Robots, got %v\n%s", err, out)
 	}
 	if _, err := os.Stat(filepath.Join(work, "sim-fleet", "pids")); !os.IsNotExist(err) {
@@ -244,5 +265,71 @@ func TestSimFleetStartFailsAndCleansUp(t *testing.T) {
 		if !waitDead(p) {
 			t.Errorf("PID %d still running after a failed start", p)
 		}
+	}
+}
+
+// P13: every Robot names its adapter before the adapter that stays starts, so
+// no register is refused. Swarmada's Robot webhook admits only a Connected
+// adapter, so a Robot that names another one is pointed while a connect
+// process of its adapter runs, and that process is stopped first. Fails on
+// the order before P13 (all adapters started, then the Robots pointed).
+func TestSimFleetPointsEachRobotBeforeItsAdapter(t *testing.T) {
+	e, work, vars := simFleet(t, "Idle")
+	out, err := e.runScript(t, "hack/demo-sim-fleet.sh", vars, "start")
+	ps := []pidLine{}
+	if _, serr := os.Stat(filepath.Join(work, "sim-fleet", "pids")); serr == nil {
+		ps = pids(t, filepath.Join(work, "sim-fleet", "pids"))
+	}
+	t.Cleanup(func() {
+		for _, p := range ps {
+			_ = syscall.Kill(p.pid, syscall.SIGKILL)
+		}
+	})
+	if err != nil {
+		t.Fatalf("start: %v\n%s", err, out)
+	}
+	for _, r := range []string{"sim-robot-001", "sim-robot-002", "sim-robot-003"} {
+		if log := readFile(t, filepath.Join(work, "logs", "sim-adapter-"+r+".log")); strings.Contains(log, "register refused") {
+			t.Errorf("the adapter of %s started before its Robot named it: %s", r, log)
+		}
+	}
+	calls := readFile(t, e.calls)
+	for _, r := range []string{"sim-robot-002", "sim-robot-003"} {
+		patch := strings.Index(calls, "patch robot "+r)
+		last := strings.LastIndex(calls, "--robot-id "+r)
+		if patch < 0 || last < patch {
+			t.Errorf("%s: the adapter that stays was not started after the patch:\n%s", r, calls)
+		}
+		if strings.Count(calls, "--robot-id "+r) != 2 {
+			t.Errorf("%s: want one connect process and one adapter:\n%s", r, calls)
+		}
+	}
+	if n := strings.Count(calls, "--robot-id sim-robot-001"); n != 1 {
+		t.Errorf("sim-robot-001 already names its adapter: want one process, got %d", n)
+	}
+	if len(ps) != 4 {
+		t.Errorf("pidfile %+v: want the port-forward and three adapters (connect processes dropped)", ps)
+	}
+	for _, p := range ps {
+		if !alive(p.pid) {
+			t.Errorf("PID %d (%s) is not running after start", p.pid, p.pattern)
+		}
+	}
+	if out, err := e.runScript(t, "hack/demo-sim-fleet.sh", vars, "stop"); err != nil || !strings.Contains(out, "stopped 4 process(es)") {
+		t.Fatalf("stop: %v\n%s", err, out)
+	}
+}
+
+// P13: a register that is refused fails start at once, naming the robot, and
+// leaves nothing running.
+func TestSimFleetStartFailsOnRefusedRegister(t *testing.T) {
+	e, work, vars := simFleet(t, "Idle")
+	vars["STUB_REFUSE"] = "sim-robot-003"
+	out, err := e.runScript(t, "hack/demo-sim-fleet.sh", vars, "start")
+	if err == nil || !strings.Contains(out, "sim-robot-003 is not registered: Swarmada refused its adapter's register (PERMISSION_DENIED: not authorized for robot sim-robot-003), and the sim adapter does not retry it") {
+		t.Fatalf("want a failure naming sim-robot-003, got %v\n%s", err, out)
+	}
+	if _, err := os.Stat(filepath.Join(work, "sim-fleet", "pids")); !os.IsNotExist(err) {
+		t.Errorf("pidfile left after a failed start: %v", err)
 	}
 }

@@ -18,11 +18,19 @@
 #   2. the client certificates of sim-fleet-adapter-2 and -3 (the pinned
 #      tree's demo-ab-live overlay) and FleetAdapters with sim-fleet-adapter's
 #      spec;
-#   3. the port-forward and three adapters; logs in $DEMO_DIR/logs, PIDs in
-#      $DEMO_DIR/sim-fleet/pids; waits until every FleetAdapter is Connected;
-#   4. points sim-robot-002/003 at their adapters (Swarmada's Robot webhook
-#      admits only a Connected one) and waits until every Robot is live
-#      (Idle, or InProgress on work Swarmada gave it).
+#   3. the port-forward, then for each robot (BACKLOG-v4 P13): the Robot is
+#      pointed at its adapter before the adapter that stays is started, so
+#      its first register is authorized (Swarmada refuses a register from an
+#      adapter the Robot does not name, and the sim adapter does not retry a
+#      refused one). Swarmada's Robot webhook admits only a Connected adapter,
+#      so for a Robot that names another one a short-lived connect process of
+#      its adapter runs first, the Robot is pointed, and that process is
+#      stopped. Logs in $DEMO_DIR/logs, PIDs in $DEMO_DIR/sim-fleet/pids;
+#   4. waits until every robot is registered and ready for work: its Robot
+#      names its adapter, the adapter is Connected with a heartbeat from the
+#      process that stays, the adapter's log holds no refused register, and
+#      the Robot is live (Idle, or InProgress on work Swarmada gave it). A
+#      robot that is not, within the timeout, fails start with its name.
 #
 # stop kills only the processes in the pidfile whose command line is still
 # the one recorded (a reused PID is left alone), adapters first.
@@ -31,7 +39,9 @@
 #
 # Environment (optional): SWARMADA_NAMESPACE (default warehouse-a),
 # FLEETOPS_SIM_CS_PORT (local ControlStream port, default 19443),
-# FLEETOPS_SIM_READY_TIMEOUT (seconds, default 180).
+# FLEETOPS_SIM_READY_TIMEOUT (seconds, default 180), FLEETOPS_SIM_REGISTER_GRACE
+# (seconds an adapter runs before its log is read for a refused register,
+# default 5).
 set -euo pipefail
 
 repo="$(cd "$(dirname "$0")/.." && pwd)"
@@ -48,6 +58,7 @@ ns="${SWARMADA_NAMESPACE:-warehouse-a}"
 mgr=system
 port="${FLEETOPS_SIM_CS_PORT:-19443}"
 timeout="${FLEETOPS_SIM_READY_TIMEOUT:-180}"
+grace="${FLEETOPS_SIM_REGISTER_GRACE:-5}"
 sw="$dir/swarmada"
 run="$dir/sim-fleet"
 logs="$dir/logs"
@@ -55,6 +66,8 @@ pidfile="$run/pids"
 robots=(sim-robot-001 sim-robot-002 sim-robot-003)
 adapters=(sim-fleet-adapter sim-fleet-adapter-2 sim-fleet-adapter-3)
 label="fleetops.alexbahel.github.io/demo-workaround"
+py="" proc=""
+started=() # per robot: when the adapter that stays was started (epoch seconds)
 
 k() { kubectl --kubeconfig "$KUBECONFIG" --context "$ctx" "$@"; }
 say() { echo "  sim fleet: $*"; }
@@ -62,6 +75,13 @@ fail() { echo "demo-sim-fleet.sh: $*" >&2; exit 1; }
 
 # ours PID PATTERN: the process is alive and still runs what we started.
 ours() { local c; c="$(ps -p "$1" -o command= 2>/dev/null || true)"; [[ -n "$c" && "$c" == *"$2"* ]]; }
+
+# end PID PATTERN: TERM, then KILL after 5 s.
+end() {
+  kill "$1" 2>/dev/null || true
+  for _ in $(seq 50); do ours "$1" "$2" || break; sleep 0.1; done
+  if ours "$1" "$2"; then kill -9 "$1" 2>/dev/null || true; fi
+}
 
 stop() {
   [[ -f "$pidfile" ]] || { say "not running (no $pidfile)"; return 0; }
@@ -72,9 +92,7 @@ stop() {
   for ((i = ${#lines[@]} - 1; i >= 0; i--)); do
     pid="${lines[$i]%% *}" pat="${lines[$i]#* }"
     if ours "$pid" "$pat"; then
-      kill "$pid" 2>/dev/null || true
-      for _ in $(seq 50); do ours "$pid" "$pat" || break; sleep 0.1; done
-      if ours "$pid" "$pat"; then kill -9 "$pid" 2>/dev/null || true; fi
+      end "$pid" "$pat"
       n=$((n + 1))
     elif kill -0 "$pid" 2>/dev/null; then
       say "PID $pid no longer runs '$pat'; left alone"
@@ -84,8 +102,13 @@ stop() {
   say "stopped $n process(es)"
 }
 
-# record PID PATTERN
+# record PID PATTERN; unrecord PID drops its line.
 record() { echo "$1 $2" >>"$pidfile"; }
+unrecord() {
+  local keep
+  keep="$(grep -v "^$1 " "$pidfile" || true)"
+  if [[ -n "$keep" ]]; then printf '%s\n' "$keep" >"$pidfile"; else : >"$pidfile"; fi
+}
 
 robot_class() {
   k apply -f - >/dev/null <<EOF
@@ -136,21 +159,48 @@ adapters() {
   say "FleetAdapters ${adapters[1]}, ${adapters[2]} (sim-fleet-adapter's spec)"
 }
 
-# robots points sim-robot-002/003 at their own adapters. Swarmada's Robot
-# webhook admits only a Connected adapter, so this runs after its process
-# has registered.
-robots() {
-  local i
-  for i in 1 2; do
-    k -n "$ns" annotate robot "${robots[$i]}" "swarmada.io/robot-id=${robots[$i]}" --overwrite >/dev/null
-    k -n "$ns" patch robot "${robots[$i]}" --type=json \
-      -p "[{\"op\":\"replace\",\"path\":\"/spec/adapter/name\",\"value\":\"${adapters[$i]}\"}]" >/dev/null
+# robot_field ROBOT JSONPATH, adapter_field ADAPTER JSONPATH
+robot_field() { k -n "$ns" get robot "$1" -o jsonpath="$2" 2>/dev/null || true; }
+adapter_field() { k -n "$ns" get fleetadapter "$1" -o jsonpath="$2" 2>/dev/null || true; }
+
+# adapter_proc INDEX LOG: one sim_adapter.py for robot INDEX in the background,
+# recorded in the pidfile; its PID in $proc.
+adapter_proc() {
+  local i="$1"
+  (
+    cd "$sw"
+    exec nohup env PYTHONUNBUFFERED=1 PYTHONPATH=proto "$py" adapters/simulation/sim_adapter.py \
+      --endpoint "127.0.0.1:$port" --namespace "$ns" --robot-id "${robots[$i]}" --zone warehouse-a \
+      --vendor simulation --scenario healthy-fleet \
+      --tls-ca "$run/tls-$((i + 1))/ca.crt" --tls-cert "$run/tls-$((i + 1))/tls.crt" --tls-key "$run/tls-$((i + 1))/tls.key" \
+      --tls-server-name "swarmada-controlstream.$mgr.svc"
+  ) >"$2" 2>&1 &
+  proc=$!
+  disown "$proc" 2>/dev/null || true # no "Terminated" line when a connect process is stopped
+  record "$proc" "sim_adapter.py"
+}
+
+# point INDEX: the Robot names its adapter before the adapter that stays
+# starts (P13). Swarmada's Robot webhook admits only a Connected adapter, so a
+# connect process of the adapter runs while the Robot is pointed, then stops.
+point() {
+  local i="$1" r="${robots[$1]}" a="${adapters[$1]}" waited=0
+  [[ "$(robot_field "$r" '{.spec.adapter.name}')" == "$a" ]] && return 0
+  adapter_proc "$i" "$logs/sim-adapter-$r-connect.log"
+  until [[ "$(adapter_field "$a" '{.status.phase}')" == Connected ]]; do
+    ((waited >= timeout)) && fail "$r: FleetAdapter $a not Connected after ${timeout}s, so $r cannot be pointed at it (log: $logs/sim-adapter-$r-connect.log)"
+    sleep 1; waited=$((waited + 1))
   done
-  say "${robots[1]}, ${robots[2]} point at ${adapters[1]}, ${adapters[2]}"
+  k -n "$ns" annotate robot "$r" "swarmada.io/robot-id=$r" --overwrite >/dev/null
+  k -n "$ns" patch robot "$r" --type=json \
+    -p "[{\"op\":\"replace\",\"path\":\"/spec/adapter/name\",\"value\":\"$a\"}]" >/dev/null
+  end "$proc" "sim_adapter.py"
+  unrecord "$proc"
+  say "$r points at $a"
 }
 
 launch() {
-  local py i pid pf_log="$logs/sim-fleet-port-forward.log"
+  local i pid pf_log="$logs/sim-fleet-port-forward.log"
   py="$(command -v python3 || command -v python)"
   nohup kubectl --kubeconfig "$KUBECONFIG" --context "$ctx" -n "$mgr" port-forward service/swarmada-controlstream "$port:9445" >"$pf_log" 2>&1 &
   pid=$!
@@ -158,42 +208,52 @@ launch() {
   for _ in $(seq 60); do grep -q "Forwarding from" "$pf_log" 2>/dev/null && break; sleep 0.5; done
   grep -q "Forwarding from" "$pf_log" 2>/dev/null || fail "the ControlStream port-forward did not start ($pf_log)"
   for i in "${!robots[@]}"; do
-    (
-      cd "$sw"
-      exec nohup env PYTHONUNBUFFERED=1 PYTHONPATH=proto "$py" adapters/simulation/sim_adapter.py \
-        --endpoint "127.0.0.1:$port" --namespace "$ns" --robot-id "${robots[$i]}" --zone warehouse-a \
-        --vendor simulation --scenario healthy-fleet \
-        --tls-ca "$run/tls-$((i + 1))/ca.crt" --tls-cert "$run/tls-$((i + 1))/tls.crt" --tls-key "$run/tls-$((i + 1))/tls.key" \
-        --tls-server-name "swarmada-controlstream.$mgr.svc"
-    ) >"$logs/sim-adapter-${robots[$i]}.log" 2>&1 &
-    record "$!" "sim_adapter.py"
+    point "$i"
+    # Two seconds apart, so no heartbeat from a connect process that just
+    # stopped counts as one from the adapter that stays (one-second stamps).
+    sleep 2
+    started[i]="$(date -u +%s)"
+    adapter_proc "$i" "$logs/sim-adapter-${robots[$i]}.log"
   done
   say "port-forward 127.0.0.1:$port and ${#robots[@]} adapters started; PIDs in $pidfile, logs in $logs"
 }
 
-# ready [adapters]: every FleetAdapter Connected and, unless "adapters", every
-# Robot live: Idle, or InProgress on work Swarmada gave it (the quickstart's
-# pending FleetActions go to a robot as soon as it is live).
+# epoch RFC3339: seconds since 1970 (GNU or BSD date).
+epoch() { date -u -d "$1" +%s 2>/dev/null || date -u -j -f '%Y-%m-%dT%H:%M:%SZ' "$1" +%s 2>/dev/null || echo 0; }
+
+# not_ready INDEX: empty when the robot is registered and ready for work,
+# otherwise why not.
+not_ready() {
+  local i="$1" r="${robots[$1]}" a="${adapters[$1]}" log="$logs/sim-adapter-${robots[$1]}.log" hb phase line
+  [[ "$(robot_field "$r" '{.spec.adapter.name}')" == "$a" ]] || { echo "Robot does not name $a"; return; }
+  [[ "$(adapter_field "$a" '{.status.phase}')" == Connected ]] || { echo "FleetAdapter $a not Connected"; return; }
+  hb="$(adapter_field "$a" '{.status.lastHeartbeat}')"
+  (($(epoch "$hb") + 1 >= started[i])) || { echo "no heartbeat on $a since its adapter started"; return; }
+  line="$(grep -m1 "register refused\|NOT_ADMITTED" "$log" 2>/dev/null || true)"
+  [[ -z "$line" ]] || { echo "register refused: ${line#*: }"; return; }
+  (($(date -u +%s) - started[i] >= grace)) || { echo "adapter started less than ${grace}s ago"; return; }
+  phase="$(robot_field "$r" '{.status.phase}')"
+  case "$phase" in Idle | InProgress) ;; *) echo "Robot phase ${phase:-<none>}" ;; esac
+}
+
+# ready: every robot registered and ready for work, or fail naming the robot.
 ready() {
-  local r a waited=0 pending
+  local i why waited=0 pending
   while :; do
     pending=""
-    if [[ "${1:-}" != adapters ]]; then
-      for r in "${robots[@]}"; do
-        case "$(k -n "$ns" get robot "$r" -o jsonpath='{.status.phase}' 2>/dev/null)" in
-          Idle | InProgress) ;;
-          *) pending+=" Robot/$r" ;;
-        esac
-      done
-    fi
-    for a in "${adapters[@]}"; do
-      [[ "$(k -n "$ns" get fleetadapter "$a" -o jsonpath='{.status.phase}' 2>/dev/null)" == Connected ]] || pending+=" FleetAdapter/$a"
+    for i in "${!robots[@]}"; do
+      why="$(not_ready "$i")"
+      if [[ -n "$why" ]]; then
+        pending+="; ${robots[$i]}: $why"
+        # A refused register is final: the sim adapter does not retry it.
+        [[ "$why" == "register refused"* ]] && fail "${robots[$i]} is not registered: Swarmada refused its adapter's register (${why#register refused: }), and the sim adapter does not retry it (log: $logs/sim-adapter-${robots[$i]}.log)"
+      fi
     done
     [[ -z "$pending" ]] && break
-    ((waited >= timeout)) && fail "not live after ${timeout}s:$pending (logs: $logs/sim-adapter-*.log)"
-    sleep 3; waited=$((waited + 3))
+    ((waited >= timeout)) && fail "not registered and ready for work after ${timeout}s${pending} (logs: $logs/sim-adapter-*.log)"
+    sleep 1; waited=$((waited + 1))
   done
-  if [[ "${1:-}" == adapters ]]; then say "every FleetAdapter Connected"; else say "every Robot live (Idle or InProgress), every FleetAdapter Connected"; fi
+  say "every robot registered and ready for work: its Robot names its adapter, the adapter is Connected, no register refused, the Robot Idle or InProgress"
 }
 
 case "$cmd" in
@@ -207,8 +267,6 @@ start)
   robot_class
   adapters
   launch
-  ready adapters
-  robots
   ready
   ;;
 stop) stop ;;
