@@ -243,8 +243,10 @@ Both model messages cost 0.0379 USD at the rates the v6 Sonnet results record. E
 dana, and fleetops-approvals' audit file (chain intact) and Events name who approved and who
 activated. An earlier run that day filed the same kind of request and passed all 11 `make test-live`
 approval-path subtests. Transcripts, requests, decisions, task status, audit files, Jaeger exports
-and costs: [`docs/evidence/live-2026-11-08/`](docs/evidence/live-2026-11-08/README.md). On the demo
-stack only sim-robot-001 completes work (BACKLOG-v4 P13).
+and costs: [`docs/evidence/live-2026-11-08/`](docs/evidence/live-2026-11-08/README.md). After the
+sim fleet fix (BACKLOG-v4 P13), all three robots took a move, and the example above, "Send a robot to
+staging-shelf-a.", ran the same way to Succeeded on the robot Swarmada picked, sim-robot-002
+(2026-11-09 UTC, 0.0390 USD; "End to end, run 2" in the same folder).
 
 **CI regression gate** (D58). The `go` job runs `make ci`, which holds the scripted fixture evals to
 `evals/baseline.json`. Proof on the branch [`fleetops-gate-proof`](https://github.com/AlexBahel/fleet-ops-copilot/tree/fleetops-gate-proof): a planted commit that made the scripted

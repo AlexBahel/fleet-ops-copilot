@@ -7,8 +7,9 @@ twice more with the API key Secret ([`docs/evidence/live-2026-11-08/`](evidence/
 The first run had one `fleetops chat` conversation as sam against Sonnet 5.5 (sections 7 and 9) that
 filed a request, the Jaeger export of section 8, `make test-live` and `make demo-down`. The second ran
 section 9 end to end: a guided request, `fleetops approve` by dana, an activation request, its
-approval, `fleetops activate` by dana, and the FleetTask Succeeded. Section 4's audit file was read and
-verified (`fleetops audit verify`). The other sections have not been run as a sequence. Items
+approval, `fleetops activate` by dana, and the FleetTask Succeeded. A third run (2026-11-09 UTC,
+same folder) ran section 9 end to end again for "a robot", after the sim fleet fix (BACKLOG-v4 P13).
+Section 4's audit file was read and verified (`fleetops audit verify`) in both. The other sections have not been run as a sequence. Items
 that depend on parts not built yet (the air-gapped profile in the chart) say so.
 
 Conventions: every `kubectl` and `helm` command names its context explicitly. The examples use a
@@ -55,8 +56,12 @@ What it does, in order (each stage prints its elapsed time; the total is the las
    adapter when it exits, so `hack/demo-sim-fleet.sh start` keeps the fleet live: RobotClass
    `simbot-v1` (a labelled demo workaround: the quickstart names it but does not ship it), one
    FleetAdapter identity per robot, and one `sim_adapter.py` per robot plus a port-forward in the
-   background (PIDs `$DEMO_DIR/sim-fleet/pids`, logs `$DEMO_DIR/logs/sim-adapter-*.log`). It
-   waits until every Robot is live (`Idle`, or `InProgress` on the quickstart's pending work). If the Robots go `Offline` later, run
+   background (PIDs `$DEMO_DIR/sim-fleet/pids`, logs `$DEMO_DIR/logs/sim-adapter-*.log`). Each
+   Robot is pointed at its adapter before the adapter that stays starts (BACKLOG-v4 P13; a short
+   connect process of the adapter runs while the Robot is pointed, `$DEMO_DIR/logs/sim-adapter-*-connect.log`,
+   whose one refused register is expected). It waits until every robot is registered and ready for
+   work: the Robot names its adapter, the adapter is Connected, no register was refused, and the
+   Robot is `Idle` or `InProgress`; otherwise it fails and names the robot. If the Robots go `Offline` later, run
    `CLUSTER=fleetops-demo KUBECONFIG=$DEMO_DIR/kubeconfig hack/demo-sim-fleet.sh start` again.
 5. Builds the copilot image, loads it into the cluster, applies the CRDs and installs the chart
    into `fleetops-system`; binds the people's roles in `warehouse-a`.
@@ -235,7 +240,7 @@ anyway, revoke it.
 
 | Profile | Model | Status on main |
 |---|---|---|
-| `cloud` | Claude via the Claude API | Chart value `llm.profile: cloud` (default). The chart runs fleetops-agent with `-backend=claude` (`internal/llm/claude.go`); it starts once the API key Secret exists (section 2). fleetops-agent has run against Sonnet 5.5 on the demo stack, end to end up to a Succeeded FleetTask (`docs/evidence/live-2026-11-08/`; docs/KNOWN-LIMITS.md); Sonnet 5.5 and Opus 5.5 were measured through `fleetops-eval` on eval surfaces v3 to v6; the record is v6 (`evals/results/comparison-v6.md`, 2026-11-08), and no model has run on v7. |
+| `cloud` | Claude via the Claude API | Chart value `llm.profile: cloud` (default). The chart runs fleetops-agent with `-backend=claude` (`internal/llm/claude.go`); it starts once the API key Secret exists (section 2). fleetops-agent has run against Sonnet 5.5 on the demo stack, end to end up to a Succeeded FleetTask, twice (`docs/evidence/live-2026-11-08/`; docs/KNOWN-LIMITS.md); Sonnet 5.5 and Opus 5.5 were measured through `fleetops-eval` on eval surfaces v3 to v6; the record is v6 (`evals/results/comparison-v6.md`, 2026-11-08), and no model has run on v7. |
 | `airgap` | Qwen2.5-7B-Instruct served by `llama-server` in the cluster | Plain manifests and make targets (`config/airgap/`, `hack/airgap.mk`) and the `llamacpp` backend (`internal/llm/llamacpp.go`); not templated in the chart. Run on single-node kind clusters with kindnet (`docs/evidence/airgap-2026-11-04/`, `docs/evidence/airgap-2026-11-05/`); the `llamacpp` backend ran four evaluations against Qwen2.5-7B-Instruct through `fleetops-eval` (`evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-05/` on eval surface v3, `evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-07/` on v4, `evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-08-v5/` on v5, `evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-08-v6/` on v6), and one against Qwen2.5-14B-Instruct on v6 (`evals/results/airgap-llamacpp-qwen2.5-14b-instruct-2026-11-08-v6/`, with this manifest's model files, alias and memory changed: its `model.md`). fleetops-agent does not run with it yet (docs/KNOWN-LIMITS.md). `llm.profile: airgap` makes the chart render fail on purpose. |
 
 Until the air-gapped profile is in the chart, it is installed beside the chart with these targets,
@@ -435,12 +440,11 @@ on 2026-11-05 (`docs/evidence/airgap-2026-11-05/`), before D68 and D69.
 
 ## 9. Requests for work: questions, preview, confirmation, activation
 
-Run end to end once on the demo stack: a guided move, confirmed, approved, activated with
-`fleetops activate` and Succeeded (2026-11-08,
-[`docs/evidence/live-2026-11-08/`](evidence/live-2026-11-08/README.md), "End to end"). Other kinds,
-blocked previews, failed execution checks and follow-ups are tested only with the scripted backend,
-envtest and the fixture evaluations (D70–D81). On the demo stack only sim-robot-001 completes work
-(docs/KNOWN-LIMITS.md); name it for a task that must finish there.
+Run end to end twice on the demo stack: a guided move, confirmed, approved, activated with
+`fleetops activate` and Succeeded (2026-11-08 for sim-robot-001, and 2026-11-09 for "a robot", run on
+sim-robot-002; [`docs/evidence/live-2026-11-08/`](evidence/live-2026-11-08/README.md), "End to end"
+and "End to end, run 2"). Other kinds, blocked previews, failed execution checks and follow-ups are
+tested only with the scripted backend, envtest and the fixture evaluations (D70–D81).
 
 Work is asked for in a conversation (docs/DESIGN.md §3.10). The copilot asks at most two short
 questions, shows a preview, and files an `ApprovalRequest` only after the person replies `1`

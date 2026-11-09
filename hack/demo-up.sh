@@ -13,7 +13,9 @@
 #   4. scripts/demo-preflight.sh (webhooks present, with endpoints, answering);
 #   4b. hack/demo-sim-fleet.sh start: the simulated fleet kept live (one sim
 #      adapter per robot, in the background; RobotClass simbot-v1 as a
-#      labelled demo workaround), every Robot live (R73);
+#      labelled demo workaround), each Robot pointed at its adapter before
+#      that adapter starts, every robot registered and ready for work (R73,
+#      BACKLOG-v4 P13);
 #   5. the image built on the host and loaded into the cluster;
 #   6. the Helm chart installed into fleetops-system;
 #   7. the people's RoleBindings and token kubeconfigs;
