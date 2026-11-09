@@ -103,12 +103,24 @@ names; [`docs/NAMES.md`](NAMES.md) maps them to the current ones.
   showed all three simulated robots stopped (`stopped:3 unconfirmed:0`; on 2026-11-05 it was
   `unconfirmed:3`), so the sim adapters stayed connected after the webhook overlay
   (`docs/evidence/live-2026-11-08/`).
-- The deployed `fleetops-agent` has run against a model on a cluster twice, both times on the demo
-  stack with Sonnet 5.5 through `fleetops chat`. The 2026-11-07 check is the source of BACKLOG-v4 P4
-  and of the readings guided-15 to guided-17 replay; its logs are not committed. On 2026-11-08 one
-  guided conversation (a move, no question, the preview with its `Checked:` block, confirmed and
-  filed as a DraftTask ApprovalRequest that stayed Pending) has its transcript, the filed request, the
-  Jaeger export and the cost (0.0280 USD) in `docs/evidence/live-2026-11-08/`. There, the spans of
+- **On the demo stack only sim-robot-001 completes work** (BACKLOG-v4 P13). `hack/demo-sim-fleet.sh`
+  starts the adapters of sim-robot-002 and sim-robot-003 before it points those Robots at them. Their
+  register is refused ("not authorized for robot …"; Swarmada's audit log: `ROBOT_AUTHZ_DENIED`, "is
+  bound to adapter \"sim-fleet-adapter\""), and they never act on work. The Robots still show as live
+  and confirm a zone stop. On 2026-11-08 a FleetAction assigned to sim-robot-003 stayed `Assigned`
+  for 19 minutes, also after a restart of its adapter by hand, and the quickstart's own action on
+  sim-robot-002 never finished (`docs/evidence/live-2026-11-08/`, "Chain 1"). A task that must
+  complete there names sim-robot-001.
+- The deployed `fleetops-agent` has run against a model on a cluster on two days, each time on the
+  demo stack with Sonnet 5.5 through `fleetops chat`. The 2026-11-07 check is the source of
+  BACKLOG-v4 P4 and of the readings guided-15 to guided-17 replay. It went end to end: an inspection
+  was asked for, filed, approved by dana and activated with `fleetops activate`, and its FleetTask
+  Succeeded. Its logs are not committed. The 2026-11-08 runs are in `docs/evidence/live-2026-11-08/`
+  with transcripts, requests, decisions, Jaeger exports and costs. At 21:35 one move request was filed
+  and stayed Pending (0.0280 USD). At 23:32–23:58 it ran end to end: a move to staging-shelf-a for
+  sim-robot-001, approved by dana, an activation request from the same conversation approved by
+  dana, `fleetops activate` by dana, and the FleetTask Succeeded (0.0379 USD for the two model
+  messages). There, the spans of
   fleetops-agent and fleetops-mcp reached the chart's Collector and Jaeger. One conversation is not a
   pass rate: the measured results are the fixture-mode runs above. The web UI has not been used on a
   cluster: the page was checked once in a browser against a local test server. Otherwise the agent
@@ -307,14 +319,16 @@ names; [`docs/NAMES.md`](NAMES.md) maps them to the current ones.
   staging-shelf-a."; "Send a robot to the charging bay." was read as a charge in all nine runs, so the
   runs never reached the change after the preview the scenario tests. The recorded results are
   unchanged.
-- **Guided requests have run on a cluster only up to filing.** On the demo stack the dialogue,
-  `check_task`, the preview and the confirmation filed requests against Swarmada's live state
-  (2026-11-07, logs not committed; 2026-11-08, `docs/evidence/live-2026-11-08/`). No guided request
-  filed there was approved, so the execution re-check, the executor's dry run against Swarmada's
-  webhooks, `fleetops activate` and the follow-up have not run on a cluster for one. They are tested
-  with the scripted backend, unit tests, envtest and the fixture evaluations. In envtest the
-  executor's dry runs reach the CRD schema and the copilot's admission policies only. `make
-  test-live` approves and executes requests it files itself through fleetops-mcp, not guided ones.
+- **Guided requests have run end to end on a cluster for one kind only.** On the demo stack a guided
+  `move` (2026-11-08, `docs/evidence/live-2026-11-08/`, "End to end") went through the dialogue,
+  `check_task`, the preview and confirmation, the approval, the execution re-check, and the executor's
+  dry runs, which Swarmada's admission accepted with its webhooks served. It then went through the
+  draft, an activation request, its approval and `fleetops activate`, and the FleetTask Succeeded. An
+  inspection did the same on 2026-11-07 (logs not committed). Nothing else has run on a cluster: no
+  other kind, no "something else" request, no blocked preview, no execution re-check that failed, and
+  no follow-up (choice 2). Those are tested with the scripted backend, unit tests, envtest and the
+  fixture evaluations. In envtest the executor's dry runs reach the CRD schema and the copilot's
+  admission policies only.
 - **The activation record names who ran `fleetops activate`, not who sent the patch.** The record is
   bound to the authenticated person and is made just before the patch; Swarmada does not record
   who cleared `spec.draft`. fleetops-approvals links the most recent record made after the approval and

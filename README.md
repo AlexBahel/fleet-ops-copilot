@@ -228,14 +228,23 @@ running stack, on one Mac mini with Docker's caches already filled and fleetops-
 API key Secret); a second run took 2m20s. A cold machine has not been timed. Conditions and per-stage
 times: [`docs/evidence/foc-up-2026-11-05/`](docs/evidence/foc-up-2026-11-05/README.md).
 
-**Live check through the deployed fleetops-agent** (2026-11-08, one conversation, not a pass rate).
-On a `make demo` stack (2m29s) with Sonnet 5.5, sam asked "Send a robot to staging-shelf-a." The
-model read the zones and robots and proposed the task, and the engine checked it. The preview
-came back with no question and its `Checked:` block. Confirmed with "1", it was filed as a DraftTask
-ApprovalRequest for sam without a model call. The model's tokens cost 0.0280 USD at the rates the v6
-Sonnet results record. `make test-live` then passed all 11 approval-path subtests and the
-Swarmada audit-actor test. Transcript, filed request, Jaeger export and cost:
-[`docs/evidence/live-2026-11-08/`](docs/evidence/live-2026-11-08/README.md).
+**Live check through the deployed fleetops-agent, end to end** (2026-11-08, Sonnet 5.5, not a pass
+rate). On a `make demo` stack, sam asked in a conversation: "Send sim-robot-001 to staging-shelf-a."
+The model read the fleet and proposed the task, and the engine checked it. The preview came back with
+no question and its `Checked:` block. Confirmed with "1", it was filed without a model call. Then:
+
+1. dana approved it, and fleetops-approvals re-checked and dry-ran the draft through Swarmada's
+   admission, then created it.
+2. sam asked in the same conversation to activate the draft, and confirmed.
+3. dana approved that request and ran `fleetops activate`, which recorded her Activation decision.
+4. The FleetTask **Succeeded** nine seconds later.
+
+Both model messages cost 0.0379 USD at the rates the v6 Sonnet results record. Every decision names
+dana, and fleetops-approvals' audit file (chain intact) and Events name who approved and who
+activated. An earlier run that day filed the same kind of request and passed all 11 `make test-live`
+approval-path subtests. Transcripts, requests, decisions, task status, audit files, Jaeger exports
+and costs: [`docs/evidence/live-2026-11-08/`](docs/evidence/live-2026-11-08/README.md). On the demo
+stack only sim-robot-001 completes work (BACKLOG-v4 P13).
 
 **CI regression gate** (D58). The `go` job runs `make ci`, which holds the scripted fixture evals to
 `evals/baseline.json`. Proof on the branch [`fleetops-gate-proof`](https://github.com/AlexBahel/fleet-ops-copilot/tree/fleetops-gate-proof): a planted commit that made the scripted
@@ -268,7 +277,7 @@ v6:
 
 [`docs/KNOWN-LIMITS.md`](docs/KNOWN-LIMITS.md) lists what is not built, measured or enforced. The
 main ones for reading the numbers above: model runs of record are fixture-mode only, not through the
-deployed fleetops-agent, which has one live conversation with committed evidence; no deployment runs fleetops-agent with the llama.cpp backend yet (the Qwen
+deployed fleetops-agent, which has one live end-to-end run with committed evidence; no deployment runs fleetops-agent with the llama.cpp backend yet (the Qwen
 models were measured through `fleetops-eval` against llama-server in the air-gapped profile), and
 that profile is installed beside the Helm chart, not from it; the five agent roles are not built (one
 loop offers every tool but the request tools); the web UI has no login, so requests filed from it are
