@@ -1,11 +1,16 @@
 # Live check on the demo stack, 2026-11-08
 
-One `make demo` stack on the Mac mini. On it: one guided conversation with fleetops-agent against
-Sonnet 5.5 that ended in a filed ApprovalRequest, then `make test-live` (phase `webhooks`), then
-`make demo-down`. This is the first run of the deployed fleetops-agent against a model on a cluster
-with committed evidence. It is one conversation, not a measurement of a pass rate. Times are UTC.
-The full logs are not committed because they hold local paths. The lines below are copied from them
-unchanged.
+Two `make demo` stacks on the Mac mini, one after the other. Times are UTC. The full logs are not
+committed because they hold local paths. The lines below are copied from them unchanged. Neither
+run measures a pass rate.
+
+1. **21:32–21:39, filing and `make test-live`.** One guided conversation with the deployed
+   fleetops-agent against Sonnet 5.5 ended in a filed ApprovalRequest. `make test-live` (phase
+   `webhooks`) followed, then `make demo-down`. Sections below, up to "Teardown".
+2. **23:32–23:58, end to end.** A guided conversation, dana's approval, the draft created by
+   fleetops-approvals, an activation request from the same conversation, dana's approval of it,
+   `fleetops activate` by dana, and the FleetTask **Succeeded**. See
+   [End to end](#end-to-end) and [`end-to-end/`](end-to-end/).
 
 | Item | Value |
 |---|---|
@@ -54,7 +59,7 @@ the request, unchanged. It holds no token. The fields:
 
 The `NotChecked` text for `validate_action` still says "Swarmada draft 5, C5". It is a string in
 `internal/feasibility/feasibility.go` that is recorded as written; the documents now say "a later
-Swarmada version" (BACKLOG-v4, C5).
+Swarmada version" (BACKLOG-v4, C5). BACKLOG-v4 A5 changes the string with the next eval-surface change.
 
 ## The trace
 
@@ -134,3 +139,134 @@ What some of the tests logged:
 
 `make demo-down` at 21:39:46: exit 0, "clean ✓ — no cluster, no tracked processes, no local
 pidfile/log state". No kind cluster and no `sim_adapter.py` process was left.
+
+## End to end
+
+23:32–23:58.
+
+| Item | Value |
+|---|---|
+| Copilot | `dfba88e` (main); the image built from it by `make demo` |
+| Swarmada, cluster, host | as above |
+| Command | `DEMO_TRACING=1 DEMO_ANTHROPIC_KEY_FILE=<key file> make demo`: exit 0, "stack running on kind-fleetops-demo in 2m19s (139s)", 23:32:26–23:34:45 |
+| People | sam files every request with his token kubeconfig; dana approves and activates with hers |
+
+Two chains of requests ran. Chain 1 had every step up to activation, but its task never ran
+(below). Chain 2 asked for the one robot that completes work on this stack, and its task Succeeded.
+Each file in [`end-to-end/`](end-to-end/) is unchanged as `kubectl get -o yaml`, the API or the
+pod printed it, unless noted. None holds a token.
+
+### Chain 2: the FleetTask Succeeded
+
+[`end-to-end/chain-2.txt`](end-to-end/chain-2.txt) has every command and its output.
+
+1. 23:56:35, sam: "Send sim-robot-001 to staging-shelf-a." The preview pins sim-robot-001 ("a
+   preference; another eligible robot runs it if this one cannot"), says "likely feasible", and has
+   the `Checked:` block. It asked no question.
+2. 23:56:48, sam: "1". ApprovalRequest `areq-krhrr` was filed (DraftTask, `requestedFor: sam`).
+3. 23:56:48, dana: `fleetops approve areq-krhrr`. Verdict ApprovalDecision `areq-krhrr-wnqjx`
+   (`verdict: Approve`, `decidedBy: dana`). fleetops-approvals re-ran the checks and dry-ran
+   `FleetTask/move-staging-shelf-a-ecad` and `FleetAction/move-staging-shelf-a-ecad-move` ("accepted
+   by the API server (dry run; nothing stored)", with Swarmada's webhooks served). It then created
+   the draft (`status.executionChecks`, `state: Executed`).
+4. 23:56:56, sam, same conversation: "Activate the draft move-staging-shelf-a-ecad." The preview
+   (kind `activate`) checks `FleetTask/move-staging-shelf-a-ecad: spec.draft=true,
+   status.phase=Draft`. At 23:57:00 sam's "1" filed ActivateTask request `areq-jh82j`.
+5. 23:57:00, dana: `fleetops approve areq-jh82j`. Verdict `areq-jh82j-nq6hf` (`Approve`). The
+   answer gives the instruction `fleetops activate areq-jh82j -n warehouse-a`.
+6. 23:57:07, dana: `fleetops activate areq-jh82j`. It re-checked ("likely feasible"), recorded
+   Activation ApprovalDecision `areq-jh82j-activation-js2vx` ("type Activation, by dana"), and
+   cleared `spec.draft`.
+7. 23:57:16, `FleetTask/move-staging-shelf-a-ecad` is `phase: Succeeded`, `actionSummary: 1/1
+   Succeeded`, member `move` on sim-robot-001, `completionTime` 23:57:16. Its condition
+   `AwaitingActivation` reads "spec.draft was cleared; the task is dispatched as written".
+   fleetops-approvals recorded `status.outcome.phase: Succeeded` on `areq-krhrr` and
+   `activatedBy: dana`, `activationRef: areq-jh82j-activation-js2vx` on `areq-jh82j`.
+
+Files: [`approvalrequest-areq-krhrr.yaml`](end-to-end/approvalrequest-areq-krhrr.yaml),
+[`approvalrequest-areq-jh82j.yaml`](end-to-end/approvalrequest-areq-jh82j.yaml),
+[`approvaldecisions.yaml`](end-to-end/approvaldecisions.yaml) (all six decisions of both chains: four
+Verdicts and two Activations),
+[`fleettask-move-staging-shelf-a-ecad.yaml`](end-to-end/fleettask-move-staging-shelf-a-ecad.yaml),
+[`fleetaction-move-staging-shelf-a-ecad-move.yaml`](end-to-end/fleetaction-move-staging-shelf-a-ecad-move.yaml).
+
+### Who did what: the audit actors
+
+- **Decisions.** Every ApprovalDecision has `decidedBy: dana`, which the `fleetops-decisions`
+  admission policy binds to the authenticated user (D79). The FleetTask carries the annotations `approved-by:
+  dana` and `requested-for: sam`, and the label `created-by: fleetops-approvals`.
+- **fleetops-approvals' audit file**
+  ([`fleetops-approvals-audit.jsonl`](end-to-end/fleetops-approvals-audit.jsonl), 9 entries; `fleetops
+  audit verify`: "9 entries, chain intact", [`audit-verify.txt`](end-to-end/audit-verify.txt),
+  file path shortened). For each chain it has `approved` (actor dana), `executed` (actor dana, target
+  the FleetTask), `approved` for the activation request, and `activation_observed` (`activatedBy:
+  dana`). Chain 2 adds `task_outcome` ("FleetTask/move-staging-shelf-a-ecad ended Succeeded").
+- **Events** ([`events-warehouse-a.txt`](end-to-end/events-warehouse-a.txt)): "ActivationObserved …
+  left Draft after approval by dana, activated by dana; the copilot did not perform the activation";
+  "TaskOutcome … ended Succeeded".
+- **Swarmada's safety audit log** ([`swarmada-safety-audit.jsonl`](end-to-end/swarmada-safety-audit.jsonl),
+  copied read-only as `make test-live` does). It holds no entry for the activation: Swarmada does not
+  record who cleared `spec.draft` (`docs/KNOWN-LIMITS.md`). Its 39 entries are the
+  `ROBOT_AUTHZ_DENIED` of chain 1's finding below.
+
+### Chain 1: approved and activated, never ran
+
+[`end-to-end/chain-1.txt`](end-to-end/chain-1.txt). This is the conversation of the 21:35 run
+repeated. "Send a robot to staging-shelf-a." at 23:34:59 gave the same preview, and "1" filed
+`areq-wkhgv`. dana approved it at 23:39:05: Verdict `areq-wkhgv-mvl4m`, draft
+`move-staging-shelf-a-f548` created. "Activate the draft move-staging-shelf-a-f548." and "1" filed
+`areq-675hq` at 23:39:23. dana approved it (`areq-675hq-s4tkx`) and ran `fleetops activate` at 23:39:39
+(Activation `areq-675hq-activation-k8mcc`, `activatedBy: dana`). Swarmada assigned the member to
+sim-robot-003, and its FleetAction stayed `Assigned`, lease renewed, until teardown 19 minutes later
+([`fleettask-move-staging-shelf-a-f548.yaml`](end-to-end/fleettask-move-staging-shelf-a-f548.yaml),
+[`fleetaction-move-staging-shelf-a-f548-move.yaml`](end-to-end/fleetaction-move-staging-shelf-a-f548-move.yaml)).
+
+What was seen:
+
+- The sim adapter of sim-robot-003 logged one line at start: `register refused robot=sim-robot-003:
+  PERMISSION_DENIED: not authorized for robot sim-robot-003`. The adapter of sim-robot-002 logged the
+  same for its robot.
+- Swarmada's safety audit log has 39 `ROBOT_AUTHZ_DENIED` entries from `sim-fleet-adapter-2` and
+  `-3`, 23:34:22–23:34:26: "robot \"sim-robot-003\" is bound to adapter \"sim-fleet-adapter\", not
+  \"sim-fleet-adapter-3\"". `hack/demo-sim-fleet.sh` starts the adapters before it points the two
+  Robots at them.
+- sim-robot-002 stayed `InProgress` on the quickstart's `inspect-receiving-dock`, `Assigned` for the
+  whole run. sim-robot-001, served by the quickstart's own adapter, completed every action given to it
+  (`deliver-pallet-001`, `receiving-round-001-inspect-dock`, chain 2's move).
+- At 23:51:08, sim-robot-003's adapter process was restarted by hand with the same arguments, after
+  its Robot pointed at it. Nothing changed by 23:56. Its log after the restart is empty.
+
+So on this stack all three Robots show as live (Idle or InProgress, `AdapterLive`), and on
+2026-11-08 at 21:38 all three confirmed a zone stop. But only sim-robot-001 completes work. Why the
+other two never act is not established beyond the refused register. Listed in `docs/KNOWN-LIMITS.md`
+and BACKLOG-v4 P13.
+
+### Trace and cost
+
+[`end-to-end/jaeger-fleetops-agent.json`](end-to-end/jaeger-fleetops-agent.json) and
+[`end-to-end/jaeger-fleetops-mcp.json`](end-to-end/jaeger-fleetops-mcp.json) are Jaeger's
+`/api/v3/traces` answers for 23:34–23:59, re-indented. fleetops-approvals exports no spans.
+
+The four messages that reached the model each have one `fleetops.request` trace
+(`fleetops.backend` `claude:claude-sonnet-5-5`, two model calls each). The four "1" confirmations
+made no model call and have no fleetops-agent trace (`docs/KNOWN-LIMITS.md`). Tokens per trace:
+
+| Message | Input | Output | Cache write | Cache read | USD |
+|---|---|---|---|---|---|
+| chain 1, "Send a robot to staging-shelf-a." | 6 | 158 | 10135 | 8833 | 0.0278 |
+| chain 1, "Activate the draft …-f548." | 6 | 242 | 2201 | 18361 | 0.0098 |
+| chain 2, "Send sim-robot-001 to staging-shelf-a." | 6 | 197 | 9525 | 8838 | 0.0267 |
+| chain 2, "Activate the draft …-ecad." | 6 | 345 | 2352 | 18398 | 0.0112 |
+| **total** | 24 | 942 | 24213 | 54430 | **0.0754** |
+
+Chain 2 alone, from request to Succeeded: **0.0379 USD**. Chain 1: 0.0376 USD. The prices are the
+ones in "Cost" above (2, 10, 2.5 and 0.1 USD per million input, output, cache-write and cache-read
+tokens). They come from `cost.pricing` in
+[`evals/results/cloud-claude-sonnet-5-5-2026-11-08-v6/results.json`](../../../evals/results/cloud-claude-sonnet-5-5-2026-11-08-v6/results.json):
+source `https://platform.claude.com/docs/en/about-claude/pricing`, read on 2026-11-08.
+
+### Teardown
+
+`make demo-down` at 23:58:37: exit 0, "clean ✓ — no cluster, no tracked processes, no local
+pidfile/log state". The restarted adapter was in the pidfile and stopped with the others; no
+`sim_adapter.py` process was left.

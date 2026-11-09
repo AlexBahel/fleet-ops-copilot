@@ -1,0 +1,123 @@
+apiVersion: v1
+items:
+- apiVersion: fleetops.alexbahel.github.io/v1alpha1
+  kind: ApprovalDecision
+  metadata:
+    creationTimestamp: "2026-11-08T23:39:39Z"
+    generateName: areq-675hq-activation-
+    generation: 1
+    labels:
+      fleetops.alexbahel.github.io/request: areq-675hq
+    name: areq-675hq-activation-k8mcc
+    namespace: warehouse-a
+    resourceVersion: "2412"
+    uid: 0925e846-9a8a-4dc2-aeee-bdb2e1391a13
+  spec:
+    decidedBy: dana
+    decidedByGroups:
+    - fleet-ops
+    - system:authenticated
+    requestRef: areq-675hq
+    type: Activation
+- apiVersion: fleetops.alexbahel.github.io/v1alpha1
+  kind: ApprovalDecision
+  metadata:
+    creationTimestamp: "2026-11-08T23:39:30Z"
+    generateName: areq-675hq-
+    generation: 1
+    labels:
+      fleetops.alexbahel.github.io/request: areq-675hq
+    name: areq-675hq-s4tkx
+    namespace: warehouse-a
+    resourceVersion: "2385"
+    uid: 1668744c-b856-455a-a307-f5d8cf2e62ff
+  spec:
+    decidedBy: dana
+    decidedByGroups:
+    - fleet-ops
+    - system:authenticated
+    requestRef: areq-675hq
+    type: Verdict
+    verdict: Approve
+- apiVersion: fleetops.alexbahel.github.io/v1alpha1
+  kind: ApprovalDecision
+  metadata:
+    creationTimestamp: "2026-11-08T23:57:07Z"
+    generateName: areq-jh82j-activation-
+    generation: 1
+    labels:
+      fleetops.alexbahel.github.io/request: areq-jh82j
+    name: areq-jh82j-activation-js2vx
+    namespace: warehouse-a
+    resourceVersion: "5562"
+    uid: 12fab452-4a9b-4bac-9a17-3382859838c5
+  spec:
+    decidedBy: dana
+    decidedByGroups:
+    - fleet-ops
+    - system:authenticated
+    requestRef: areq-jh82j
+    type: Activation
+- apiVersion: fleetops.alexbahel.github.io/v1alpha1
+  kind: ApprovalDecision
+  metadata:
+    creationTimestamp: "2026-11-08T23:57:00Z"
+    generateName: areq-jh82j-
+    generation: 1
+    labels:
+      fleetops.alexbahel.github.io/request: areq-jh82j
+    name: areq-jh82j-nq6hf
+    namespace: warehouse-a
+    resourceVersion: "5537"
+    uid: 7a488b6f-da37-40bb-9a0f-17d00ec03fbd
+  spec:
+    decidedBy: dana
+    decidedByGroups:
+    - fleet-ops
+    - system:authenticated
+    requestRef: areq-jh82j
+    type: Verdict
+    verdict: Approve
+- apiVersion: fleetops.alexbahel.github.io/v1alpha1
+  kind: ApprovalDecision
+  metadata:
+    creationTimestamp: "2026-11-08T23:56:48Z"
+    generateName: areq-krhrr-
+    generation: 1
+    labels:
+      fleetops.alexbahel.github.io/request: areq-krhrr
+    name: areq-krhrr-wnqjx
+    namespace: warehouse-a
+    resourceVersion: "5492"
+    uid: 2f2a8e09-0588-4540-8389-2ed0e27c0f3a
+  spec:
+    decidedBy: dana
+    decidedByGroups:
+    - fleet-ops
+    - system:authenticated
+    requestRef: areq-krhrr
+    type: Verdict
+    verdict: Approve
+- apiVersion: fleetops.alexbahel.github.io/v1alpha1
+  kind: ApprovalDecision
+  metadata:
+    creationTimestamp: "2026-11-08T23:39:06Z"
+    generateName: areq-wkhgv-
+    generation: 1
+    labels:
+      fleetops.alexbahel.github.io/request: areq-wkhgv
+    name: areq-wkhgv-mvl4m
+    namespace: warehouse-a
+    resourceVersion: "2300"
+    uid: 4d154384-d4e8-4a60-8b3f-5ebdcf9116fe
+  spec:
+    decidedBy: dana
+    decidedByGroups:
+    - fleet-ops
+    - system:authenticated
+    requestRef: areq-wkhgv
+    type: Verdict
+    verdict: Approve
+kind: List
+metadata:
+  resourceVersion: ""

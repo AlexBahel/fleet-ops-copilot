@@ -1,0 +1,36 @@
+apiVersion: swarmada.io/v1
+kind: FleetAction
+metadata:
+  creationTimestamp: "2026-11-08T23:39:39Z"
+  generation: 1
+  labels:
+    swarmada.io/fleettask: move-staging-shelf-a-f548
+  name: move-staging-shelf-a-f548-move
+  namespace: warehouse-a
+  ownerReferences:
+  - apiVersion: swarmada.io/v1
+    blockOwnerDeletion: true
+    controller: true
+    kind: FleetTask
+    name: move-staging-shelf-a-f548
+    uid: 26a47ea0-e93a-435f-b930-6660e3dfb333
+  resourceVersion: "5644"
+  uid: ef142dfc-4fbc-492e-8d4a-b54ba684a657
+spec:
+  desiredState: Running
+  onFailure: Requeue
+  payload:
+    waypoint: staging-shelf-a
+    x: 12.1
+    "y": 8.1
+  priority: Normal
+  requiredCapabilities:
+  - navigation
+  type: Navigate
+  zone: warehouse-a
+status:
+  assignedRobot: sim-robot-003
+  assignmentGeneration: 1794180835490498
+  leaseExpiresAt: "2026-11-08T23:57:57Z"
+  phase: Assigned
+  scheduledAt: "2026-11-08T23:39:39Z"

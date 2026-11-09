@@ -1,0 +1,16 @@
+LAST SEEN   TYPE      REASON                      OBJECT                           MESSAGE
+24m         Warning   TelemetrySinkUnconfigured   swarmadaconfig/swarmada-config   spec.telemetry.sink.type is unset; high-cadence telemetry is not being forwarded (observed-degraded). Set a real store or explicitly opt in with type: Drop.
+24m         Warning   SigningIncomplete           swarmadaconfig/swarmada-config   signature verification is required and spec.signing.trustRoots is empty, so every signature check fails closed: no FleetAdapter conformance report, firmware or model artifact can verify in this namespace. Add a trustRoot, or set spec.signing.requireSignatureVerification: false to turn verification off deliberately
+22m         Normal    RequestCreated              approvalrequest/areq-wkhgv       DraftTask requested for sam; awaiting a person's decision
+18m         Normal    Approved                    approvalrequest/areq-wkhgv       approved by dana
+18m         Normal    Executed                    approvalrequest/areq-wkhgv       FleetTask/move-staging-shelf-a-f548 written after approval by dana
+18m         Normal    RequestCreated              approvalrequest/areq-675hq       ActivateTask requested for sam; awaiting a person's decision
+17m         Normal    Approved                    approvalrequest/areq-675hq       approved by dana
+17m         Normal    ActivationObserved          approvalrequest/areq-675hq       FleetTask/move-staging-shelf-a-f548 left Draft after approval by dana, activated by dana; the copilot did not perform the activation
+40s         Normal    Approved                    approvalrequest/areq-krhrr       approved by dana
+40s         Normal    Executed                    approvalrequest/areq-krhrr       FleetTask/move-staging-shelf-a-ecad written after approval by dana
+40s         Normal    RequestCreated              approvalrequest/areq-krhrr       DraftTask requested for sam; awaiting a person's decision
+28s         Normal    Approved                    approvalrequest/areq-jh82j       approved by dana
+28s         Normal    RequestCreated              approvalrequest/areq-jh82j       ActivateTask requested for sam; awaiting a person's decision
+18s         Normal    ActivationObserved          approvalrequest/areq-jh82j       FleetTask/move-staging-shelf-a-ecad left Draft after approval by dana, activated by dana; the copilot did not perform the activation
+12s         Normal    TaskOutcome                 approvalrequest/areq-krhrr       FleetTask/move-staging-shelf-a-ecad ended Succeeded

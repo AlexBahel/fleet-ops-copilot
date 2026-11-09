@@ -1,0 +1,76 @@
+apiVersion: fleetops.alexbahel.github.io/v1alpha1
+kind: ApprovalRequest
+metadata:
+  creationTimestamp: "2026-11-08T23:39:23Z"
+  generateName: areq-
+  generation: 1
+  labels:
+    fleetops.alexbahel.github.io/created-by: fleetops-mcp
+    fleetops.alexbahel.github.io/session: web-0f06599f85e31a5e
+  name: areq-675hq
+  namespace: warehouse-a
+  resourceVersion: "2425"
+  uid: a3f2f6dd-0dff-41f8-9912-9aa30de819a9
+spec:
+  activateTask:
+    taskName: move-staging-shelf-a-f548
+  checks:
+    checkedAt: "2026-11-08T23:39:23Z"
+    checks:
+    - detail: every dependsOn names a member and the graph is acyclic
+      name: dependencies
+      outcome: Passed
+    - detail: FleetZone warehouse-a exists, no stop in force on it or its ancestors,
+        no restriction denies the work
+      name: 'move: zone'
+      outcome: Passed
+    - detail: waypoint staging-shelf-a is declared in FleetZone warehouse-a
+      name: 'move: location'
+      outcome: Passed
+    - detail: FleetAdapter sim-fleet-adapter lists Navigate
+      name: 'move: adapter catalog'
+      outcome: Passed
+    - detail: sim-robot-001, sim-robot-003 pass every candidate filter a read can
+        evaluate
+      name: 'move: eligible robot now'
+      outcome: Passed
+    - name: the adapter's validate_action for the concrete action (no client can see
+        it before assignment; Swarmada draft 5, C5)
+      outcome: NotChecked
+    - name: 'filter 9: the adapter''s contract version range and SafetyStream'
+      outcome: NotChecked
+    - name: 'filter 10: stops reported by adapters, and duplicate wire robot ids'
+      outcome: NotChecked
+    verdict: likely feasible
+  expiresAt: "2026-11-09T00:09:23Z"
+  policy:
+    code: REQUIRE_APPROVAL
+    effect: RequireApproval
+    message: activation is performed by the approving person with their own credentials
+  preview:
+    catalogueSHA256: 43ab5816b7c972dfd288be79e9840d28aa3a825c70e25120178eb0812869cc6a
+    catalogueVersion: 1
+    confirmedAt: "2026-11-08T23:39:23Z"
+    failureHandling: ReportOnly
+    id: 0ab65073b12042512aca79698687fb65f3e104a915c2cdf8117f7368c644f609
+    interpretation: Known
+    kind: activate
+    resultReported: true
+  requestedBy: system:serviceaccount:fleetops-system:fleetops-mcp
+  requestedFor: sam
+  sessionID: web-0f06599f85e31a5e
+  type: ActivateTask
+status:
+  activatedBy: dana
+  activationRef: areq-675hq-activation-k8mcc
+  decidedAt: "2026-11-08T23:39:30Z"
+  decidedBy: dana
+  decisionRef: areq-675hq-s4tkx
+  executedAt: "2026-11-08T23:39:40Z"
+  instruction: fleetops activate areq-675hq -n warehouse-a
+  message: activation observed (performed by dana, not by the copilot)
+  state: Executed
+  target:
+    apiVersion: swarmada.io/v1
+    kind: FleetTask
+    name: move-staging-shelf-a-f548

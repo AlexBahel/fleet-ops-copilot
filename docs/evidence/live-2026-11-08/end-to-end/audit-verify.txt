@@ -1,0 +1,2 @@
+fleetops audit verify fleetops-approvals-audit.jsonl
+fleetops-approvals-audit.jsonl: 9 entries, chain intact
