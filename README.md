@@ -10,8 +10,7 @@ This README is a case study: the problem, the constraint, the approach, what was
 what is not done. Every number links to the committed file or CI run it comes from. The design is
 in [`docs/DESIGN.md`](docs/DESIGN.md); what is not built, not measured, or not enforced is listed in
 [`docs/KNOWN-LIMITS.md`](docs/KNOWN-LIMITS.md). It has run on kind clusters on one machine and is not
-deployed at any site. Records made before the rename use earlier names;
-[`docs/NAMES.md`](docs/NAMES.md) maps them to the current ones.
+deployed at any site.
 
 ## Problem
 
@@ -170,16 +169,15 @@ the four `results.json` files it links.
 Pass is judged by a deterministic harness, not a model (`docs/DESIGN.md` §4.1). Each column is
 one sample of three runs per scenario; Claude runs at the API's default sampling, which cannot be
 fixed on these models (D43). The comparison classifies every failed run as model, scenario, judge
-or product; the defects are in [`docs/KNOWN-LIMITS.md`](docs/KNOWN-LIMITS.md) and
-[`docs/BACKLOG-v4.md`](docs/BACKLOG-v4.md) and are counted as failures (on v6: 5 scenario runs,
-dispatch-07 for both Claude models; no product or judge runs). The scripted self-test of the same
+or product ([`comparison-v6.md`](evals/results/comparison-v6.md), "Failure classes", and each
+`failures.md`); defects are counted as failures (on v6: 5 scenario runs, dispatch-07 for both Claude
+models; no product or judge runs). The scripted self-test of the same
 surface passes 150/150 ([`evals/results/fixtures/results.json`](evals/results/fixtures/results.json)).
 
 **Fixes after the record, not record-run.** The defects the v6 runs found were fixed afterwards on
-eval surface v7 (D101): P12, a refusal of an unused field that repeated without limit (D98); J7, a
-judge gap for refusal wording (judge v7, D99); and S8, a scenario that counted a correct reading as a
-failure (D100), plus regression scenario guided-24 ([`docs/BACKLOG-v4.md`](docs/BACKLOG-v4.md),
-"Found in the v6 record runs"). These postdate the record and no model has been run on v7, so the
+eval surface v7 (D101): a refusal of an unused field that repeated without limit (D98), a judge
+gap for refusal wording (judge v7, D99) and a scenario that counted a correct reading as a failure
+(D100), plus regression scenario guided-24. These postdate the record and no model has been run on v7, so the
 table above does not reflect them. The v7 scripted self-test, 51 scenarios × 3, is held at 153/153
 by [`evals/baseline.json`](evals/baseline.json).
 
@@ -201,32 +199,21 @@ re-runs before the one write. In the 300 v6 runs of the two Qwen models, 3 reque
 not expect were filed after the scripted person confirmed their preview (Qwen2.5-7B, zone-03), and
 all 3 were left pending for a person; no Swarmada object was changed by the model.
 
-**Swarmada objects changed by the model, all records.** Across the four eval surfaces of record,
-**1,626 runs** over 13 `results.json` files changed **0 Swarmada objects through the model**
-(`unsafeWriteContainment.clusterChanges` is 0 in each):
-
-| Eval surface | Date | Runs | Swarmada objects changed by the model | Sources |
-|---|---|---|---|---|
-| v6, 50 scenarios, 4 models | 2026-11-08 | 600 | 0 | [`comparison-v6.md`](evals/results/comparison-v6.md) and its 4 results.json |
-| v5, 47 scenarios, 3 models | 2026-11-08 | 423 | 0 | [`comparison-v5.md`](evals/results/comparison-v5.md) and its 3 results.json |
-| v4, 42 scenarios, 3 models | 2026-11-07 | 378 | 0 | [`comparison-2026-11-07.md`](evals/results/comparison-2026-11-07.md) and its 3 results.json |
-| v3, 25 scenarios, 3 models | 2026-11-05 | 225 | 0 | [`comparison-2026-11-05.md`](evals/results/comparison-2026-11-05.md) and its 3 results.json |
-| **total** | | **1,626** | **0** | |
-
-The only Swarmada changes in those runs, 54 (v4 14, v5 18, v6 22; `clusterChangesAllRuns`), come
-from the harness's own execution step in the scenarios that test execution (guided-01, guided-11):
-it approves the filed request as a fixture person and runs the executor once; each comparison lists
-them. What counts as an unsafe write differs between v3 and later surfaces, so those counts are not
-added up: on v3 the model called the request tools itself and made 30 such attempts in 225 runs; since
-v4 only fleetops-agent files a request, after the person confirms a preview, and a filing the
-scenario did not expect is counted instead (v4 3 in 378 runs, v5 6 in 423, v6 3 in 600; R69, D67).
+**Swarmada objects changed by the model.** In the **600** v6 runs (four results.json files) the
+model changed **0 Swarmada objects** (`unsafeWriteContainment.clusterChanges` is 0 in each). The
+only Swarmada changes in those runs, 22 (`clusterChangesAllRuns`: 6, 6, 5, 5), come from the
+harness's own execution step in the two scenarios that test execution (guided-01, guided-11): it
+approves the filed request as a fixture person and runs the executor once
+([`comparison-v6.md`](evals/results/comparison-v6.md), "Containment").
 
 ### Other measurements
 
-**Install time.** `DEMO_TRACING=1 make demo` took **2m14s** (exit 0) from no cluster to a
-running stack, on one Mac mini with Docker's caches already filled and fleetops-agent not started (no
-API key Secret); a second run took 2m20s. A cold machine has not been timed. Conditions and per-stage
-times: [`docs/evidence/foc-up-2026-11-05/`](docs/evidence/foc-up-2026-11-05/README.md).
+**Install time.** `DEMO_TRACING=1 DEMO_ANTHROPIC_KEY_FILE=<key file> make demo` took **2m47s**
+(exit 0) from no cluster to a running stack with fleetops-agent started, on one Mac mini
+(2026-11-09 UTC; this run waits until every simulated robot is ready for work). Two runs on
+2026-11-08 took 2m29s and 2m19s. A cold machine (no Docker images or build cache) has not been
+timed. Conditions and per-stage times:
+[`docs/evidence/live-2026-11-08/`](docs/evidence/live-2026-11-08/README.md).
 
 **Live check through the deployed fleetops-agent, end to end** (2026-11-08, Sonnet 5.5, not a pass
 rate). On a `make demo` stack, sam asked in a conversation: "Send sim-robot-001 to staging-shelf-a."
@@ -236,15 +223,15 @@ no question and its `Checked:` block. Confirmed with "1", it was filed without a
 1. dana approved it, and fleetops-approvals re-checked and dry-ran the draft through Swarmada's
    admission, then created it.
 2. sam asked in the same conversation to activate the draft, and confirmed.
-3. dana approved that request and ran `fleetops activate`, which recorded her Activation decision.
+3. dana approved that request and ran `fleetops activate`, which recorded dana's Activation decision.
 4. The FleetTask **Succeeded** nine seconds later.
 
 Both model messages cost 0.0379 USD at the rates the v6 Sonnet results record. Every decision names
 dana, and fleetops-approvals' audit file (chain intact) and Events name who approved and who
 activated. An earlier run that day filed the same kind of request and passed all 11 `make test-live`
 approval-path subtests. Transcripts, requests, decisions, task status, audit files, Jaeger exports
-and costs: [`docs/evidence/live-2026-11-08/`](docs/evidence/live-2026-11-08/README.md). After the
-sim fleet fix (BACKLOG-v4 P13), all three robots took a move, and the example above, "Send a robot to
+and costs: [`docs/evidence/live-2026-11-08/`](docs/evidence/live-2026-11-08/README.md). On a later
+stack all three robots took a move, and the example above, "Send a robot to
 staging-shelf-a.", ran the same way to Succeeded on the robot Swarmada picked, sim-robot-002
 (2026-11-09 UTC, 0.0390 USD; "End to end, run 2" in the same folder).
 
@@ -262,18 +249,10 @@ force for a pod, every external target is blocked; a new pod's egress was open f
 1.2 s before that ([`docs/evidence/airgap-2026-11-05/`](docs/evidence/airgap-2026-11-05/README.md),
 [`docs/evidence/airgap-2026-11-04/`](docs/evidence/airgap-2026-11-04/README.md)).
 
-### Earlier records (history)
-
-Each earlier surface is a different product, judge or scenario set, so these are not like-for-like
-with v6 or with each other; each comparison says why, and the v6 comparison shows all three beside
-v6:
-
-- eval surface v5, 2026-11-08, 47 scenarios: Sonnet 5.5 83/141, Opus 5.5 86/141, Qwen2.5-7B 19/141
-  ([`comparison-v5.md`](evals/results/comparison-v5.md));
-- eval surface v4, 2026-11-07, 42 scenarios: 71/126, 79/126, 6/126
-  ([`comparison-2026-11-07.md`](evals/results/comparison-2026-11-07.md));
-- eval surface v3, 2026-11-05, 25 scenarios, the model calling the request tools itself: 67/75,
-  66/75, 3/75 ([`comparison-2026-11-05.md`](evals/results/comparison-2026-11-05.md)).
+Results of earlier eval surfaces (v3 to v5, 2026-11-05 to 2026-11-08) and the documents of that
+time are kept at the tag
+[`records-2026-11-08`](https://github.com/AlexBahel/fleet-ops-copilot/tree/records-2026-11-08);
+they are not comparable with v6.
 
 ## Known limits
 
@@ -284,8 +263,7 @@ models were measured through `fleetops-eval` against llama-server in the air-gap
 that profile is installed beside the Helm chart, not from it; the five agent roles are not built (one
 loop offers every tool but the request tools); the web UI has no login, so requests filed from it are
 never approvable; people on kind use a static token file (test only), and OIDC has not been run.
-[`docs/BACKLOG-v4.md`](docs/BACKLOG-v4.md) lists the judge, scenario and tool defects found in the
-record runs.
+[`docs/BACKLOG.md`](docs/BACKLOG.md) lists the open items.
 
 ## How to run
 
@@ -311,7 +289,7 @@ key never appears on a command line:
 ```bash
 make build                                             # bin/fleetops, the CLI used below
 (umask 077; pbpaste > ~/fleetops-key.txt)              # copy the key from the Claude Console first
-DEMO_ANTHROPIC_KEY_FILE=~/fleetops-key.txt make demo   # 2m14s measured on a Mac mini with warm image caches (above)
+DEMO_ANTHROPIC_KEY_FILE=~/fleetops-key.txt make demo   # 2m47s measured on a Mac mini (above)
 rm ~/fleetops-key.txt
 ```
 
@@ -542,15 +520,15 @@ go run -tags envtest ./evals/cmd/fleetops-eval -backend claude -model claude-son
 | `charts/fleet-ops-copilot` | Helm chart: the objects in `config/` plus an optional NetworkPolicy and trace backend; `make chart-check` |
 | `scripts/` | `demo-preflight.sh` (cluster and Swarmada webhook checks), `chart-parity` (chart vs `config/`), `baseline-lowered` (CI warning when `evals/baseline.json` is lowered) |
 | `hack/` | `demo-up.sh`, `demo-down.sh`, `kind-people.sh` (test-only person tokens), `kind/` (kind configuration), `airgap.mk`, `shellcheck.sh` (pinned ShellCheck), live-test scripts |
-| `docs/` | `DESIGN.md` (design and decision log), `KNOWN-LIMITS.md`, `BACKLOG-v4.md`, `RUNBOOK.md` (operations; which sections have been run is stated at its top), `NAMES.md` (names before and after the rename), `architecture/` (D2 source and SVG), `evidence/` (cluster logs) |
+| `docs/` | `DESIGN.md` (design and decision log), `KNOWN-LIMITS.md`, `BACKLOG.md`, `RUNBOOK.md` (operations; which sections have been run is stated at its top), `architecture/` (D2 source and SVG), `evidence/` (cluster logs) |
 | `evals/` | Evaluation harness, scenarios, fixtures (hand-written and captured live), results |
 | `test/envtest`, `test/live`, `test/image` | API-server tests; approval paths against a live Swarmada control plane; the image's binaries run, and its mounted files are readable, as the non-root user |
 
 ## How it was built
 
-Built with [Claude Code](https://claude.com/claude-code) under Alex Bahel's design: the design,
-the decisions in `docs/DESIGN.md` §7 and the rulings they cite are the owner's; code, tests and
-documents were written with Claude Code. Two of the four models
+Built with [Claude Code](https://claude.com/claude-code) under Alex Bahel's design: the design and
+the decisions in `docs/DESIGN.md` §7 are Alex Bahel's; code, tests and documents were written
+with Claude Code. Two of the four models
 measured above (Claude Sonnet 5.5 and Opus 5.5) are from Anthropic, the maker of Claude Code.
 
 ## Contributing and security
