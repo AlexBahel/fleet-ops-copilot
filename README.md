@@ -246,8 +246,7 @@ policy and approval path with a scripted backend, not a model.
 
 **Air-gapped egress.** On kind with kindnet, `make verify-egress` passed 3/3: once the policy is in
 force for a pod, every external target is blocked; a new pod's egress was open for up to about
-1.2 s before that ([`docs/evidence/airgap-2026-11-05/`](docs/evidence/airgap-2026-11-05/README.md),
-[`docs/evidence/airgap-2026-11-04/`](docs/evidence/airgap-2026-11-04/README.md)).
+1.3 s before that ([`docs/evidence/airgap-2026-11-12/`](docs/evidence/airgap-2026-11-12/README.md)).
 
 Results of earlier eval surfaces (v3 to v5, 2026-11-05 to 2026-11-08) and the documents of that
 time are kept at the tag

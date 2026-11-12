@@ -1,9 +1,0 @@
-pod llama-server-7bcf974fd6-dk7j5
-created 2026-11-05T03:59:49Z
-PodReadyToStartContainers 2026-11-05T03:59:49Z
-Initialized 2026-11-05T03:59:51Z
-Ready 2026-11-05T04:00:00Z
-ContainersReady 2026-11-05T04:00:00Z
-PodScheduled 2026-11-05T03:59:49Z
-started 2026-11-05T03:59:51Z restarts 0
-imageID docker.io/library/import-2026-11-05@sha256:b7504e20ac23be18064401f6e5b4ee0dfbe9fb51a5c7a77dfac2d9cd70fc9cf9

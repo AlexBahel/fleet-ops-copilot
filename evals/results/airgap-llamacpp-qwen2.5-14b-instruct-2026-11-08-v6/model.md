@@ -14,7 +14,7 @@ the node; nothing was downloaded inside the cluster. llama-server was the same i
 `--model` and `--alias`), context size and slot count as the Qwen2.5-7B-Instruct run of the same day
 (`../airgap-llamacpp-qwen2.5-7b-instruct-2026-11-08-v6/`); the Deployment was `config/airgap/llama-server.yaml` with the
 model file names, the alias and the memory request and limit changed (11Gi / 13Gi instead of 5Gi / 7Gi), as recorded in
-`backendSettings`. The Qwen2.5-7B-Instruct files are those of `docs/evidence/airgap-2026-11-05/model-SHA256SUMS`.
+`backendSettings`. The Qwen2.5-7B-Instruct files are those of `docs/evidence/airgap-2026-11-12/model-SHA256SUMS`.
 
 [`llama-server.yaml`](llama-server.yaml) is the Deployment and Service manifest as applied for this run (2026-11-08T06:15:12Z),
 byte for byte (sha256 `7d14cd41f5a9cbbaba125c013bfafac18735de109dd002509e09ff53cf8a1174`). Its only differences from

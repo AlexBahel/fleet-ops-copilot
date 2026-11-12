@@ -28,12 +28,13 @@ remove it.
   them, and it is for development and demonstration, not a trace store. Its images must be
   pullable by the nodes, so it is not part of the air-gapped profile. With the backend on, the
   chart renders the Collector's egress to Jaeger's OTLP port and DNS also without
-  `networkPolicy.enabled` (D68); **tracing beside the air-gapped policy is verified by template
-  only** (helm lint, kubeconform), not on a cluster, until the next cluster run. Beside
-  `config/airgap`, fleetops-mcp's and fleetops-agent's export to the Collector's OTLP port is opened by
-  `config/airgap/networkpolicy-tracing.yaml`, which `make deploy-airgap` applies only when the
-  Collector is installed (D69); the chart opens the same port only with `networkPolicy.enabled`.
-  Both are template-verified only, until the next cluster run. On kindnet a NetworkPolicy applies
+  `networkPolicy.enabled` (D68). Beside `config/airgap`, fleetops-mcp's and fleetops-agent's export
+  to the Collector's OTLP port is opened by `config/airgap/networkpolicy-tracing.yaml`, which
+  `make deploy-airgap` applies only when the Collector is installed (D69); the chart opens the
+  same port only with `networkPolicy.enabled`. Beside the air-gapped policy both ran on one kind
+  cluster with kindnet (`docs/evidence/airgap-2026-11-12/`): a restarted Collector delivered spans
+  to Jaeger, and fleetops-mcp reached the Collector's OTLP port. fleetops-agent did not run there,
+  so its export beside `config/airgap` is verified by template only. On kindnet a NetworkPolicy applies
   to new connections only (see "Egress in the air-gapped profile"): a pod started before the
   rule existed keeps its old connections, so restart fleetops-mcp and fleetops-agent after applying it.
 - More than one approver per request (`minApprovers`): one accepted decision approves.
@@ -73,13 +74,14 @@ remove it.
   (see "Not built yet").
 - The air-gapped manifests (`config/airgap/`) and the `hack/airgap.mk` targets have run on
   single-node kind clusters (kind v0.33.0, CNI kindnet, Docker Desktop on arm64;
-  `docs/evidence/airgap-2026-11-04/`, `docs/evidence/airgap-2026-11-05/`), on no other CNI or node.
+  `docs/evidence/airgap-2026-11-12/`), on no other CNI or node.
 - The Helm chart (`charts/fleet-ops-copilot`) with its optional tracing backend (OpenTelemetry
-  Collector and Jaeger, D61) has been installed by `make demo` on one single-node kind cluster
-  (2026-11-05, `docs/evidence/airgap-2026-11-05/`): both backend pods became ready with the pod
-  security settings and probes as rendered, and the Collector received OTLP and exported it to
-  Jaeger. Its cloud-profile NetworkPolicy (off by default) has never been applied to a cluster,
-  and `docs/RUNBOOK.md` has not been run as a sequence beyond section 0.
+  Collector and Jaeger, D61) has been installed by `make demo` on single-node kind clusters
+  (2026-11-08 and 2026-11-09, `docs/evidence/live-2026-11-08/`; 2026-11-12,
+  `docs/evidence/airgap-2026-11-12/`): both backend pods became ready with the pod security
+  settings and probes as rendered, and the Collector received OTLP and exported it to Jaeger. Its
+  cloud-profile NetworkPolicy (off by default) has never been applied to a cluster, and
+  `docs/RUNBOOK.md` has not been run as a sequence beyond section 0.
 - `make demo`, `make demo-down` and `make test-live` (D59, D60) have run on one machine only
   (Mac mini, Docker Desktop, kind v0.33.0; 2026-11-08 and 2026-11-09 UTC,
   `docs/evidence/live-2026-11-08/`). `make demo` took 2m29s, 2m19s and 2m47s, each creating its kind
@@ -267,24 +269,24 @@ remove it.
 - **Egress in the air-gapped profile** (`config/airgap/networkpolicy.yaml`, D50, D63) is denied,
   except the Kubernetes API and cluster DNS for the copilot components and nothing for the model
   server, **once the policy is in force for the pod**. Measured on kind's default CNI, kindnet
-  (`docs/evidence/airgap-2026-11-04/egress-startup-window.log`): a new pod's egress was open for
-  up to about 1.2 s after its container started (blocked from 1230 ms and 1191 ms in two runs),
-  then denied. The egress probe therefore records egress at pod start (not counted), waits until
+  (`docs/evidence/airgap-2026-11-12/egress-startup-window.log`): a new pod's egress was open for
+  up to about 1.3 s after its container started (open at 714 ms and 571 ms, blocked from 1302 ms
+  and 1214 ms in two runs), then denied. The egress probe therefore records egress at pod start (not counted), waits until
   a connection its policy denies inside the cluster fails, and decides on the attempt after that
   (D63); the at-start line shows the window where it exists. Nothing in the copilot waits for the
   policy before opening connections, so a process could reach the internet in that window.
   **On kindnet the policy applies to new connections only:** a connection opened before the policy
-  existed kept working after it. Measured 2026-11-05: the trace Collector's gRPC connection to
-  Jaeger, opened before `fleetops-airgap-egress` was created, carried spans for at least 68.6 minutes
-  under a policy that allows the Collector only DNS; after a restart its new connection, and a new
-  connection from its network namespace, timed out, while a pod without a policy still reached
-  Jaeger (`docs/evidence/airgap-2026-11-05/collector-restart-check.log`). So a connection opened in
+  existed kept working after it. Measured 2026-11-12: a pod in `fleetops-system` opened one
+  connection to the API server before the policies were created; under a policy that allows that
+  pod DNS only, the connection answered 299 reused requests over 14 min 38 s, while every new
+  connection from the same pod timed out (`docs/evidence/airgap-2026-11-12/conn-check.log`). So a connection opened in
   a new pod's start-up window, or by any pod before the policy is applied, can outlive the policy:
   apply the policy before the workloads start, or restart every pod in `fleetops-system` after applying
   it (`make deploy-airgap` restarts fleetops-mcp and fleetops-approvals only). Other CNIs were not tested. Which CNIs enforce a policy from pod
   start has not been checked here; for a site that needs it, choose a CNI whose own documentation
   says so and run `make verify-egress` there. Cluster DNS answered
-  queries for external names in kind (CoreDNS forwards to the host). `kubectl port-forward`
+  queries for external names in kind (CoreDNS forwards to the host; `example.com` resolved and
+  connected from a namespace without the policy, `docs/evidence/airgap-2026-11-12/verify-egress-baseline.log`). `kubectl port-forward`
   reaches `llama-server` regardless of its ingress policy; RBAC (`pods/portforward`) governs it.
   NetworkPolicy does not govern image pulls, which the node makes; no image is pulled at runtime
   only because every pod uses `imagePullPolicy: IfNotPresent` and the images are loaded first.

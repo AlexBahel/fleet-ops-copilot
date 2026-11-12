@@ -1,3 +1,0 @@
-2026-11-04T21:55:21Z
-port-forward svc/llama-server 18081:8080, GET /health: {"status":"ok"} http=200
-2026-11-04T21:55:22Z

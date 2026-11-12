@@ -9,8 +9,8 @@ No credential is involved.
 
 **Status:** the manifests are checked against the Kubernetes schemas with
 kubeconform (`make validate-airgap`) and have been applied on single-node kind
-clusters with kindnet (`docs/evidence/airgap-2026-11-04/`,
-`docs/evidence/airgap-2026-11-05/`); they have not run on any other CNI.
+clusters with kindnet (the v6 record runs, and `docs/evidence/airgap-2026-11-12/`);
+they have not run on any other CNI.
 
 ## Files
 
@@ -48,10 +48,10 @@ pod except `llama-server`), the Kubernetes API server (`fleetops-mcp`,
 `fleetops-approvals`, `fleetops-agent`), `llama-server` port 8080 (`fleetops-agent`,
 `fleetops-egress-probe`) and `fleetops-mcp` port 8080 (`fleetops-agent`); with the chart's trace backend
 installed, `make deploy-airgap` also applies `networkpolicy-tracing.yaml`: the Collector's port
-4317 (`fleetops-mcp`, `fleetops-agent`; template-verified only). `llama-server` may
+4317 (`fleetops-mcp`, `fleetops-agent`; run on a cluster for `fleetops-mcp` only). `llama-server` may
 open no connection at all. Ingress to `llama-server` is limited to `fleetops-agent`
 and `fleetops-egress-probe`. Measured on a kind cluster:
-`docs/evidence/airgap-2026-11-04/`.
+`docs/evidence/airgap-2026-11-12/`.
 
 `networkpolicy.yaml` contains two documentation addresses (`192.0.2.10`,
 `192.0.2.11`) where the API server endpoint and Service address go;
@@ -68,7 +68,7 @@ prints it without counting it; then it waits until the policy is in force for
 its own pod (a connection to the API server, which the policy denies it, is
 refused or times out; up to 60 s, exit 3 otherwise); then the control; then
 the attempt that decides. On kind's default CNI a new pod's egress was open for
-up to about 1.2 s after its container started, so the at-start line there
+up to about 1.3 s after its container started, so the at-start line there
 reports open egress (`docs/KNOWN-LIMITS.md`, D63). The claim is therefore:
 egress denied except the Kubernetes API and cluster DNS for the copilot
 components, none for the model server, once the policy is in force for the

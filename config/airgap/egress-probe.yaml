@@ -5,7 +5,7 @@
 # Order (D63):
 #   1. at start: one attempt at each external target, printed and NOT counted.
 #      On some CNIs a new pod's egress is open until its policy is programmed
-#      (kindnet: up to ~1.2 s, docs/KNOWN-LIMITS.md); this line shows it.
+#      (kindnet: up to ~1.3 s, docs/KNOWN-LIMITS.md); this line shows it.
 #   2. wait until the policy is in force for this pod: POLICY_SENTINEL_URL is
 #      a cluster address the policy denies to this pod (the API server, which
 #      only fleetops-mcp, fleetops-approvals and fleetops-agent may reach). The probe polls it

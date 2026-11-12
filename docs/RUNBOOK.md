@@ -235,7 +235,7 @@ anyway, revoke it.
 | Profile | Model | Status on main |
 |---|---|---|
 | `cloud` | Claude via the Claude API | Chart value `llm.profile: cloud` (default). The chart runs fleetops-agent with `-backend=claude` (`internal/llm/claude.go`); it starts once the API key Secret exists (section 2). fleetops-agent has run against Sonnet 5.5 on the demo stack, end to end up to a Succeeded FleetTask, twice (`docs/evidence/live-2026-11-08/`; docs/KNOWN-LIMITS.md); Sonnet 5.5 and Opus 5.5 were measured through `fleetops-eval` on eval surface v6, the record (`evals/results/comparison-v6.md`, 2026-11-08); no model has run on v7. |
-| `airgap` | Qwen2.5-7B-Instruct served by `llama-server` in the cluster | Plain manifests and make targets (`config/airgap/`, `hack/airgap.mk`) and the `llamacpp` backend (`internal/llm/llamacpp.go`); not templated in the chart. Run on single-node kind clusters with kindnet (`docs/evidence/airgap-2026-11-04/`, `docs/evidence/airgap-2026-11-05/`); the `llamacpp` backend's record runs on eval surface v6 are against Qwen2.5-7B-Instruct (`evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-08-v6/`) and Qwen2.5-14B-Instruct (`evals/results/airgap-llamacpp-qwen2.5-14b-instruct-2026-11-08-v6/`, with this manifest's model files, alias and memory changed: its `model.md`). fleetops-agent does not run with it yet (docs/KNOWN-LIMITS.md). `llm.profile: airgap` makes the chart render fail on purpose. |
+| `airgap` | Qwen2.5-7B-Instruct served by `llama-server` in the cluster | Plain manifests and make targets (`config/airgap/`, `hack/airgap.mk`) and the `llamacpp` backend (`internal/llm/llamacpp.go`); not templated in the chart. Run on single-node kind clusters with kindnet (`docs/evidence/airgap-2026-11-12/`); the `llamacpp` backend's record runs on eval surface v6 are against Qwen2.5-7B-Instruct (`evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-08-v6/`) and Qwen2.5-14B-Instruct (`evals/results/airgap-llamacpp-qwen2.5-14b-instruct-2026-11-08-v6/`, with this manifest's model files, alias and memory changed: its `model.md`). fleetops-agent does not run with it yet (docs/KNOWN-LIMITS.md). `llm.profile: airgap` makes the chart render fail on purpose. |
 
 Until the air-gapped profile is in the chart, it is installed beside the chart with these targets,
 in this order:
@@ -250,7 +250,7 @@ make verify-egress    KIND_CLUSTER=fleetops-<name>         # must report every e
 
 `make verify-egress` prints an `at-start` line (not counted), the time the policy came into force
 for the probe pod, and the `after-wait` line that decides. On kind's default CNI the `at-start`
-line reports open egress: a new pod's egress was open for up to about 1.2 s after its container
+line reports open egress: a new pod's egress was open for up to about 1.3 s after its container
 started (docs/KNOWN-LIMITS.md, D63). If a pod must not have that window, use a CNI whose own
 documentation says it enforces NetworkPolicy before the pod's containers start, and run the probe
 there.
@@ -428,9 +428,10 @@ cluster DNS only) is rendered also without `networkPolicy.enabled`, so the Colle
 Jaeger beside the air-gapped policy of `config/airgap` (D68). fleetops-mcp/fleetops-agent → Collector is
 opened beside `config/airgap` by `config/airgap/networkpolicy-tracing.yaml`, which
 `make deploy-airgap` applies when `deploy/fleetops-otel-collector` exists (install the chart with the
-backend first), and in the chart only with `networkPolicy.enabled` (D69). Both rules are
-template-verified only, until the next cluster run. The backend ran on a `make demo` cluster
-on 2026-11-05 (`docs/evidence/airgap-2026-11-05/`), before D68 and D69.
+backend first), and in the chart only with `networkPolicy.enabled` (D69). Both rules ran beside
+`config/airgap` on a `make demo` cluster on 2026-11-12 (`docs/evidence/airgap-2026-11-12/`): a
+restarted Collector reached Jaeger and fleetops-mcp reached the Collector; fleetops-agent did not
+run there.
 
 ## 9. Requests for work: questions, preview, confirmation, activation
 
