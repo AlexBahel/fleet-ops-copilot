@@ -10,12 +10,10 @@ SETUP_ENVTEST_VERSION ?= v0.0.0-20260305142021-f9589b9f2b9d
 GO ?= go
 BIN := bin
 
-.PHONY: help build vet lint shellcheck fmt test test-envtest eval-fixtures record-selftest eval-baseline generate check-no-local all ci envtest-assets image deploy-kind test-live-go demo demo-down test-live baseline-lowered
+.PHONY: help build vet lint shellcheck fmt test test-envtest eval-fixtures record-selftest eval-baseline generate check-no-local ci envtest-assets image test-image test-live-go demo demo-down test-live baseline-lowered
 
 help: ## List targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
-
-all: ci
 
 ci: check-no-local build vet lint shellcheck test test-envtest eval-fixtures ## Everything the CI Go job runs, and the hygiene job's shellcheck
 
@@ -85,21 +83,6 @@ test-image: ## Build the binaries under umask 077 and the image, then run each b
 image: ## Build the fleetops-mcp/fleetops-approvals/fleetops-agent image (binaries built on the host, see Dockerfile)
 	CGO_ENABLED=0 GOOS=linux GOARCH=$(ARCH) $(GO) build -o $(BIN)/linux-$(ARCH)/ ./cmd/fleetops-mcp ./cmd/fleetops-approvals ./cmd/fleetops-agent
 	docker build --platform linux/$(ARCH) -t $(IMG) .
-
-deploy-kind: image ## Install CRDs, RBAC, admission policies, fleetops-mcp, fleetops-approvals and fleetops-agent into kind cluster KIND_CLUSTER (fleetops-*)
-	@case "$(KIND_CLUSTER)" in fleetops-*) ;; *) echo "KIND_CLUSTER must be set and start with fleetops-"; exit 1;; esac
-	kind load docker-image $(IMG) --name $(KIND_CLUSTER)
-	kubectl --context kind-$(KIND_CLUSTER) apply -f config/crd/ -f config/rbac/ -f config/admission/
-	kubectl --context kind-$(KIND_CLUSTER) -n fleetops-system create configmap fleetops-policy \
-		--from-file=default.yaml=policies/default.yaml --dry-run=client -o yaml \
-		| kubectl --context kind-$(KIND_CLUSTER) apply -f -
-	kubectl --context kind-$(KIND_CLUSTER) -n fleetops-system create configmap fleetops-catalogue \
-		--from-file=site.yaml=catalogue/warehouse-a.yaml --dry-run=client -o yaml \
-		| kubectl --context kind-$(KIND_CLUSTER) apply -f -
-	kubectl --context kind-$(KIND_CLUSTER) apply -f config/deploy/
-	kubectl --context kind-$(KIND_CLUSTER) -n fleetops-system rollout restart deploy/fleetops-mcp deploy/fleetops-approvals deploy/fleetops-agent
-	kubectl --context kind-$(KIND_CLUSTER) -n fleetops-system rollout status deploy/fleetops-mcp deploy/fleetops-approvals --timeout=180s
-	@echo "fleetops-agent starts once Secret fleet-ops-copilot-claude (key ANTHROPIC_API_KEY) exists in fleetops-system; not waited for here."
 
 test-live-go: build ## Go live tests of the approval paths (hack/live-approval-path.sh sets their environment; make test-live runs them on the demo stack)
 	$(GO) test -tags live -count=1 -v -timeout 900s ./test/live/...

@@ -18,7 +18,7 @@ limitations under the License.
 
 // Package live runs the copilot's approval paths against a live cluster that
 // runs Swarmada v0.4 with its admission webhooks served, and the copilot
-// deployed from config/ (make deploy-kind). Unlike test/envtest, nothing here
+// installed by make demo (the Helm chart). Unlike test/envtest, nothing here
 // is a stand-in: Swarmada's own webhooks admit or refuse every write.
 //
 // Required environment (hack/live-approval-path.sh sets it):

@@ -6,8 +6,7 @@
 # ONLY): the fictional people sam, dana and eve authenticate through the API
 # server's static token file, as they do in envtest (internal/testenv
 # DefaultPeople). A person with a token can be the verified requester of a
-# request (D57); a person with a client certificate (hack/kind-person.sh)
-# cannot. Not for any cluster that holds anything real; in production the
+# request (D57); a person with a client certificate (kind's admin) cannot. Not for any cluster that holds anything real; in production the
 # people authenticate with OIDC (docs/RUNBOOK.md).
 #
 #   hack/kind-people.sh gen DIR

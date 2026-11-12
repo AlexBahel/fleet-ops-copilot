@@ -139,8 +139,8 @@ func check(repo, rendered string) ([]string, error) {
 
 	delete(want, "v1/Namespace//fleetops-system") // created by helm install --create-namespace
 
-	// The ConfigMaps make deploy-kind creates from files (the policy, the
-	// site catalogue) are rendered by the chart from its copies.
+	// The ConfigMaps config/deploy mounts (the policy, the site catalogue)
+	// are rendered by the chart from its copies of the files.
 	for _, cmf := range []struct{ name, key, file string }{
 		{"fleetops-policy", "default.yaml", filepath.Join("policies", "default.yaml")},
 		{"fleetops-catalogue", "site.yaml", filepath.Join("catalogue", "warehouse-a.yaml")},

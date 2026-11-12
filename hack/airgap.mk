@@ -72,7 +72,7 @@ deploy-airgap: ## Apply llama-server and the egress NetworkPolicies to kind clus
 	@if $(KCTL) -n $(AIRGAP_NS) get deploy/fleetops-mcp deploy/fleetops-approvals >/dev/null 2>&1; then \
 		$(KCTL) -n $(AIRGAP_NS) rollout restart deploy/fleetops-mcp deploy/fleetops-approvals && \
 		$(KCTL) -n $(AIRGAP_NS) rollout status deploy/fleetops-mcp deploy/fleetops-approvals --timeout=180s; \
-	else echo "fleetops-mcp/fleetops-approvals not deployed (make deploy-kind): API access under the policy not exercised"; fi
+	else echo "fleetops-mcp/fleetops-approvals not deployed (install the chart first): API access under the policy not exercised"; fi
 
 verify-egress: ## Egress probe Job in fleetops-system: records egress at pod start, waits until the policy is in force, then passes only if every external target is blocked and the in-namespace control works
 	$(require_fleetops_cluster)

@@ -1,8 +1,8 @@
 # fleetops-mcp (tool server), fleetops-approvals (approval controller and executor) and
 # fleetops-agent (model loop and web UI) in namespace fleetops-system. Apply after
-# config/crd, config/rbac and config/admission (make deploy-kind). The policy
-# file comes from ConfigMap fleetops-policy (created by make deploy-kind from
-# policies/default.yaml), fleetops-agent's site catalogue from ConfigMap
+# config/crd, config/rbac and config/admission. make chart-parity checks that
+# the Helm chart renders the same objects. The policy file comes from ConfigMap
+# fleetops-policy (from policies/default.yaml), fleetops-agent's site catalogue from ConfigMap
 # fleetops-catalogue (from catalogue/warehouse-a.yaml). fleetops-agent does not start until Secret
 # fleet-ops-copilot-claude (key ANTHROPIC_API_KEY) exists in fleetops-system.
 # Audit files are on emptyDir volumes: they do not survive a pod restart
