@@ -1,5 +1,0 @@
-# shell `time` of each run (zsh), from the run logs; the logs themselves are not committed
-run1: FOC_UP_TRACING=1 make foc-up  23.34s user 10.88s system 25% cpu 2:14.09 total
-run2: FOC_UP_TRACING=1 make foc-up  9.42s user 6.76s system 11% cpu 2:19.60 total
-run1: exit=0
-run2: exit=0
