@@ -1,7 +1,7 @@
 # Site catalogue for the fictional Example Distribution Co. warehouse A
 # (docs/DESIGN.md §2, §3.10.1, D70). It lists the kinds of work a person can
 # ask for here, how each maps to Swarmada v0.4, and the questions that lead to
-# each. Classes come from docs/design/guided-request-inventory.md §4. Part of the eval
+# each. Classes (a), (b), (c): docs/DESIGN.md §3.10.1. Part of the eval
 # surface: results and requests record this file's SHA-256.
 apiVersion: fleetops.alexbahel.github.io/v1alpha1
 kind: SiteCatalogue
@@ -11,14 +11,14 @@ namespace: warehouse-a
 
 # A location is a FleetZone waypoint resolved to its pose and written into the
 # FleetAction payload with these keys; the quickstart's simulated adapter reads
-# x and y in metres (inventory §2.3).
+# x and y in metres.
 location:
   waypoint: waypoint
   x: x
   "y": "y"
 
-# Shown in the preview, never asked (R64). onFailure Requeue is Swarmada's
-# bounded retry: "retries up to 3 times, then alerts" (R69).
+# Shown in the preview, never asked (D71). onFailure Requeue is Swarmada's
+# bounded retry: "retries up to 3 times, then alerts" (D78).
 defaults:
   priority: Normal
   onFailure: Requeue
@@ -270,10 +270,10 @@ somethingElse:
 # Kinds a "something else" request may be composed from, one member each.
 basicSteps: [move, patrol, charge]
 
-# Class (c): needs a Swarmada change (inventory §4, BACKLOG-v4 "Proposed for
-# Swarmada draft 5"). Nothing here can be previewed or filed.
+# Class (c): needs a Swarmada change, proposed for a later Swarmada version
+# (docs/BACKLOG.md). Nothing here can be previewed or filed.
 notYetPossible:
-  # C1 and C2 are findings (R67, R73): a robot can still go and look, so a
+  # C1 and C2 are findings (D72): a robot can still go and look, so a
   # request that needs one is filed as the inspect kind for what it looks
   # for, and the preview says what is not reported. Never "not possible".
   - id: C1

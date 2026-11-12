@@ -118,7 +118,7 @@ type LocationKeys struct {
 type Kind struct {
 	Name  string `json:"name"`
 	Title string `json:"title"`
-	// Class is a or b (docs/design/guided-request-inventory.md §4).
+	// Class is a or b (docs/DESIGN.md §3.10.1).
 	Class string `json:"class"`
 	// ResultReported is false for class (b): Swarmada records arrival and
 	// completion, not what the robot found (R67).

@@ -126,7 +126,7 @@ func phrase(n int) string {
 
 // AlwaysNotChecked are checks no read can make (DESIGN.md §3.10.4).
 var AlwaysNotChecked = []string{
-	"the adapter's validate_action for the concrete action (no client can see it before assignment; Swarmada draft 5, C5)",
+	"the adapter's validate_action for the concrete action (no client can see it before assignment; proposed for a later Swarmada version, C5)",
 	"filter 9: the adapter's contract version range and SafetyStream",
 	"filter 10: stops reported by adapters, and duplicate wire robot ids",
 }
