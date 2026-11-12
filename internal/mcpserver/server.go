@@ -234,28 +234,6 @@ func New(svc *tools.Service) *mcp.Server {
 	return srv
 }
 
-// Check verifies that the registered tool names are exactly ReadTools+RequestTools.
-func Check(ctx context.Context, srv *mcp.Server) error {
-	tl, err := ListTools(ctx, srv)
-	if err != nil {
-		return err
-	}
-	res := &mcp.ListToolsResult{Tools: tl}
-	want := map[string]bool{}
-	for _, n := range append(append([]string{}, ReadTools...), RequestTools...) {
-		want[n] = true
-	}
-	if len(res.Tools) != len(want) {
-		return fmt.Errorf("server registers %d tools, want %d", len(res.Tools), len(want))
-	}
-	for _, t := range res.Tools {
-		if !want[t.Name] {
-			return fmt.Errorf("unexpected tool %q", t.Name)
-		}
-	}
-	return nil
-}
-
 // ListTools returns the tools srv serves, as a client sees them.
 func ListTools(ctx context.Context, srv *mcp.Server) ([]*mcp.Tool, error) {
 	ct, st := mcp.NewInMemoryTransports()

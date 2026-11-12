@@ -43,7 +43,6 @@ const (
 	KeyInstruction = "instruction"
 	KeyDock        = "dock"
 	KeyBounds      = "bounds"
-	KeyRoute       = "route"
 )
 
 // Task builds the FleetTask, held as a draft, for p in namespace ns. A member

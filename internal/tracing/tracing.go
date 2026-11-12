@@ -64,8 +64,6 @@ const (
 // conventions; fleetops.* are the copilot's own.
 const (
 	AttrOperation      = attribute.Key("gen_ai.operation.name")
-	AttrProvider       = attribute.Key("gen_ai.provider.name")
-	AttrModel          = attribute.Key("gen_ai.request.model")
 	AttrInputTokens    = attribute.Key("gen_ai.usage.input_tokens")
 	AttrOutputTokens   = attribute.Key("gen_ai.usage.output_tokens")
 	AttrCacheCreation  = attribute.Key("gen_ai.usage.cache_creation.input_tokens")

@@ -34,8 +34,21 @@ func TestToolSurface(t *testing.T) {
 		t.Fatal(err)
 	}
 	srv := New(&tools.Service{Engine: policy.New(p)})
-	if err := Check(context.Background(), srv); err != nil {
+	tl, err := ListTools(context.Background(), srv)
+	if err != nil {
 		t.Fatal(err)
+	}
+	want := map[string]bool{}
+	for _, n := range append(append([]string{}, ReadTools...), RequestTools...) {
+		want[n] = true
+	}
+	if len(tl) != len(want) {
+		t.Fatalf("server registers %d tools, want %d", len(tl), len(want))
+	}
+	for _, tool := range tl {
+		if !want[tool.Name] {
+			t.Fatalf("unexpected tool %q", tool.Name)
+		}
 	}
 	for _, n := range append(append([]string{}, ReadTools...), RequestTools...) {
 		for _, bad := range []string{"clear", "release", "resume", "delete", "approve", "cancel", "patch", "update"} {

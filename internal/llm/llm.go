@@ -120,14 +120,6 @@ func (s *Scripted) Chat(_ context.Context, _ string, _ []Message, _ []ToolSpec) 
 	return Reply{Text: st.Final, Calls: st.Calls}, nil
 }
 
-// SettingsReporter is implemented by backends that send generation settings.
-// Settings returns every request field that controls sampling, thinking or
-// effort, with the value the backend sends, or NotSent for a field it leaves
-// out (the server's default applies). Evaluation results record it.
-type SettingsReporter interface {
-	Settings() map[string]string
-}
-
 // NotSent marks a setting the backend leaves out of its requests.
 const NotSent = "not sent (server default)"
 

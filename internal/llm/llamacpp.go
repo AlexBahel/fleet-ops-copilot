@@ -323,7 +323,9 @@ func (l *LlamaCpp) baseRequest() llamaRequest {
 // length in llama-server's chat-completions API.
 var llamaSettingKeys = []string{"model", "temperature", "max_tokens", "stream", "top_p", "top_k", "min_p", "repeat_penalty", "repeat_last_n", "seed"}
 
-// Settings implements SettingsReporter from the fields Chat sends.
+// Settings returns every request field that controls sampling, with the
+// value Chat sends, or NotSent for a field it leaves out (the server's default
+// applies). Evaluation results record it.
 func (l *LlamaCpp) Settings() map[string]string {
 	s, err := settingsFrom(l.baseRequest(), llamaSettingKeys)
 	if err != nil {

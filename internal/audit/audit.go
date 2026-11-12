@@ -48,9 +48,7 @@ type Kind string
 const (
 	KindToolCall        Kind = "tool_call"
 	KindPolicyDecision  Kind = "policy_decision"
-	KindDraftCreated    Kind = "draft_created"
 	KindRequestCreated  Kind = "request_created"
-	KindDecisionSeen    Kind = "decision_seen"
 	KindApproved        Kind = "approved"
 	KindRejected        Kind = "rejected"
 	KindDecisionRefused Kind = "decision_refused"

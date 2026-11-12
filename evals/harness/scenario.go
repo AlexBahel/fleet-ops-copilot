@@ -183,27 +183,14 @@ type ExpectRefusal struct {
 
 // Fact is one API fact: Ref is Kind/name, Field a dotted path (a list element
 // is selected by name: status.capabilities[camera_front].status), Value its
-// value in the fixture. Cite is the field token the answer must contain;
-// it defaults to the last path segment.
+// value in the fixture. Cite was the field token judge v2 required; judge v3
+// and later do not use it (D66), and it stays so scenario files that set it
+// still load.
 type Fact struct {
 	Ref   string `json:"ref"`
 	Field string `json:"field"`
 	Value string `json:"value"`
 	Cite  string `json:"cite,omitempty"`
-}
-
-// CiteToken is the field text judge v2 required in an answer. Judge v3 does
-// not use it (D66); the cite field of a scenario fact is kept so the scenario
-// files still load and v2 results can be read.
-func (f Fact) CiteToken() string {
-	if f.Cite != "" {
-		return f.Cite
-	}
-	segs := splitPath(f.Field)
-	if len(segs) == 0 {
-		return f.Field
-	}
-	return segs[len(segs)-1].key
 }
 
 // LoadScenarios reads every *.yaml in dir, sorted by id.

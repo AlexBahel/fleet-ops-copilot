@@ -134,7 +134,9 @@ func (c *Claude) baseParams() anthropic.MessageNewParams {
 // effort and output length.
 var claudeSettingKeys = []string{"model", "max_tokens", "output_config", "thinking", "temperature", "top_p", "top_k", "cache_control"}
 
-// Settings implements SettingsReporter from the fields Chat sends.
+// Settings returns every request field that controls sampling, thinking or
+// effort, with the value Chat sends, or NotSent for a field it leaves out
+// (the server's default applies). Evaluation results record it.
 func (c *Claude) Settings() map[string]string {
 	s, err := settingsFrom(c.baseParams(), claudeSettingKeys)
 	if err != nil {

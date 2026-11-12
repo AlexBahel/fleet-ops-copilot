@@ -480,7 +480,7 @@ type Results struct {
 	Backend     string    `json:"backend"`
 	// BackendSettings lists every sampling, thinking and effort field the
 	// backend sends, or that it leaves to the server default
-	// (llm.SettingsReporter). Empty for the scripted backend.
+	// (the backend's Settings). Empty for the scripted backend.
 	BackendSettings map[string]string `json:"backendSettings,omitempty"`
 	RunsPerScenario int               `json:"runsPerScenario"`
 	// SystemPrompt identifies what the model is told and how runs are judged:
