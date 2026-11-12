@@ -46,7 +46,7 @@ func TestToolSurface(t *testing.T) {
 	}
 }
 
-// R46: every namespace parameter names the namespace the tools use and says
+// D66: every namespace parameter names the namespace the tools use and says
 // that others are refused, in the deployment's own terms.
 func TestNamespaceParameterDescribed(t *testing.T) {
 	p, err := policy.Load("../../policies/default.yaml")

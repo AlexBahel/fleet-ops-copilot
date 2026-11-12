@@ -5,7 +5,7 @@
 # fleetops-mcp, fleetops-approvals and fleetops-agent (which reads ApprovalRequests),
 # fleetops-agent -> fleetops-mcp, fleetops-agent -> the Claude API when CIDRs are given, and
 # egress to the OTLP collector from otlpEgress.to. No ingress to fleetops-agent's
-# web UI is allowed (R38: no Ingress; kubectl port-forward is normally not
+# web UI is allowed (D56: no Ingress; kubectl port-forward is normally not
 # subject to NetworkPolicy, depending on the CNI). Policies are additive: a pod may do what
 # any policy selecting it allows.
 #

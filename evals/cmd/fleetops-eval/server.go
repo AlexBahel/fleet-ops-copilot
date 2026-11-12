@@ -16,7 +16,7 @@ limitations under the License.
 
 package main
 
-// Server-side settings of a llamacpp measurement (ruling R41). The request
+// Server-side settings of a llamacpp measurement (D64). The request
 // fields the backend sends are in llm.LlamaCpp.Settings; what decides the
 // rest of the measurement is on the server side: the context size and slot
 // count llama-server runs with, its build, the threads it chose, and the

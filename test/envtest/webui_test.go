@@ -287,7 +287,7 @@ func TestWebUIShowsTheWriteThatIsExecuted(t *testing.T) {
 }
 
 // A request filed from the page records the typed name as an unverified
-// requester. fleetops-approvals refuses every approval of it (R38) and writes
+// requester. fleetops-approvals refuses every approval of it (D56) and writes
 // nothing; a rejection is accepted. The panel offers only the reject command.
 func TestWebUIRequestCannotBeApproved(t *testing.T) {
 	ctx := context.Background()

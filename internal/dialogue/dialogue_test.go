@@ -169,7 +169,7 @@ func TestSomethingElse(t *testing.T) {
 	if o.Proposal.Interpretation != Composed || in.Preview.Interpretation != "Composed" || len(in.Actions) != 2 || in.Actions[1].DependsOn[0] != "step1-move" || in.Actions[1].RobotSelector != "sim-robot-003" {
 		t.Fatalf("composed %+v", in)
 	}
-	// Not possible: only work no robot can do at all (R73).
+	// Not possible: only work no robot can do at all (D72).
 	st3 := newState("x")
 	st3.Describe("run the vision service on the camera stream and count the pallets")
 	o = e.Propose(st3, Input{SomethingElse: &SomethingElseInput{Interpretation: NotPossible, Need: "C3", Reason: "it needs an external analysis service"}}, snap)
@@ -181,7 +181,7 @@ func TestSomethingElse(t *testing.T) {
 	}
 }
 
-// R67, R73: a "something else" need for a finding (a result, a photo,
+// D72: a "something else" need for a finding (a result, a photo,
 // damage, what is at a place) is never "not possible": it becomes the
 // inspect kind for what it looks for, with the "not reported" label and the
 // gap's own sentence in the preview, and the person's words kept.
@@ -306,7 +306,7 @@ func TestOtherAsks(t *testing.T) {
 	}
 }
 
-// R67: flipping resultReported (when Swarmada can report a result, C1)
+// D70: flipping resultReported (when Swarmada can report a result, C1)
 // changes one preview line and nothing in the dialogue.
 func TestResultReportedFlipNeedsNoDialogueChange(t *testing.T) {
 	render := func(c *catalogue.Catalogue) ([]string, string) {
@@ -347,7 +347,7 @@ func TestParseReply(t *testing.T) {
 
 // D72: a "something else" description that the model answers with a plain
 // kind (not a somethingElse reading) is logged for catalogue review too;
-// seen with Sonnet 5.5 on the demo stack, 2026-11-07.
+// seen with Sonnet 5.5 on the demo stack.
 func TestSomethingElseAnsweredWithAKindIsLogged(t *testing.T) {
 	var logged []ReviewEntry
 	e := &Engine{Cat: cat(t), Review: func(r ReviewEntry) { logged = append(logged, r) }}
@@ -370,7 +370,7 @@ func TestSomethingElseAnsweredWithAKindIsLogged(t *testing.T) {
 	}
 }
 
-// P6, the path Sonnet 5.5 guided-06 took (runs 1-3): inspect.what, "4", the
+// D87, the path Sonnet 5.5 guided-06 took (runs 1-3): inspect.what, "4", the
 // open question, a description, and then the model answers the description
 // with a new ask (charge) instead of somethingElse. That is its reading of
 // the description: the charge, with no third question.
@@ -403,7 +403,7 @@ func TestNewAskAfterSomethingElseIsTheReading(t *testing.T) {
 	}
 }
 
-// P6: every question the person is shown counts against the cap of two,
+// D87: every question the person is shown counts against the cap of two,
 // a question asked again included, in every path.
 func TestCapCountsEveryQuestionShown(t *testing.T) {
 	e := &Engine{Cat: cat(t)}
@@ -420,7 +420,7 @@ func TestCapCountsEveryQuestionShown(t *testing.T) {
 	}
 }
 
-// P7: a value that does not have its field's form (start "on approval", a
+// D88: a value that does not have its field's form (start "on approval", a
 // reading Opus 5.5 gave in zone-03; "now" is D91) is removed from the
 // dialogue state, and the
 // person is asked the question that fills it again, with the valid forms.
@@ -455,7 +455,7 @@ func TestInvalidValueRemovedAndAskedAgain(t *testing.T) {
 	}
 }
 
-// P7: past the cap the invalid value is not asked again; the preview uses
+// D88: past the cap the invalid value is not asked again; the preview uses
 // the default and says the value given could not be used.
 func TestInvalidValuePastTheCapShownInPreview(t *testing.T) {
 	e := &Engine{Cat: cat(t)}
@@ -532,7 +532,7 @@ func defaultPolicy(t *testing.T) Allowed {
 	return AllowedBy(p)
 }
 
-// P11 (D93): a value the catalogue knows but the site policy forbids is
+// D93: a value the catalogue knows but the site policy forbids is
 // refused before any question, with the policy's code and allowed values,
 // and nothing of the call is applied. On the v5 surface the engine asked
 // "From where to where?" and the refusal came only from check_task.
@@ -583,7 +583,7 @@ func TestFormsFollowThePolicy(t *testing.T) {
 	}
 }
 
-// P10 (D94): a field the catalogue knows but the kind does not use is
+// D94: a field the catalogue knows but the kind does not use is
 // refused to the model, with the kind's fields named, before anything of
 // the call is applied; it is never dropped. The calls are the readings of
 // the v5 record: Qwen2.5-7B guided-14 runs 1-3 (dock on a move) and
@@ -637,7 +637,7 @@ func TestFieldTheKindDoesNotUseIsRefused(t *testing.T) {
 	}
 }
 
-// P12 (D98): the same field refused twice in one message is not sent back
+// D98: the same field refused twice in one message is not sent back
 // to the model a third time. The call is Qwen2.5-7B's first call in
 // guided-23 run 3 of the v6 record (trace 24b31da3e740e0cb5a70d474dd06d56d,
 // also guided-14 run 1, trace 568b3cfbf616739b4b52fdaf794cbb47: dock
@@ -686,7 +686,7 @@ func TestRefusedFieldAskedOfThePersonAfterTwoRefusals(t *testing.T) {
 	}
 }
 
-// P12 (D98): when no field of the kind can hold the value, or the cap of
+// D98: when no field of the kind can hold the value, or the cap of
 // two questions is reached, the field is left out and the preview says so.
 // The calls are Qwen2.5-7B's dispatch-04 run 1 in the v6 record (trace
 // e89e129a47afc33ef68d8488e51b748f: zone "Zone/zone-001" on an inspection
@@ -763,7 +763,7 @@ func TestRefusedFieldLeftOutAndShownWhenNothingHoldsIt(t *testing.T) {
 	}
 }
 
-// P12 (D98): a field with an empty value is ignored, not refused. The
+// D98: a field with an empty value is ignored, not refused. The
 // calls are Qwen2.5-7B's guided-23 run 2 in the v6 record (trace
 // 29e7fb4e341fc19958a22f5c89730c98: "task": "", "times": "" on a move,
 // refused 11 times until the 12-turn limit).

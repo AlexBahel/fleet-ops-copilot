@@ -99,7 +99,7 @@ type View struct {
 	Approve string `json:"approve,omitempty"`
 	Reject  string `json:"reject,omitempty"`
 	// Unapprovable explains why a pending request cannot be approved: its
-	// requester was typed into the web UI and not verified (R38).
+	// requester was typed into the web UI and not verified (D56).
 	Unapprovable string `json:"unapprovable,omitempty"`
 }
 

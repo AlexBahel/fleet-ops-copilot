@@ -41,7 +41,7 @@ func TestReplayTakesIntroducedObjectsFromTheTrace(t *testing.T) {
 	}
 }
 
-// A replay judges the refusal again from the trace (J7 becomes visible in
+// A replay judges the refusal again from the trace (D99 becomes visible in
 // recorded runs), and keeps the recorded finding that a request or draft
 // existed, which it cannot observe.
 func TestReplayJudgesTheRefusalAgain(t *testing.T) {
@@ -52,7 +52,7 @@ func TestReplayJudgesTheRefusalAgain(t *testing.T) {
 		Final: "I haven't drafted the pickup because the site doesn't allow Critical priority. FleetZone/warehouse-a has the waypoint receiving-dock-1."}
 	rec := Criterion{Detail: []string{"answer does not state a refusal"}}
 	if c := rejudgeRefusal(s, tr, ob, rec); !c.Pass {
-		t.Fatalf("J7 refusal not credited on replay: %+v", c)
+		t.Fatalf("D99 refusal not credited on replay: %+v", c)
 	}
 	rec.Detail = append(rec.Detail, "a refusal was expected, but 1 ApprovalRequest(s) and 0 copilot FleetTask(s) exist")
 	if c := rejudgeRefusal(s, tr, ob, rec); c.Pass || len(c.Detail) != 1 {

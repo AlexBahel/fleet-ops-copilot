@@ -90,7 +90,7 @@ func conflict(a, b Scenario) bool {
 // sameInputDifferentExpectation lists the pairs of scenarios that give the
 // model the same input (prompt, fixture and setup) but expect a different
 // first question from the engine, or results that conflict where no reply of
-// the scripted person explains it (D96, BACKLOG-v4 S6, S7). Such a pair rewards
+// the scripted person explains it (D96). Such a pair rewards
 // one reading in one scenario and fails it in the other.
 func sameInputDifferentExpectation(scs []Scenario) [][2]string {
 	groups := map[string][]Scenario{}
@@ -179,7 +179,7 @@ func TestSharedInputCheckControls(t *testing.T) {
 	}
 }
 
-// S8 (D100): dispatch-07 accepts the up-front refusal dispatch-06 counts as
+// D100: dispatch-07 accepts the up-front refusal dispatch-06 counts as
 // correct, with no propose_task call. The run is Sonnet 5.5's dispatch-07
 // run 1 on v6 (2026-11-08), which failed only on the required call; the
 // engine's own refusal (D93) is still what the scripted run makes.

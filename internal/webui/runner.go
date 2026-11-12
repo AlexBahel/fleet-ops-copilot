@@ -67,7 +67,7 @@ type ChatOutput struct {
 type AgentRunner struct {
 	// Transport returns a new MCP client transport (streamable HTTP to
 	// fleetops-mcp in the cluster) that sends token, if any, as the caller's
-	// bearer token; fleetops-mcp verifies it (R39).
+	// bearer token; fleetops-mcp verifies it (D57).
 	Transport  func(token string) mcp.Transport
 	NewBackend func() (llm.Backend, error)
 	// BackendName is shown in the page header.

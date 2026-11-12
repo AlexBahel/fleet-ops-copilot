@@ -92,7 +92,7 @@ spec:
 # fleetops-agent: Claude backend, MCP client of fleetops-mcp, web UI on :8090. Its
 # ServiceAccount may only get and list ApprovalRequests. No login: requests
 # filed from the page record an unverified requester and cannot be approved
-# (R38). ClusterIP only, no Ingress: kubectl port-forward svc/fleetops-agent 8090:8090.
+# (D56). ClusterIP only, no Ingress: kubectl port-forward svc/fleetops-agent 8090:8090.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

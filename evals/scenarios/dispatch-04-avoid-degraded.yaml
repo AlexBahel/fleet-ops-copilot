@@ -11,7 +11,7 @@ setup:
   - {ref: FleetAdapter/sim-fleet-adapter-2, status: true, patch: {status: {phase: Connected}}}
   - {ref: FleetAdapter/sim-fleet-adapter-3, status: true, patch: {status: {phase: Connected}}}
 # The person names the place but not what to look for: inspect's first
-# question is asked (BACKLOG-v4 P1: the location now reaches the draft).
+# question is asked (D77: the location reaches the draft).
 script:
   - tool: list_robots
     args: {}

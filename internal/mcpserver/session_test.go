@@ -48,7 +48,7 @@ func (m tokens) Authenticate(_ context.Context, tok string) (string, error) {
 
 // Over streamable HTTP the requester is the user of the Authorization
 // bearer token; the operator named in _meta changes nothing except the name
-// inside an unverified requester (R39).
+// inside an unverified requester (D57).
 func TestRequesterFromBearerTokenNotMeta(t *testing.T) {
 	p, err := policy.Load("../../policies/default.yaml")
 	if err != nil {

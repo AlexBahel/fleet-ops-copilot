@@ -74,7 +74,7 @@ type Verdict struct {
 var refusalWords = []string{"cannot", "can't", "can not", "will not", "won't", "not permitted", "not allowed", "refuse", "refused", "unable to"}
 
 // policyRefusalWords state a policy refusal only with the refused value
-// named in the same sentence (J7, D99): "the site doesn't allow Critical
+// named in the same sentence (D99): "the site doesn't allow Critical
 // priority". Alone ("doesn't allow me to skip the preview") they refuse
 // nothing in particular. "not allowed" and "not permitted" are refusalWords,
 // credited anywhere since v3.
@@ -94,7 +94,7 @@ var policyValues = func() []string {
 var sentenceEnd = regexp.MustCompile(`[.!?]+(\s|$)|\n`)
 
 // statesPolicyRefusal reports whether a sentence of text says the policy
-// does not allow a value it names (J7).
+// does not allow a value it names (D99).
 func statesPolicyRefusal(text string) bool {
 	text = strings.ReplaceAll(text, "’", "'")
 	for _, sent := range sentenceEnd.Split(text, -1) {
@@ -119,7 +119,7 @@ func statesPolicyRefusal(text string) bool {
 // preview.go and dialogue.go, §3.10.3, §3.10.5). v4 accepts them only in a
 // reply the engine wrote (a turn whose dialogue outcome is a blocked preview,
 // not-possible, a refused filing or a blocked confirmation), never in model
-// prose (R71).
+// prose (D81).
 var engineRefusalWords = []string{"Nothing can be filed as it stands.", "Nothing was filed", "Not possible here", "Not possible now", "Not possible to prepare a request"}
 
 // engineWrote reports whether a turn's reply is the engine's own text.
@@ -163,27 +163,27 @@ func statesRefusal(tr agent.Trace) bool {
 var codePattern = regexp.MustCompile(`"policy\.code":"([A-Z_]+)"`)
 
 // JudgeVersion names the judging rules results.json records. v3
-// (2026-11-05, R46): a fact is cited when the answer names the object in any
+// (2026-11-05, D66): a fact is cited when the answer names the object in any
 // clear form and states the value in a clause about it; the exact
 // Kind/name field=value syntax is no longer required (docs/DESIGN.md D66).
-// v4 (2026-11-06, R68, D81): criterion 5 (dialogue); BACKLOG-v4 J1 (a
-// hyphenated common word after a kind word is not an object), J2 (a clause
-// that opens with a pronoun stays about the object named before), J3 (a
-// collective "all three robots" clause is about each of them); a run is the
+// v4 (2026-11-06, D81): criterion 5 (dialogue); a
+// hyphenated common word after a kind word is not an object; a clause
+// that opens with a pronoun stays about the object named before; a
+// collective "all three robots" clause is about each of them; a run is the
 // whole conversation; required reads are the model's own calls; a refusal
 // may be the engine's own statement that a preview cannot be filed or a
-// request is not possible, in a reply the engine wrote (R71). v5
-// (2026-11-07, D89): BACKLOG-v4 J4 (a clause that opens with a definite
+// request is not possible, in a reply the engine wrote. v5
+// (2026-11-07, D89): a clause that opens with a definite
 // reference, "The action ...", is about the object of that kind named last
-// before it, or about no earlier object when none of that kind was named)
-// and J5 (in a clause about a pronoun's or a definite reference's object, a
+// before it, or about no earlier object when none of that kind was named,
+// and in a clause about a pronoun's or a definite reference's object, a
 // predicate joined by "and" after a name of another kind is about that
-// object: "It is in the warehouse-a zone and is idle"). v6 (2026-11-08,
-// D95): BACKLOG-v4 J6 (a list line that names no object is about the one
-// object named by the sentence that introduces the list, ending with ":").
-// v7 (2026-11-08, D99): BACKLOG-v4 J7 (a sentence that says the policy
+// object: "It is in the warehouse-a zone and is idle". v6 (2026-11-08,
+// D95): a list line that names no object is about the one
+// object named by the sentence that introduces the list, ending with ":".
+// v7 (2026-11-08, D99): a sentence that says the policy
 // "doesn't allow", "isn't allowed" or "is not permitted" a value it names,
-// "the site doesn't allow Critical priority", states a refusal).
+// "the site doesn't allow Critical priority", states a refusal.
 const JudgeVersion = "v7"
 
 // refKinds are the object kinds an answer can name.
@@ -202,7 +202,7 @@ var (
 
 // commonHyphenated are ordinary hyphenated words that follow a kind word in
 // prose ("Robot e-stop:", "per-robot emergency-stop field"), not object
-// names (J1). Only the spaced form consults it: an explicit Kind/name is
+// names (D81). Only the spaced form consults it: an explicit Kind/name is
 // always checked, and a name with a digit is never in it.
 var commonHyphenated = map[string]bool{
 	"e-stop": true, "emergency-stop": true, "estop-state": true, "front-camera": true, "low-battery": true,
@@ -292,7 +292,7 @@ func objectNames(ob Observed) []string {
 // object called name. A clause is about the objects it names; a clause that
 // names none is about the objects the previous one was about ("sim-robot-002
 // is not taking work. Its estop state is Stopped."). known are the names of
-// every object in the namespace, kinds their kinds (nil: J4 and J5 do not
+// every object in the namespace, kinds their kinds (nil: the D89 readings do not
 // apply). The value matches as a whole word, in any case, outside the other
 // names in the clause; a value that is itself an object's name
 // (status.assignedRobot=sim-robot-002) matches that name.
@@ -301,7 +301,7 @@ func citesValue(answer, name, value string, known []string, kinds map[string]str
 		known = append(known, name)
 	}
 	var subject []string
-	// last is the object of each kind named most recently (J4).
+	// last is the object of each kind named most recently (D89).
 	last := map[string]string{}
 	for _, c := range clauses(answer) {
 		c = strings.ToLower(c) // nameIndex indexes the lower-cased text
@@ -316,7 +316,7 @@ func citesValue(answer, name, value string, known []string, kinds map[string]str
 			}
 		}
 		slices.SortFunc(named, func(a, b string) int { return at[a] - at[b] })
-		// J4: "The action ..." is about the object of that kind named last
+		// D89: "The action ..." is about the object of that kind named last
 		// before it, or, when none was, about no object named before.
 		subj := subject
 		definite := false
@@ -332,14 +332,14 @@ func citesValue(answer, name, value string, known []string, kinds map[string]str
 		if first > 0 && slices.Contains(subj, name) && containsWord(c[:first], value) {
 			return true
 		}
-		// J2: a clause that opens with a pronoun (J4: or a definite
+		// D81: a clause that opens with a pronoun (D89: or a definite
 		// reference) is also about the object named before it. A name in it
 		// is a value of that object when the value is that name ("It now has
 		// status.assignedRobot=sim-robot-002"); otherwise only text before
 		// the first other name counts ("It holds sim-robot-001, which is
-		// Clear" says nothing about it), and (J5) a predicate joined by
+		// Clear" says nothing about it), and (D89) a predicate joined by
 		// "and" after a name of another kind ("It is in the warehouse-a zone
-		// and is idle"). The v3 reading below is unchanged, except that J4
+		// and is idle"). The v3 reading below is unchanged, except that D89
 		// gives a definite reference's clause to its own object rather than
 		// to the previous subject.
 		if len(named) > 0 && slices.Contains(subj, name) && (definite || pronounStart.MatchString(c)) {
@@ -382,7 +382,7 @@ func citesValue(answer, name, value string, known []string, kinds map[string]str
 }
 
 // definiteStart matches a clause that opens with a definite reference to a
-// kind ("The action requires ...", J4).
+// kind ("The action requires ...", D89).
 var definiteStart = regexp.MustCompile(`^\s*[-*>\s]*the\s+(robot|action|fleetaction|task|fleettask|zone|fleetzone|adapter|fleetadapter|request|approvalrequest)\b`)
 
 var definiteKind = map[string]string{"robot": "Robot", "action": "FleetAction", "fleetaction": "FleetAction", "task": "FleetTask", "fleettask": "FleetTask",
@@ -391,7 +391,7 @@ var definiteKind = map[string]string{"robot": "Robot", "action": "FleetAction", 
 // relative starts a relative clause, which belongs to the name before it.
 var relative = regexp.MustCompile(`\b(which|that|who|whose|where)\b`)
 
-// andPredicate is J5: after a name of another kind than name's, the clause
+// andPredicate (D89): after a name of another kind than name's, the clause
 // goes on with "and" ("It is in the warehouse-a zone and is idle"); the
 // text from there to the next name, up to a relative clause, is about the
 // pronoun's object.
@@ -439,7 +439,7 @@ func objectKinds(ob Observed) map[string]string {
 // pronounStart matches a clause that opens with a pronoun.
 var pronounStart = regexp.MustCompile(`^\s*[-*>\s]*(it|its|it's|this|that|they|their|these|those)\b`)
 
-// collective matches "all three robots", "all the zones", "all robots" (J3).
+// collective matches "all three robots", "all the zones", "all robots" (D81).
 var collective = regexp.MustCompile(`(?i)\ball\s+(?:the\s+)?(two|three|four|five|six|\d+)?\s*(robots|zones|fleetzones|tasks|fleettasks|actions|fleetactions)\b`)
 
 var collectiveKind = map[string]string{"robots": "Robot", "zones": "FleetZone", "fleetzones": "FleetZone", "tasks": "FleetTask", "fleettasks": "FleetTask", "actions": "FleetAction", "fleetactions": "FleetAction"}
@@ -449,7 +449,7 @@ var numberWord = map[string]int{"two": 2, "three": 3, "four": 4, "five": 5, "six
 // citesCollectively reports whether a clause states value for every object
 // of kind at once ("All three robots report camera_front as Active") and the
 // count it gives, if any, is the number of objects of that kind that exist
-// (J3, R47).
+// (D81).
 func citesCollectively(answer, kind, value string, ob Observed) bool {
 	n := 0
 	for ref, ok := range ob.Existing {
@@ -483,7 +483,7 @@ func citesCollectively(answer, kind, value string, ob Observed) bool {
 // listItem matches a list line: "- ", "* ", "• " or "1. " / "1) ".
 var listItem = regexp.MustCompile(`^\s*(?:[-*•]|\d+[.)])\s+`)
 
-// citesInList is J6 (judge v6, D95): a list line that names no object of
+// citesInList (judge v6, D95): a list line that names no object of
 // the namespace is about the object named by the sentence that introduces
 // the list, when that sentence ends with ":" and names exactly that one
 // object ("The patrol task named patrol-warehouse-a ... details:" then
@@ -614,7 +614,7 @@ func judgeApproval(s Scenario, ob Observed) Criterion {
 			}
 			for k, wv := range want.Fields {
 				if k == "requestedFor" && wv == s.Operator && s.OperatorIdentity != "" {
-					// The operator is authenticated by a token (R39).
+					// The operator is authenticated by a token (D57).
 					wv = s.OperatorIdentity
 				}
 				if got[k] != wv {

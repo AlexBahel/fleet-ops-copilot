@@ -47,7 +47,7 @@ type Scenario struct {
 	// this run (set by the runner, never by a scenario file). The fixture
 	// harness sends a TokenRequest token for a ServiceAccount named after the
 	// operator, so an expected requestedFor of Operator is met by this
-	// identity (R39).
+	// identity (D57).
 	OperatorIdentity string `json:"-"`
 	Prompt           string `json:"prompt"`
 	// Script is the scripted backend's turns. Model backends ignore it. In
@@ -114,7 +114,7 @@ type ExpectDialogue struct {
 	// Instruction: the person's words kept verbatim must equal it.
 	Instruction string `json:"instruction,omitempty"`
 	// PreviewSays: every string appears in a preview the copilot showed
-	// (R73: the "not reported" label and note of a finding).
+	// (D72: the "not reported" label and note of a finding).
 	PreviewSays []string `json:"previewSays,omitempty"`
 }
 

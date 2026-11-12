@@ -124,7 +124,7 @@ type SomethingElse struct {
 	Interpretation string `json:"interpretation,omitempty"`
 	FollowUpAsked  bool   `json:"followUpAsked,omitempty"`
 	// Finding is the notYetPossible id of a finding the request asked for
-	// (a result, a photo): the preview says it is not reported (R73).
+	// (a result, a photo): the preview says it is not reported (D72).
 	Finding string `json:"finding,omitempty"`
 }
 
@@ -229,7 +229,7 @@ type Proposal struct {
 	// Missing are required items with no value and no default (rule 7).
 	Missing []string
 	// Notes are shown after the result label: what was asked for that
-	// Swarmada does not report (R73).
+	// Swarmada does not report (D72).
 	Notes []string
 }
 
@@ -268,7 +268,7 @@ type ReviewEntry struct {
 	Steps          []string
 	Reason         string
 	// Finding is set when a notPossible reading named a finding gap and the
-	// engine filed it as an inspection instead (R73).
+	// engine filed it as an inspection instead (D72).
 	Finding string
 }
 
@@ -457,7 +457,7 @@ func (e *Engine) somethingElse(st *State, in SomethingElseInput, snap Snapshot) 
 	se := st.SomethingElse
 	finding := ""
 	if in.Interpretation != Known && in.Interpretation != Composed {
-		// R67, R73: a need for a finding (a result, a photo) is an inspection
+		// D72: a need for a finding (a result, a photo) is an inspection
 		// whose result is not reported, not "not possible".
 		if g, ok := e.Cat.GapByID(in.Need); ok && g.Finding {
 			if k, ok := e.Cat.FindingKind(e.lookFor(in.LookFor, se.Text)); ok {

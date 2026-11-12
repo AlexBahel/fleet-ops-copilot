@@ -23,9 +23,9 @@ limitations under the License.
 // write anything (its ServiceAccount can only get and list ApprovalRequests).
 //
 // There is no login. fleetops-mcp decides the requester from the caller's bearer
-// token (R39). The page sends none, so the name typed in it is recorded as
+// token (D57). The page sends none, so the name typed in it is recorded as
 // requestedFor "unverified:<name>", and the policy refuses to approve any
-// request with an unverified requester (R38): a request filed from the page
+// request with an unverified requester (D56): a request filed from the page
 // can be rejected, or left to expire, but never approved. A client that sends
 // "Authorization: Bearer <the person's token>" to /api/chat (fleetops chat) has it
 // forwarded to fleetops-mcp, which verifies it with a TokenReview.
@@ -262,7 +262,7 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
-	// fleetops-mcp decides the requester from the token (R39). Without one, the
+	// fleetops-mcp decides the requester from the token (D57). Without one, the
 	// typed name is only asserted and every request it files is unverified.
 	requester := ""
 	if token == "" {

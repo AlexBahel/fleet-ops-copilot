@@ -1,4 +1,4 @@
-# Regression for BACKLOG-v4 P8 (D85): the reading Sonnet 5.5 and Qwen2.5-7B
+# Regression for D85: the reading Sonnet 5.5 and Qwen2.5-7B
 # gave in guided-12 runs 1-3, the rounds as "repeat". The engine refuses the
 # unknown field and names the allowed ones; the model calls again with
 # "times". Before D85 the field was dropped and the patrol ran 1 round.

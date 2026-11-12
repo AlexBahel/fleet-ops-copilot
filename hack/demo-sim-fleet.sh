@@ -3,10 +3,10 @@
 # Licensed under the Apache License, Version 2.0 (see LICENSE).
 #
 # hack/demo-sim-fleet.sh start|stop — keeps the Swarmada quickstart's simulated
-# fleet live on the demo stack (R73, BACKLOG-v4 P4).
+# fleet live on the demo stack (D59).
 #
 # The quickstart stops its sim adapter when it exits, so every Robot goes
-# Offline and nothing can be filed (the filing check, R65). start runs one
+# Offline and nothing can be filed (the filing check, D73). start runs one
 # adapters/simulation/sim_adapter.py per robot, as the quickstart's own
 # all-live path does (one FleetAdapter identity per process: Swarmada keys a
 # live stream by adapter name, config/overlays/demo-ab-live), in the
@@ -18,7 +18,7 @@
 #   2. the client certificates of sim-fleet-adapter-2 and -3 (the pinned
 #      tree's demo-ab-live overlay) and FleetAdapters with sim-fleet-adapter's
 #      spec;
-#   3. the port-forward, then for each robot (BACKLOG-v4 P13): the Robot is
+#   3. the port-forward, then for each robot: the Robot is
 #      pointed at its adapter before the adapter that stays is started, so
 #      its first register is authorized (Swarmada refuses a register from an
 #      adapter the Robot does not name, and the sim adapter does not retry a
@@ -181,7 +181,7 @@ adapter_proc() {
 }
 
 # point INDEX: the Robot names its adapter before the adapter that stays
-# starts (P13). Swarmada's Robot webhook admits only a Connected adapter, so a
+# starts. Swarmada's Robot webhook admits only a Connected adapter, so a
 # connect process of the adapter runs while the Robot is pointed, then stops.
 point() {
   local i="$1" r="${robots[$1]}" a="${adapters[$1]}" waited=0

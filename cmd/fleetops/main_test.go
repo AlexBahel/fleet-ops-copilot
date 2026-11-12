@@ -75,7 +75,7 @@ current-context: kind-fleetops-test
 	return p
 }
 
-// fleetops chat sends the kubeconfig user's bearer token to fleetops-agent (R39) and
+// fleetops chat sends the kubeconfig user's bearer token to fleetops-agent (D57) and
 // warns when there is none.
 func TestChatSendsTheKubeconfigToken(t *testing.T) {
 	var gotAuth, gotBody string

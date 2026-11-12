@@ -106,7 +106,7 @@ func TestSystemPromptPinned(t *testing.T) {
 	}
 }
 
-// P9: the text of every model response of a message reaches the person, in
+// D84: the text of every model response of a message reaches the person, in
 // order, and the trace records each response's text.
 func TestEveryResponseTextReachesThePerson(t *testing.T) {
 	srv := mcp.NewServer(&mcp.Implementation{Name: "t"}, nil)

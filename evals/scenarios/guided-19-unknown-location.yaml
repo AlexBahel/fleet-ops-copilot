@@ -1,9 +1,9 @@
-# Regression for BACKLOG-v4 P5 (D86): the reading Qwen2.5-7B gave in guided-03
+# Regression for D86: the reading Qwen2.5-7B gave in guided-03
 # run 1, a location that is not a waypoint (receiving-dock). check_task
 # blocks the preview with WAYPOINT_NOT_FOUND and lists the waypoints that
 # exist; the person's "1" cannot file it. Before D86 the preview said likely
 # feasible and the filing was refused by the CRD with an empty reply.
-# S7 (D96): the prompt was guided-02's and guided-03's ("Inspect the
+# D96: the prompt was guided-02's and guided-03's ("Inspect the
 # receiving dock."), which expect inspect's first question, so the reading
 # those scenarios count as correct stalled here. The prompt now names a place
 # that is not a waypoint and the kind.

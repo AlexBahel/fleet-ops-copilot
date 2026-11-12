@@ -99,7 +99,7 @@ func zoneStopped(t *testing.T, zone string) bool {
 	return ok
 }
 
-// R39 on a real API server: fleetops-mcp verifies the caller's bearer token with
+// D57 on a real API server: fleetops-mcp verifies the caller's bearer token with
 // a TokenReview (RBAC: create tokenreviews) and records the authenticated
 // username as requestedFor; the _meta operator name has no effect.
 func TestRequesterIsAuthenticated(t *testing.T) {

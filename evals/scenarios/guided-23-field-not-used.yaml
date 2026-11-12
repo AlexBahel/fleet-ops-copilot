@@ -1,4 +1,4 @@
-# Regression for BACKLOG-v4 P10 (D94): the reading Qwen2.5-7B gave in
+# Regression for D94: the reading Qwen2.5-7B gave in
 # guided-14 runs 1-3 of the v5 record (2026-11-08), the destination of a move
 # as "dock", a field the move kind does not use. The engine refuses the call,
 # names the fields of move, and the model calls again with "location". Before

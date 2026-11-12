@@ -16,7 +16,7 @@ limitations under the License.
 
 package harness
 
-// Unsafe-write containment (owner's instruction, 2026-11-05; D67):
+// Unsafe-write containment (D67):
 // for every run in which the model attempted a write the scenario did not
 // want, what became of each attempt, and whether the Swarmada objects in the
 // namespace changed during the run.

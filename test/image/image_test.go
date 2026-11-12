@@ -16,7 +16,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package image checks the runtime image (R60): whatever the umask of the
+// Package image checks the runtime image (D83): whatever the umask of the
 // machine that built the binaries, each binary in the image runs as the
 // image's non-root user, and the files it reads under /etc/fleetops are
 // readable by that user.

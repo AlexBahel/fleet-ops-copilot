@@ -321,7 +321,7 @@ func TestApprovalPathDraftAndActivation(t *testing.T) {
 		t.Fatal("eve activated the draft")
 	}
 	// dana activates with a plain kubectl-style merge patch, not fleetops activate:
-	// it works, and is recorded as such (R72).
+	// it works, and is recorded as such (D79).
 	if err := mergePatch(t, asPerson(t, "dana"), &task, map[string]any{"spec": map[string]any{"draft": false}}); err != nil {
 		t.Fatalf("dana's activation refused: %v", err)
 	}

@@ -42,7 +42,7 @@ import (
 
 // chat sends one message to fleetops-agent's /api/chat with the caller's own
 // bearer token from their kubeconfig, so fleetops-mcp records the authenticated
-// person as the requester (R39). A kubeconfig user with no bearer token (for
+// person as the requester (D57). A kubeconfig user with no bearer token (for
 // example a client certificate) sends none, and any request is then
 // unverified and can never be approved.
 func chat(ctx context.Context, args []string, stdout, stderr io.Writer) error {

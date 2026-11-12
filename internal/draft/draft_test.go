@@ -38,7 +38,7 @@ func payload(t *testing.T, a swarmv1.FleetActionSpec) map[string]any {
 }
 
 // An inspection carries its location as waypoint, x and y in the payload,
-// with what to look for and the person's words (BACKLOG-v4 P1).
+// with what to look for and the person's words (D77).
 func TestInspectPayload(t *testing.T) {
 	task, err := Task("warehouse-a", &fleetopsv1.DraftTaskParams{TaskName: "inspect-dock", Actions: []fleetopsv1.DraftAction{{
 		Name: "inspect", Type: "Navigate", RequiredCapabilities: []string{"navigation", "camera_front"},

@@ -41,8 +41,8 @@ import (
 // SystemPromptVersion names what the model is told: the SystemPrompt text
 // and the tool descriptions it is offered. Evaluation results record it with
 // the prompt's SHA-256 and the tool list's (docs/DESIGN.md D46, D66, D81).
-// v2 (2026-11-04) added three sentences (P1-P3). v3 (2026-11-05, R46)
-// described every namespace parameter. v4 (2026-11-06, D81, R62-R69): the
+// v2 (2026-11-04, D46) added three sentences. v3 (2026-11-05, D66)
+// described every namespace parameter. v4 (2026-11-06, D70-D81): the
 // model reads a request through propose_task and is offered no write tool;
 // the copilot asks, previews and files after the person's confirmation.
 // v5 (2026-11-07, D90) keeps the v4 text; propose_task's schema is

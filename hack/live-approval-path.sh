@@ -5,7 +5,7 @@
 # Runs test/live against a kind cluster that runs Swarmada v0.4 and the
 # copilot (make demo, or make deploy-kind). The people are the fictional sam,
 # dana and eve with bearer tokens from the static token file hack/kind-people.sh
-# made (R43, test only): requests are filed with sam's or dana's own token, so
+# made (D60, test only): requests are filed with sam's or dana's own token, so
 # the requester is verified (D57), and dana approves with her token's
 # kubeconfig. The script binds the people's roles in warehouse-a
 # (hack/kind-people.sh bind), port-forwards fleetops-mcp, and runs `make test-live-go`.

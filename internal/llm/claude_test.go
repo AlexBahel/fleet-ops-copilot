@@ -85,7 +85,7 @@ func TestNewClaudeNeedsKeyFromEnv(t *testing.T) {
 	}
 }
 
-// R20: the recorded settings come from the request fields Chat sends.
+// D43: the recorded settings come from the request fields Chat sends.
 func TestClaudeSettingsRecordWhatIsSent(t *testing.T) {
 	t.Setenv("ANTHROPIC_API_KEY", "test")
 	c, err := NewClaude("claude-sonnet-5-5", "medium")

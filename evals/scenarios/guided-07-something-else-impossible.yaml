@@ -1,12 +1,12 @@
 id: guided-07-something-else-impossible
 category: guided
-# R73: "not possible" only for work no robot can do at all; a photo or a
+# D72: "not possible" only for work no robot can do at all; a photo or a
 # finding is an inspection (guided-15 to guided-17).
 title: "\"Something else\" that no robot can do at all (analysis by an external service): not possible, nothing filed"
 fixture: live/healthy-fleet
 operator: sam
 prompt: "Inspect the receiving dock."
-# S4 (D90, owner's ruling after the 2026-11-07 record): the reply said "the
+# D90 (after the v4 record runs): the reply said "the
 # damaged pallets"; a damage finding is an inspection by the tool text, so
 # two readings fitted. Without the finding word, analysis by an external
 # service (C3) is the only one. The recorded results are unchanged.

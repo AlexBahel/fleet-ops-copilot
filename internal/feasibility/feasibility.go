@@ -41,7 +41,7 @@ const (
 	Blocked        = "blocked"
 )
 
-// Statement is shown with every verdict (R65).
+// Statement is shown with every verdict (D73).
 const Statement = "Checked against current fleet state; Swarmada's own acceptance is checked at execution."
 
 // Check outcomes (api/v1alpha1 CheckRecord).
@@ -131,11 +131,11 @@ var AlwaysNotChecked = []string{
 	"filter 10: stops reported by adapters, and duplicate wire robot ids",
 }
 
-// ConfigNotChecked is listed when SwarmadaConfig could not be read (R66).
+// ConfigNotChecked is listed when SwarmadaConfig could not be read (D80).
 const ConfigNotChecked = "namespace-wide stop and Pending cap not checked"
 
 // Config is the projection of the namespace's SwarmadaConfig: the stop
-// markers and the Pending cap, nothing else (R66, R69). The object itself is
+// markers and the Pending cap, nothing else (D80). The object itself is
 // never kept, logged or traced.
 type Config struct {
 	Read          bool

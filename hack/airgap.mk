@@ -91,7 +91,7 @@ verify-egress-baseline: ## Same probe in a namespace WITHOUT the policy: must re
 	$(KCTL) create namespace fleetops-egress-baseline --dry-run=client -o yaml | $(KCTL) apply -f -
 	$(KCTL) -n fleetops-egress-baseline delete job fleetops-egress-probe --ignore-not-found --wait
 	sed -e 's|value: "http://llama-server:8080/health"|value: ""|' -e 's|value: "https://kubernetes.default.svc:443/healthz"|value: ""|' config/airgap/egress-probe.yaml | $(KCTL) -n fleetops-egress-baseline apply -f -
-	@# No control and no policy sentinel: no policy here, so no wait (R40).
+	@# No control and no policy sentinel: no policy here, so no wait (D63).
 	@res=unfinished; for i in $$(seq 1 60); do \
 		s="$$($(KCTL) -n fleetops-egress-baseline get job fleetops-egress-probe -o jsonpath='{.status.succeeded}')"; \
 		f="$$($(KCTL) -n fleetops-egress-baseline get job fleetops-egress-probe -o jsonpath='{.status.failed}')"; \

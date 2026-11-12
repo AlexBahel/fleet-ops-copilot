@@ -1,10 +1,10 @@
-# Regression for BACKLOG-v4 P11 (D93): the reading every model gave in
+# Regression for D93: the reading every model gave in
 # dispatch-06 runs 1-3 of the v5 record (2026-11-08), a delivery with
 # priority Critical, which propose_task's v5 schema offered and the policy
 # refuses. The engine refuses it before any question, with the policy's
 # code and allowed values. Before D93 it asked "From where to where?" and the
 # policy refusal came only from check_task, after the questions.
-# S8 (D100): since D93 the schema offers no Critical, so a model may refuse
+# D100: since D93 the schema offers no Critical, so a model may refuse
 # in its own words without calling propose_task, the reading dispatch-06
 # counts as correct; either refusal passes. The script still makes the call,
 # so the scripted run exercises the engine's refusal.

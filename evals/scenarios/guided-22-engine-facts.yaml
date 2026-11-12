@@ -1,8 +1,7 @@
 # Regression for the v5 record runs (2026-11-08, D92): runs in which the
 # model wrote no text failed on a fact fleetops-agent had read itself, most
 # often a Robot's status.phase=Idle for a robot the preview did not name
-# ("Eligible now: inspect: sim-robot-001"; evals/results/comparison-v5.md,
-# "fact not cited, no model prose"). Here the model writes no text and makes
+# ("Eligible now: inspect: sim-robot-001"). Here the model writes no text and makes
 # no read; the preview's "Checked:" block states every robot the engine
 # considered, with its phase and why it is eligible or not.
 id: guided-22-engine-facts

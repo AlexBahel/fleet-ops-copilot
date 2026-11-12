@@ -44,7 +44,7 @@ import (
 type Session struct {
 	ID string
 	// Operator is the requester: the username of the caller's verified bearer
-	// token, or "unverified:<asserted name>" (internal/authn, R39).
+	// token, or "unverified:<asserted name>" (internal/authn, D57).
 	Operator string
 	Verified bool
 	// Unverified is why the requester is not verified; empty when verified.

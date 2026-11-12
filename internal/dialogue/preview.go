@@ -24,7 +24,7 @@ import (
 	"github.com/AlexBahel/fleet-ops-copilot/internal/tools"
 )
 
-// ResultNotReported is shown for a class (b) kind (R67).
+// ResultNotReported is shown for a class (b) kind (D70).
 const ResultNotReported = "Swarmada records arrival and completion, not what the robot found; a person reviews the result on the robot's side."
 
 // ComposedNote is shown for a composed request (D72).

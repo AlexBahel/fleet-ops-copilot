@@ -6,7 +6,7 @@
 # list ApprovalRequests: the page shows the `fleetops approve` / `fleetops reject`
 # command a person runs with their own kubeconfig; it cannot decide.
 # There is no login, so the typed operator name is recorded as an unverified
-# requester and requests filed from the page can never be approved (R38). The
+# requester and requests filed from the page can never be approved (D56). The
 # Service stays ClusterIP and the chart renders no Ingress; reach it with
 # `kubectl port-forward` (docs/RUNBOOK.md).
 ---

@@ -1,4 +1,4 @@
-# Regression for BACKLOG-v4 P9 (D84): the fact is cited in a model response
+# Regression for D84: the fact is cited in a model response
 # before the one that calls propose_task, which says nothing itself. The
 # person sees both; before D84 only the last response's text was shown.
 id: guided-18-earlier-text-shown

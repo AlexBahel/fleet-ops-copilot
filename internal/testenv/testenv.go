@@ -86,7 +86,7 @@ const (
 	EstopActorAnn    = "swarmada.io/estop-actor"
 	EstopInForceFinz = "swarmada.io/estop-in-force"
 	// OperatorNS holds one ServiceAccount per eval operator; the harness mints
-	// its bearer token with the TokenRequest API (R39).
+	// its bearer token with the TokenRequest API (D57).
 	OperatorNS = "fleetops-eval-operators"
 )
 
@@ -99,7 +99,7 @@ func OperatorIdentity(operator string) string {
 // Person is an authenticated user with RoleBindings in SwarmNS. Each one has
 // a client certificate and a static bearer token (--token-auth-file) for the
 // same username and groups, so a person can also be the verified requester
-// of a tool call (R39).
+// of a tool call (D57).
 type Person struct {
 	Name   string
 	Groups []string

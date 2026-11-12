@@ -47,7 +47,7 @@ func readFile(t *testing.T, p string) string {
 
 var tokenLine = regexp.MustCompile(`^([0-9a-f]{48}),([a-z]+),([a-z]+),"([a-z-]+)"$`)
 
-// R43: gen writes the kube-apiserver static token file, mode 600, one random
+// D60: gen writes the kube-apiserver static token file, mode 600, one random
 // token per person, and keeps an existing file.
 func TestKindPeopleGen(t *testing.T) {
 	e := newEnv(t)
@@ -435,7 +435,7 @@ func TestDemoUpDefaultDirectoryIsOutsideRepo(t *testing.T) {
 	}
 }
 
-// R59: a real make demo run stops at the tools stage, before any cluster
+// D82: a real make demo run stops at the tools stage, before any cluster
 // command, when the Python the quickstart will use cannot import grpc.
 func TestDemoUpStopsWhenQuickstartPythonLacksGrpc(t *testing.T) {
 	e := newEnv(t)

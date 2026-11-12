@@ -39,7 +39,7 @@ import (
 // Meta keys the agent loop sets on every tools/call. The model cannot set
 // them: they are request metadata, not tool arguments. MetaOperator is only
 // the name the client asserts: the requester is decided from the caller's
-// bearer token (internal/authn, R39), and the asserted name appears only in
+// bearer token (internal/authn, D57), and the asserted name appears only in
 // an unverified requester.
 const (
 	MetaSession  = "fleetops.alexbahel.github.io/session"
@@ -134,7 +134,7 @@ func (b bearer) RoundTrip(r *http.Request) (*http.Response, error) {
 func boolp(b bool) *bool { return &b }
 
 // NamespaceDescription is the description of every tool's namespace
-// parameter (R46, v3): it names the namespace the tools use when the
+// parameter (D66): it names the namespace the tools use when the
 // parameter is omitted and says that other namespaces are refused (requests
 // by policy, DENY_NAMESPACE; reads by the API server, since fleetops-mcp holds no
 // permission there). A model that does not know the namespace otherwise
@@ -279,7 +279,7 @@ func ListTools(ctx context.Context, srv *mcp.Server) ([]*mcp.Tool, error) {
 // ToolsDigest is the SHA-256 of the tools srv serves that a model is offered
 // (name, description and input schema of each, sorted by name), together
 // with extra tools the agent adds (propose_task): what the model is told
-// besides the system prompt. Evaluation results record it (R46).
+// besides the system prompt. Evaluation results record it (D66).
 func ToolsDigest(ctx context.Context, srv *mcp.Server, extra ...*mcp.Tool) (string, error) {
 	served, err := ListTools(ctx, srv)
 	if err != nil {

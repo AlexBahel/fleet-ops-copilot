@@ -2,7 +2,7 @@
 # the cluster. The Job SUCCEEDS when every attempt is blocked, and FAILS when
 # any is answered, so "Complete" is the evidence that egress is denied.
 #
-# Order (R40):
+# Order (D63):
 #   1. at start: one attempt at each external target, printed and NOT counted.
 #      On some CNIs a new pod's egress is open until its policy is programmed
 #      (kindnet: up to ~1.2 s, docs/KNOWN-LIMITS.md); this line shows it.

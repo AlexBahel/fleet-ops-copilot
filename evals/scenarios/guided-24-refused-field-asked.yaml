@@ -1,4 +1,4 @@
-# Regression for BACKLOG-v4 P12 (D98): Qwen2.5-7B repeated a call D94 refused
+# Regression for D98: Qwen2.5-7B repeated a call D94 refused
 # in 26 runs of the v6 record (2026-11-08), up to the 12-turn limit. The field
 # is the one of its first call in guided-23 run 3 (dock on a move), here
 # repeated. The engine refuses it twice; the third call is applied without

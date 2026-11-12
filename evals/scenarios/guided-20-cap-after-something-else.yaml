@@ -1,4 +1,4 @@
-# Regression for BACKLOG-v4 P6 (D87): the path Sonnet 5.5 took in guided-06
+# Regression for D87: the path Sonnet 5.5 took in guided-06
 # runs 1-3. After inspect.what, "4" and the open question, the model reads
 # the description as a charge (a new ask, not somethingElse). That is its
 # reading: the charge is previewed with no third question. Before D87 the

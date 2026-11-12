@@ -1,4 +1,4 @@
-# Owner's instruction on phase 0: no quickstart robot declares the carrying
+# D73: no quickstart robot declares the carrying
 # capability transport.payload.
 id: guided-10-deliver-no-carrier
 category: guided

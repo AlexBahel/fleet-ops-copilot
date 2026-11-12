@@ -17,7 +17,7 @@ rules:
     resources: [robots, fleettasks, fleetactions, fleetzones, zonemaintenances, discoveredrobots, fleetadapters, robotclasses, tasktriggers]
     verbs: [get, list, watch]
   # check_task reads the namespace stop markers and maxPendingActionsPerZone
-  # in code and drops the rest of the object (R66, R69); never through a
+  # in code and drops the rest of the object (D80); never through a
   # model-facing tool.
   - apiGroups: ["swarmada.io"]
     resources: [swarmadaconfigs]
@@ -55,7 +55,7 @@ rules:
     resources: [validatingwebhookconfigurations]
     verbs: [get, list]
   # Authenticate the caller of each tool call: the person's bearer token is
-  # verified with a TokenReview and its username becomes the requester (R39).
+  # verified with a TokenReview and its username becomes the requester (D57).
   - apiGroups: ["authentication.k8s.io"]
     resources: [tokenreviews]
     verbs: [create]
@@ -71,7 +71,7 @@ rules:
     resources: [robots, fleettasks, fleetactions, fleetzones, zonemaintenances, fleetadapters]
     verbs: [get, list, watch]
   # The execution re-check reads the namespace stop markers and the Pending
-  # cap (R66), as check_task does.
+  # cap (D80), as check_task does.
   - apiGroups: ["swarmada.io"]
     resources: [swarmadaconfigs]
     verbs: [get, list]
@@ -80,7 +80,7 @@ rules:
     verbs: [create]
   # Dry runs only: before an approved draft is created, each member is
   # dry-run as a FleetAction so Swarmada's catalog check and Pending cap
-  # answer (R65, D76). The fleetops-approvals-dry-run-only admission
+  # answer (D76). The fleetops-approvals-dry-run-only admission
   # policy refuses any FleetAction create that is not a dry run.
   - apiGroups: ["swarmada.io"]
     resources: [fleetactions]

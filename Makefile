@@ -79,7 +79,7 @@ KIND_CLUSTER ?=
 IMG ?= fleet-ops-copilot:dev
 ARCH ?= $(shell $(GO) env GOARCH)
 
-test-image: ## Build the binaries under umask 077 and the image, then run each binary in it as user 65532 (R60; needs Docker)
+test-image: ## Build the binaries under umask 077 and the image, then run each binary in it as user 65532 (D83; needs Docker)
 	$(GO) test -tags image -count=1 -v ./test/image
 
 image: ## Build the fleetops-mcp/fleetops-approvals/fleetops-agent image (binaries built on the host, see Dockerfile)

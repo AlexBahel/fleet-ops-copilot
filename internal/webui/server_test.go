@@ -141,7 +141,7 @@ func TestChatAnswersAndReportsPolicy(t *testing.T) {
 		t.Fatalf("%d %+v", code, out)
 	}
 	// No token: the typed name is passed on only as asserted, and the page is
-	// told it will be recorded unverified (fleetops-mcp marks it, R39).
+	// told it will be recorded unverified (fleetops-mcp marks it, D57).
 	if r.got[0] != "|jane@example.com|"+out.SessionID+"|stop aisle-b" || out.Requester != "unverified:jane@example.com" {
 		t.Fatalf("runner got %q", r.got[0])
 	}
@@ -352,7 +352,7 @@ func TestChatFilesRequestThatPanelShows(t *testing.T) {
 	v := rr.Items[0]
 	name := strings.TrimPrefix(out.ToolCalls[0].Created, "ApprovalRequest/")
 	// Filed from the page, so the requester is unverified: the panel offers
-	// only rejection and says why (R38).
+	// only rejection and says why (D56).
 	if v.Name != name || v.State != "Pending" || v.RequestedFor != "unverified:jane@example.com" || v.SessionID != out.SessionID ||
 		v.Approve != "" || v.Reject != "fleetops reject "+name+" -n warehouse-a" || !strings.Contains(v.Unapprovable, "DENY_REQUESTER_UNVERIFIED") {
 		t.Fatalf("view %+v", v)

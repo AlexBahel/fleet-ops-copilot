@@ -112,7 +112,7 @@ func TestNeverGuaranteed(t *testing.T) {
 	}
 }
 
-// Owner's instruction on phase 0: a Charge for a robot below its battery
+// D73: a Charge for a robot below its battery
 // floor is a named blocker with its reason and alternatives.
 func TestChargeBelowFloor(t *testing.T) {
 	s := fleet()
@@ -131,7 +131,7 @@ func TestChargeBelowFloor(t *testing.T) {
 	}
 }
 
-// Owner's instruction on phase 0: a deliver no robot can carry.
+// D73: a deliver no robot can carry.
 func TestDeliverWithoutCarryingRobot(t *testing.T) {
 	r := Evaluate(Proposal{Creating: true, Task: task(t,
 		fleetopsv1.DraftAction{Name: "pickup", Type: "PickUp", RequiredCapabilities: []string{"navigation", "transport.payload"}, Location: dock},
@@ -222,7 +222,7 @@ func TestActivateAndMaintenanceAndStop(t *testing.T) {
 	}
 }
 
-// R66/R69: only the stop markers and the Pending cap survive the projection,
+// D80: only the stop markers and the Pending cap survive the projection,
 // and without the read the report says what was not checked.
 func TestConfigProjectionAndNotChecked(t *testing.T) {
 	cfg := swarmv1.SwarmadaConfig{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{estopProcessed: "1"}}}

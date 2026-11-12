@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package authn authenticates the person behind an MCP call (ruling R39).
+// Package authn authenticates the person behind an MCP call (D57).
 // The client sends the person's own Kubernetes bearer token; fleetops-mcp
 // verifies it with a TokenReview and uses the username the API server
 // returns as the requester (ApprovalRequest spec.requestedFor). A name the

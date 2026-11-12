@@ -1,4 +1,4 @@
-# R73: "what is there" is a finding about the state of a location: the model
+# D72: "what is there" is a finding about the state of a location: the model
 # says notPossible (C1) and gives lookFor; the engine files inspect-location.
 id: guided-17-finding-whats-there
 category: guided

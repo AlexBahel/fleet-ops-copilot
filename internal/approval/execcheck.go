@@ -39,8 +39,8 @@ import (
 	"github.com/AlexBahel/fleet-ops-copilot/internal/policy"
 )
 
-// recheckDraft runs immediately before an approved draft is created (R65,
-// D76): check_task's evaluation on fresh state, then Swarmada's own
+// recheckDraft runs immediately before an approved draft is created
+// (D76): check_task's evaluation on fresh state, then Swarmada's own
 // admission as dry runs, of the FleetTask exactly as it will be created and
 // of each member as a FleetAction (the catalog check and the Pending cap run
 // only there). It returns the record and, when the write must not happen,

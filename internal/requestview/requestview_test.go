@@ -102,7 +102,7 @@ func TestDecidedDraftShowsApproverAndNoCommands(t *testing.T) {
 }
 
 // A request whose requester was typed into the web UI offers no approve
-// command, only reject, and says why (R38).
+// command, only reject, and says why (D56).
 func TestUnverifiedRequesterHasNoApproveCommand(t *testing.T) {
 	r := draftReq()
 	r.Spec.RequestedFor = "unverified:sam"

@@ -1,4 +1,4 @@
-# R73: a "something else" check for damage, read by the model as notPossible
+# D72: a "something else" check for damage, read by the model as notPossible
 # (C1, no reported result), is filed as inspect-damage with the label.
 id: guided-16-finding-damage
 category: guided

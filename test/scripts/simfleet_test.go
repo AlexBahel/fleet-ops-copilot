@@ -35,7 +35,7 @@ import (
 // python3 stands for sim_adapter.py: as Swarmada does, its register is
 // refused when the Robot does not name the robot's adapter at the moment it
 // starts, and the refusal is printed once and never retried, as the sim
-// adapter does (BACKLOG-v4 P13); it then runs until killed. phase is what
+// adapter does; it then runs until killed. phase is what
 // every Robot reports.
 func simFleet(t *testing.T, phase string) (env, string, map[string]string) {
 	t.Helper()
@@ -129,7 +129,7 @@ func waitDead(pid int) bool {
 	return false
 }
 
-// R73: start keeps one adapter per robot and one port-forward running in the
+// D59: start keeps one adapter per robot and one port-forward running in the
 // background, records their PIDs and logs under DEMO_DIR, creates the
 // labelled RobotClass and the two extra FleetAdapters, and stop ends exactly
 // those processes.
@@ -219,7 +219,7 @@ func TestSimFleetStartStop(t *testing.T) {
 	}
 }
 
-// R73: stop never kills a process that no longer runs what was recorded (a
+// D59: stop never kills a process that no longer runs what was recorded (a
 // reused PID).
 func TestSimFleetStopLeavesOtherProcessesAlone(t *testing.T) {
 	e, work, vars := simFleet(t, "Idle")
@@ -244,7 +244,7 @@ func TestSimFleetStopLeavesOtherProcessesAlone(t *testing.T) {
 	}
 }
 
-// R73: a start whose fleet never becomes live fails, says what is missing,
+// D59: a start whose fleet never becomes live fails, says what is missing,
 // and leaves nothing running.
 func TestSimFleetStartFailsAndCleansUp(t *testing.T) {
 	e, work, vars := simFleet(t, "Offline")
@@ -268,11 +268,11 @@ func TestSimFleetStartFailsAndCleansUp(t *testing.T) {
 	}
 }
 
-// P13: every Robot names its adapter before the adapter that stays starts, so
+// Every Robot names its adapter before the adapter that stays starts, so
 // no register is refused. Swarmada's Robot webhook admits only a Connected
 // adapter, so a Robot that names another one is pointed while a connect
 // process of its adapter runs, and that process is stopped first. Fails on
-// the order before P13 (all adapters started, then the Robots pointed).
+// the earlier order (all adapters started, then the Robots pointed).
 func TestSimFleetPointsEachRobotBeforeItsAdapter(t *testing.T) {
 	e, work, vars := simFleet(t, "Idle")
 	out, err := e.runScript(t, "hack/demo-sim-fleet.sh", vars, "start")
@@ -320,7 +320,7 @@ func TestSimFleetPointsEachRobotBeforeItsAdapter(t *testing.T) {
 	}
 }
 
-// P13: a register that is refused fails start at once, naming the robot, and
+// A register that is refused fails start at once, naming the robot, and
 // leaves nothing running.
 func TestSimFleetStartFailsOnRefusedRegister(t *testing.T) {
 	e, work, vars := simFleet(t, "Idle")

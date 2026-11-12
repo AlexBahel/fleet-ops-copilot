@@ -18,7 +18,7 @@ limitations under the License.
 //
 // The requester of every call is the username of the caller's bearer token
 // (Authorization header), verified with a TokenReview; without a verified
-// token it is "unverified:<asserted name>", which is never approved (R39).
+// token it is "unverified:<asserted name>", which is never approved (D57).
 // Over stdio there is no header, so every requester is unverified.
 package main
 

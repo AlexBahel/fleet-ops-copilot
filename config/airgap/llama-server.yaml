@@ -18,7 +18,7 @@
 # context across slots), --jinja (required for tool calling), --threads left
 # at the server default. fleetops-eval -backend llamacpp -llama-context records the
 # args, the resources below, /props (n_ctx, total_slots, build) and the thread
-# count from this container's log in backendSettings (R41, D64).
+# count from this container's log in backendSettings (D64).
 apiVersion: apps/v1
 kind: Deployment
 metadata:

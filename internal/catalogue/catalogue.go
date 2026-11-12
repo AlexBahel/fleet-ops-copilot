@@ -29,10 +29,10 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// SomethingElse is the label every choice list ends with (R64, R69).
+// SomethingElse is the label every choice list ends with (D71).
 const SomethingElse = "Something else — describe it"
 
-// MaxQuestions is the cap on questions before the preview (R64).
+// MaxQuestions is the cap on questions before the preview (D71).
 const MaxQuestions = 2
 
 // MaxChoices is the number of choices a question may offer besides SomethingElse.
@@ -121,7 +121,7 @@ type Kind struct {
 	// Class is a or b (docs/DESIGN.md §3.10.1).
 	Class string `json:"class"`
 	// ResultReported is false for class (b): Swarmada records arrival and
-	// completion, not what the robot found (R67).
+	// completion, not what the robot found (D70).
 	ResultReported       bool              `json:"resultReported"`
 	Request              string            `json:"request"`
 	RequiredCapabilities []string          `json:"requiredCapabilities,omitempty"`
@@ -197,11 +197,11 @@ type Gap struct {
 	// (a result, a photo): a request that needs it is still an inspection,
 	// filed as the class (b) inspect kind for what it looks for, with the
 	// "not reported" label and Say shown in the preview. It is never a
-	// reason for "not possible" (R67, R73).
+	// reason for "not possible" (D72).
 	Finding bool `json:"finding,omitempty"`
 }
 
-// classB is a kind Swarmada runs but whose result it does not report (R67).
+// classB is a kind Swarmada runs but whose result it does not report (D70).
 const classB = "b"
 
 // GapByID returns a notYetPossible entry.
@@ -231,7 +231,7 @@ func (c *Catalogue) LookForWords() []string {
 }
 
 // FindingKind returns the class (b) kind whose lookFor is exactly the given
-// set, in any order (R73).
+// set, in any order (D72).
 func (c *Catalogue) FindingKind(lookFor []string) (*Kind, bool) {
 	want := slices.Clone(lookFor)
 	slices.Sort(want)

@@ -74,7 +74,7 @@ const (
 
 // UnverifiedPrefix marks a requester (spec.requestedFor) whose identity no
 // one authenticated, such as a name typed into fleetops-agent's web UI, which has
-// no login. Approval of such a request is always refused (R38); rejection is
+// no login. Approval of such a request is always refused (D56); rejection is
 // allowed. A hard invariant: no policy file setting changes it.
 const UnverifiedPrefix = "unverified:"
 

@@ -2,7 +2,7 @@
 # Copyright 2026 Alex Bahel
 # Licensed under the Apache License, Version 2.0 (see LICENSE).
 #
-# Person identities with bearer tokens on a kind cluster (ruling R43, TEST
+# Person identities with bearer tokens on a kind cluster (D60, TEST
 # ONLY): the fictional people sam, dana and eve authenticate through the API
 # server's static token file, as they do in envtest (internal/testenv
 # DefaultPeople). A person with a token can be the verified requester of a

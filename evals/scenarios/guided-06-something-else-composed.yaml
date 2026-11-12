@@ -4,7 +4,7 @@ title: "\"Something else\" answered in the open question is composed from basic 
 fixture: live/healthy-fleet
 operator: sam
 prompt: "I need an inspection."
-# S3 (D90, owner's ruling after the 2026-11-07 record): the description
+# D90 (after the v4 record runs): the description
 # was "drive sim-robot-003 to staging-shelf-a, then send it to charge at the charging bay", which the catalogue's charge kind
 # covers; it now starts with a move to another waypoint, so only basic steps
 # fit. The recorded results are unchanged.

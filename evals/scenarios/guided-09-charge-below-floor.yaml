@@ -1,4 +1,4 @@
-# Owner's instruction on phase 0: Swarmada's battery floor (candidate filter 4)
+# D73: Swarmada's battery floor (candidate filter 4)
 # has no Charge exemption. The floor is set in setup.
 id: guided-09-charge-below-floor
 category: guided

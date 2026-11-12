@@ -29,7 +29,7 @@ limitations under the License.
 // $FLEETOPS_LLAMACPP_URL); also a measurement, with no dollar cost. It records
 // llama-server's GET /props (context size, slots, build) in backendSettings,
 // and with -llama-context the Deployment's arguments and resources, the
-// threads the server logged, and the node's capacity (ruling R41).
+// threads the server logged, and the node's capacity (D64).
 package main
 
 import (
@@ -389,7 +389,7 @@ func run(c runConfig) error {
 	defer func() { _ = tf.Close() }()
 	r := &harness.Runner{Env: env, Policy: pol, FixtureDir: fixtureDir, Backend: c.factory, Runs: runs, Live: live, Traces: tf, Catalogue: cat}
 	if live == nil {
-		// Fixture state is fixed in time; so is the clock (S1).
+		// Fixture state is fixed in time; so is the clock (D81).
 		r.Now = func() time.Time { return harness.FixtureClock }
 	}
 	if c.otlp != "" {
@@ -436,7 +436,7 @@ func run(c runConfig) error {
 	}
 	res := harness.Summarize(c.name, runs, envInfo, srs, c.latencyScope)
 	res.BackendSettings = c.settings
-	// The tool list as the harness's fleetops-mcp serves it (R46): with
+	// The tool list as the harness's fleetops-mcp serves it (D66): with
 	// -live-context the deployed fleetops-mcp serves its own, from its flags.
 	digest, err := mcpserver.ToolsDigest(ctx, mcpserver.New(&tools.Service{Engine: policy.New(pol), DefaultNamespace: testenv.SwarmNS}), agent.ProposeMCPTool(cat, dialogue.AllowedBy(pol)))
 	if err != nil {

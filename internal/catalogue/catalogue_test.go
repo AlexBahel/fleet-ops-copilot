@@ -48,7 +48,7 @@ func TestSiteCatalogueLoads(t *testing.T) {
 	}
 }
 
-// TestInspectFirstQuestion pins R64/R69: inspect's first question is exactly
+// TestInspectFirstQuestion pins D71: inspect's first question is exactly
 // 1 Damage · 2 Location · 3 Both · 4 Something else — describe it.
 func TestInspectFirstQuestion(t *testing.T) {
 	c, err := Parse(site(t))
@@ -72,7 +72,7 @@ func TestInspectFirstQuestion(t *testing.T) {
 	}
 }
 
-// TestClassBKindsDoNotReportResults pins R67.
+// TestClassBKindsDoNotReportResults pins D70.
 func TestClassBKindsDoNotReportResults(t *testing.T) {
 	c, err := Parse(site(t))
 	if err != nil {

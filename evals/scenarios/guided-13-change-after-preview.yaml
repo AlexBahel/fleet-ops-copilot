@@ -4,7 +4,7 @@ title: "Change something after the preview: alert on the first failure instead o
 fixture: live/healthy-fleet
 operator: sam
 prompt: "Send a robot to staging-shelf-a."
-# S5 (D90, owner's ruling after the 2026-11-07 record): the prompt was "Send
+# D90 (after the v4 record runs): the prompt was "Send
 # a robot to the charging bay.", which every model read as a charge; an
 # unambiguous move tests the change after the preview. The recorded results
 # are unchanged.

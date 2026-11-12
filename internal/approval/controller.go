@@ -383,7 +383,7 @@ func (r *Reconciler) observeActivation(ctx context.Context, req *fleetopsv1.Appr
 }
 
 // OutsideFleetopsActivate is what fleetops-approvals records when a draft left Draft
-// with no Activation record, e.g. after a plain kubectl patch (R72).
+// with no Activation record, e.g. after a plain kubectl patch (D79).
 const OutsideFleetopsActivate = "activated outside fleetops activate; activator not recorded"
 
 // activationRecord returns the most recent Activation ApprovalDecision for

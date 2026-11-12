@@ -6,7 +6,7 @@
 # cluster, in one command, and the elapsed time at the end.
 #
 #   1. a kind cluster fleetops-demo whose API server has the static token file for
-#      the fictional people sam, dana and eve (R43, test only);
+#      the fictional people sam, dana and eve (D60, test only);
 #   2. Swarmada's warehouse quickstart at the commit go.mod pins;
 #   3. Swarmada's admission webhooks turned on (config/controlstream-tls, the
 #      overlay its `make deploy` applies; docs/RUNBOOK.md section 6);
@@ -14,8 +14,7 @@
 #   4b. hack/demo-sim-fleet.sh start: the simulated fleet kept live (one sim
 #      adapter per robot, in the background; RobotClass simbot-v1 as a
 #      labelled demo workaround), each Robot pointed at its adapter before
-#      that adapter starts, every robot registered and ready for work (R73,
-#      BACKLOG-v4 P13);
+#      that adapter starts, every robot registered and ready for work (D59);
 #   5. the image built on the host and loaded into the cluster;
 #   6. the Helm chart installed into fleetops-system;
 #   7. the people's RoleBindings and token kubeconfigs;
@@ -42,7 +41,7 @@
 #                            from a cluster. Still creates DEMO_DIR with the tokens and the rendered kind
 #                            configuration, and reports missing tools instead of stopping.
 #
-# Run on kind on one machine (docs/evidence/foc-up-2026-11-05/, docs/evidence/live-2026-11-08/).
+# Run on kind on one machine (docs/evidence/live-2026-11-08/).
 set -euo pipefail
 
 repo="$(cd "$(dirname "$0")/.." && pwd)"
@@ -110,7 +109,7 @@ if [[ -n "$missing" ]]; then
     fail "missing tools:$missing"
   fi
 fi
-# R59: the quickstart's simulated adapter runs on this host with the first
+# D82: the quickstart's simulated adapter runs on this host with the first
 # python3 (else python) on PATH, as its run.sh picks it, and imports grpc and
 # google.protobuf. Check that interpreter now, before anything is created.
 py="$(command -v python3 || command -v python || true)"
@@ -132,7 +131,7 @@ fi
 echo "  cluster $CLUSTER (context $ctx), kubeconfig $KUBECONFIG, scenario $scenario"
 
 # ---- 1. people tokens, kind cluster ------------------------------------------
-stage "people tokens (R43, test only)"
+stage "people tokens (D60, test only)"
 "$repo/hack/kind-people.sh" gen "$dir/people"
 
 stage "kind cluster $CLUSTER"
@@ -218,7 +217,7 @@ else
   ((ok)) || fail "scripts/demo-preflight.sh still refuses after 3 minutes (output above)"
 fi
 
-# R73: the quickstart stopped its sim adapter on exit; keep all three robots live.
+# D59: the quickstart stopped its sim adapter on exit; keep all three robots live.
 stage "Swarmada sim fleet: three live adapters"
 x env DEMO_DIR="$dir" SWARMADA_NAMESPACE="$swarm_ns" "$repo/hack/demo-sim-fleet.sh" start
 

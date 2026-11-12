@@ -1,4 +1,4 @@
-# R65/D76: a stop is put on the zone after the request is filed; at execution
+# D76: a stop is put on the zone after the request is filed; at execution
 # check_task finds it and fleetops-approvals refuses with the reason.
 id: guided-11-conditions-change
 category: guided

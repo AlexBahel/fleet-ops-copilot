@@ -46,7 +46,7 @@ func navigateIn(name, zone string) tools.DraftTaskInput {
 	}, Preview: &tools.PreviewInput{Kind: "move", ResultReported: true, CatalogueVersion: 1, CatalogueSHA256: "test"}}
 }
 
-// R65/D76: conditions change after approval (the only eligible robot is
+// D76: conditions change after approval (the only eligible robot is
 // gone), so the executor refuses with the reason and writes nothing.
 func TestExecutorRefusesWhenConditionsChange(t *testing.T) {
 	ctx := context.Background()
@@ -120,7 +120,7 @@ func TestExecutorRecordsDryRuns(t *testing.T) {
 	}
 }
 
-// R69: a FleetAction create by fleetops-approvals that is not a dry run is
+// D76: a FleetAction create by fleetops-approvals that is not a dry run is
 // refused by the admission policy; a dry run is admitted.
 func TestFleetopsApprovalsFleetActionDryRunOnly(t *testing.T) {
 	ctx := context.Background()
@@ -142,7 +142,7 @@ func TestFleetopsApprovalsFleetActionDryRunOnly(t *testing.T) {
 	}
 }
 
-// R69 and D25: fleetops-mcp has no create on any Swarmada resource.
+// D76 and D25: fleetops-mcp has no create on any Swarmada resource.
 func TestFleetopsMcpHasNoCreateOnSwarmada(t *testing.T) {
 	ctx := context.Background()
 	lists, err := env.Discovery().ServerResourcesForGroupVersion("swarmada.io/v1")
@@ -171,7 +171,7 @@ func TestFleetopsMcpHasNoCreateOnSwarmada(t *testing.T) {
 	}
 }
 
-// D79 (R71): fleetops activate records the activation in our own API, as an
+// D79: fleetops activate records the activation in our own API, as an
 // ApprovalDecision of type Activation, then sends the plain spec.draft=false
 // patch. The fleetops-decisions admission policy binds the record to the
 // authenticated caller; a record decides nothing; a record made before the
@@ -262,7 +262,7 @@ func TestActivationRecordIsTheAuthenticatedUser(t *testing.T) {
 	}
 }
 
-// R71: the copilot installs no admission policy that matches the Swarmada
+// D79: the copilot installs no admission policy that matches the Swarmada
 // resources a person activates (fleettasks are matched only for
 // fleetops-approvals' own writes).
 func TestNoCopilotPolicyOnActivation(t *testing.T) {

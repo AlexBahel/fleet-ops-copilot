@@ -20,7 +20,7 @@ export CLUSTER KUBECONFIG
 dir="${DEMO_DIR:-$HOME/.local/state/fleet-ops-copilot/demo}"
 guard_outside_repo demo-down.sh "$dir" "$repo"
 
-# R73: the sim fleet's adapters and port-forward first.
+# D59: the sim fleet's adapters and port-forward first.
 DEMO_DIR="$dir" "$repo/hack/demo-sim-fleet.sh" stop
 if [[ -f "$dir/swarmada/examples/warehouse-quickstart/run.sh" ]]; then
   (cd "$dir/swarmada" && QUICKSTART_CLUSTER="$CLUSTER" bash examples/warehouse-quickstart/run.sh --clean)

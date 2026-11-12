@@ -178,7 +178,7 @@ func TestModelCannotFile(t *testing.T) {
 	}
 }
 
-// A blocked preview cannot be confirmed (owner's instruction on phase 0:
+// A blocked preview cannot be confirmed (D73:
 // Charge below the battery floor).
 func TestBlockedPreviewCannotBeConfirmed(t *testing.T) {
 	r := &swarmv1.Robot{ObjectMeta: metav1.ObjectMeta{Name: "sim-robot-001", Namespace: "warehouse-a"}}
@@ -206,7 +206,7 @@ func TestBlockedPreviewCannotBeConfirmed(t *testing.T) {
 }
 
 // Something else: "4" with a description keeps the words verbatim and the
-// model reads them; not possible (work no robot can do, R73) files nothing.
+// model reads them; not possible (work no robot can do, D72) files nothing.
 func TestSomethingElseFlows(t *testing.T) {
 	c := world(t)
 	_, conv, send := chatFixture(t, c,
@@ -223,7 +223,7 @@ func TestSomethingElseFlows(t *testing.T) {
 	}
 }
 
-// R73: the finding fallback (a model's "not possible" for a photo, mapped to
+// D72: the finding fallback (a model's "not possible" for a photo, mapped to
 // the matching inspect kind) only produces a preview. Nothing is filed on
 // the turn that maps it, nor on a reply that is not a confirmation ("3");
 // the one
@@ -274,7 +274,7 @@ func TestFindingFallbackOnlyPreviewsUntilConfirmed(t *testing.T) {
 	}
 }
 
-// P9: text the model wrote before the response that calls propose_task is
+// D84: text the model wrote before the response that calls propose_task is
 // shown with the engine's preview, before it, and recorded.
 func TestEarlierResponseTextShownWithPreview(t *testing.T) {
 	c := world(t)
@@ -294,7 +294,7 @@ func TestEarlierResponseTextShownWithPreview(t *testing.T) {
 	}
 }
 
-// P8: propose_task's schema lists the catalogue's asks, kinds and field
+// D85: propose_task's schema lists the catalogue's asks, kinds and field
 // names as enums, and no other field name.
 func TestProposeSchemaEnumeratesTheCatalogue(t *testing.T) {
 	cat, err := catalogue.Load("../../catalogue/warehouse-a.yaml")
@@ -335,7 +335,7 @@ func TestProposeSchemaEnumeratesTheCatalogue(t *testing.T) {
 	}
 }
 
-// P8: an unknown field name is refused with a question naming the allowed
+// D85: an unknown field name is refused with a question naming the allowed
 // ones, nothing of that call is applied, and the model's next call with the
 // right name is used (the recorded guided-12 reading: repeat for times).
 func TestUnknownFieldNameRefused(t *testing.T) {
@@ -363,7 +363,7 @@ func TestUnknownFieldNameRefused(t *testing.T) {
 	}
 }
 
-// P5: a location that is not a waypoint of the catalogue's fleet is caught by
+// D86: a location that is not a waypoint of the catalogue's fleet is caught by
 // check_task before the preview is shown: the preview is blocked with
 // WAYPOINT_NOT_FOUND, never "likely feasible", and cannot be confirmed.
 func TestUnknownLocationBlockedBeforeFiling(t *testing.T) {
@@ -386,7 +386,7 @@ func TestUnknownLocationBlockedBeforeFiling(t *testing.T) {
 	}
 }
 
-// P5: when fleetops-mcp refuses the filing with an error (here the API server
+// D86: when fleetops-mcp refuses the filing with an error (here the API server
 // refusing the ApprovalRequest), the person gets the engine's fixed reply
 // saying what was refused and why, never an empty one.
 func TestRefusedFilingIsNeverAnEmptyReply(t *testing.T) {
@@ -418,7 +418,7 @@ func TestRefusedFilingIsNeverAnEmptyReply(t *testing.T) {
 	}
 }
 
-// P7 end to end, a zone-03 reading: start "on approval" is not sent to check_task
+// D88 end to end, a zone-03 reading: start "on approval" is not sent to check_task
 // (which refused it, and kept refusing later calls); the person is asked
 // again and the request is filed after the answer and the confirmation.
 func TestInvalidStartAskedAgainThenFiled(t *testing.T) {
@@ -447,7 +447,7 @@ func TestInvalidStartAskedAgainThenFiled(t *testing.T) {
 	}
 }
 
-// P11 (D93): the schema offers only the catalogue values the site policy
+// D93: the schema offers only the catalogue values the site policy
 // allows: no priority Critical under policies/default.yaml.
 func TestProposeSchemaOffersOnlyWhatThePolicyAllows(t *testing.T) {
 	cat, err := catalogue.Load("../../catalogue/warehouse-a.yaml")
@@ -481,7 +481,7 @@ func TestProposeSchemaOffersOnlyWhatThePolicyAllows(t *testing.T) {
 	}
 }
 
-// P12 (D98): Qwen2.5-7B's dispatch-04 run 1 in the v6 record (trace
+// D98: Qwen2.5-7B's dispatch-04 run 1 in the v6 record (trace
 // e89e129a47afc33ef68d8488e51b748f) made the same propose_task call eleven
 // times, each refused by D94 for zone "Zone/zone-001", and ended with no
 // reply. The model now sees the refusal twice; the third call is applied
@@ -519,7 +519,7 @@ func TestRefusalLoopEndsAfterTwoRefusals(t *testing.T) {
 	}
 }
 
-// P12 (D98): Qwen2.5-7B's first call in guided-23 run 3 of the v6 record
+// D98: Qwen2.5-7B's first call in guided-23 run 3 of the v6 record
 // (trace 24b31da3e740e0cb5a70d474dd06d56d), dock "receiving-dock-1" on a
 // move, repeated. After two refusals the person is asked which of the
 // move's fields holds it, with numbered choices ending with "Something else
@@ -557,7 +557,7 @@ func TestRefusedFieldAskedOfThePerson(t *testing.T) {
 // D93 through fleetops-agent: a value the site policy forbids is refused by
 // the engine, before any question, with DENY_FIELD, the allowed values and
 // the "Checked:" block, and nothing is filed. dispatch-07 no longer requires
-// the call (S8, D100); this test and the scripted dispatch-07 run keep the
+// the call (D100); this test and the scripted dispatch-07 run keep the
 // engine's refusal covered.
 func TestPolicyForbiddenValueRefusedThroughChat(t *testing.T) {
 	c := world(t)

@@ -79,7 +79,7 @@ jobs:
         run: |
           git status --porcelain
           test -z "$(git status --porcelain)"
-      # R60: build the binaries under umask 077 and the image, and run each
+      # D83: build the binaries under umask 077 and the image, and run each
       # binary in it as user 65532. The runner has Docker; the test fails
       # rather than skips when it cannot reach it.
       - name: Image binaries run as the non-root user

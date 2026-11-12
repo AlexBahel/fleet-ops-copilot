@@ -41,7 +41,7 @@ spec:
   validationActions: ["Deny"]
 ---
 # fleetops-approvals may create a FleetAction only as a dry run: Swarmada's
-# admission answers and nothing is stored (R65, D76).
+# admission answers and nothing is stored (D76).
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:

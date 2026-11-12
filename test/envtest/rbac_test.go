@@ -94,7 +94,7 @@ func TestRBACMatrix(t *testing.T) {
 		{mcpUser, sw, "robots", "", "update", false},
 		{mcpUser, fo, "approvalrequests", "", "create", true},
 		{mcpUser, core, "events", "", "list", true},
-		// fleetops-mcp verifies callers' tokens (R39); no other copilot SA can.
+		// fleetops-mcp verifies callers' tokens (D57); no other copilot SA can.
 		{mcpUser, "authentication.k8s.io", "tokenreviews", "", "create", true},
 		{agentUser, "authentication.k8s.io", "tokenreviews", "", "create", false},
 		{approvUser, "authentication.k8s.io", "tokenreviews", "", "create", false},

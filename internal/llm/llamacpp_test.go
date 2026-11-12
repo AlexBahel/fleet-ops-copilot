@@ -620,7 +620,7 @@ func TestReplayArgs(t *testing.T) {
 	}
 }
 
-// R20: the recorded settings come from the request fields Chat sends.
+// D43: the recorded settings come from the request fields Chat sends.
 func TestLlamaCppSettingsRecordWhatIsSent(t *testing.T) {
 	t.Setenv(EnvLlamaCppTemperature, "0.7")
 	l, err := NewLlamaCpp("http://127.0.0.1:1", "")

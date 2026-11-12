@@ -27,7 +27,7 @@ limitations under the License.
 //	FLEETOPS_LIVE_ADMIN_CONTEXT        cluster-admin context (setup reads, tokens, kubectl exec)
 //	FLEETOPS_LIVE_APPROVER_CONTEXT     context of a person who authenticates with a bearer token (dana) and holds fleetops:approver and swarmada:fleet-manager
 //	FLEETOPS_LIVE_TOKENS_FILE          the people's static token file (hack/kind-people.sh gen): requests are filed with the
-//	                              requester's own bearer token, so the requester is verified (D57, R43)
+//	                              requester's own bearer token, so the requester is verified (D57, D60)
 //	FLEETOPS_LIVE_MCP_URL              fleetops-mcp streamable HTTP endpoint, e.g. http://127.0.0.1:18080/mcp
 //	FLEETOPS_LIVE_FLEETOPS                  path to the fleetops binary
 //	FLEETOPS_LIVE_PHASE                "no-webhooks" (Swarmada serves no admission webhooks) or "webhooks"
@@ -520,7 +520,7 @@ func TestLiveApprovalPaths(t *testing.T) {
 		}
 		// The person runs the printed command with their own credentials:
 		// fleetops activate records an Activation ApprovalDecision, then sends the
-		// plain spec.draft=false patch through Swarmada's real webhook (R71).
+		// plain spec.draft=false patch through Swarmada's real webhook (D79).
 		act := e.fleetops(t, strings.Fields(strings.TrimSpace(out[iCmd+1 : iCmd+len(want)]))[1:]...)
 		if !strings.Contains(act, "recorded ApprovalDecision "+req+"-activation-") || !strings.Contains(act, "activated FleetTask "+draft) {
 			t.Fatalf("fleetops activate output:\n%s", act)
@@ -582,7 +582,7 @@ func TestLiveApprovalPaths(t *testing.T) {
 		}
 	})
 
-	// R43/D57 on the live API server: the requester is the person behind the
+	// D57, D60 on the live API server: the requester is the person behind the
 	// bearer token, whatever name _meta asserts; without a token the requester
 	// is unverified:<name> and no one can approve the request.
 	t.Run("requester-is-authenticated-not-asserted", func(t *testing.T) {
@@ -762,7 +762,7 @@ func TestLiveApprovalPaths(t *testing.T) {
 	})
 
 	// Last before the audit record: the zone stop above leaves the zone stopped,
-	// so every subtest that files a draft into it runs before (R65 check).
+	// so every subtest that files a draft into it runs before (the check_task filing check, D73).
 	t.Run("every-write-traces-to-a-named-approval", func(t *testing.T) {
 		// Every object the executor created traces to an approval by a person.
 		var reqs fleetopsv1.ApprovalRequestList

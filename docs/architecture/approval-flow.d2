@@ -3,8 +3,8 @@
 # render with `d2 approval-flow.d2 approval-flow.svg` (see README.md in this directory).
 # Zone maintenance and zone stop follow steps 1-13 with a different write in
 # step 12 and no step 11. fleetops-mcp records as requestedFor the username of the
-# caller's bearer token, verified with a TokenReview (R39); without a verified token
-# it records unverified:<name>, which is refused at step 10 (R38). The web UI sends
+# caller's bearer token, verified with a TokenReview (D57); without a verified token
+# it records unverified:<name>, which is refused at step 10 (D56). The web UI sends
 # no token, so its requests stop there; fleetops chat sends the person's token.
 
 shape: sequence_diagram
@@ -31,7 +31,7 @@ request: "Request (guided, preview confirmed)" {
 
 decide: "Decision (person)" {
   approver -> api: "9. fleetops approve <id>: create ApprovalDecision with own credentials\n(fleetops-decisions: not a ServiceAccount, decidedBy = caller)"
-  approvals -> api: "10. checks: requester not unverified (R38: a request without a verified token, e.g. from the web UI, is refused here);\ndecider != requester; SubjectAccessReview (decider may create fleettasks);\nnot expired; policy re-run on fresh state; status Approved, approvedBy"
+  approvals -> api: "10. checks: requester not unverified (D56: a request without a verified token, e.g. from the web UI, is refused here);\ndecider != requester; SubjectAccessReview (decider may create fleettasks);\nnot expired; policy re-run on fresh state; status Approved, approvedBy"
 }
 
 execute: "Execution (draft)" {

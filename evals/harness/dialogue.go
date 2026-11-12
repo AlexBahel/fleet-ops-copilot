@@ -34,7 +34,7 @@ import (
 	"github.com/AlexBahel/fleet-ops-copilot/internal/testenv"
 )
 
-// MaxQuestions is the cap of questions before the preview (R64).
+// MaxQuestions is the cap of questions before the preview (D71).
 const MaxQuestions = 2
 
 // questionsBeforePreview counts the questions the copilot asked before its
