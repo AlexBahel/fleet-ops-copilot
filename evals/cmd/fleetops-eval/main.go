@@ -78,8 +78,8 @@ const fixturesDir = "evals/fixtures"
 // The llama-server Deployment (and its container) whose settings a llamacpp
 // measurement records with -llama-context, as config/airgap deploys it.
 const (
-	llamaNamespace  = "fleetops-system"
-	llamaDeployment = "llama-server"
+	llamaServerNamespace  = "fleetops-system"
+	llamaServerDeployment = "llama-server"
 )
 
 func main() {
@@ -156,7 +156,7 @@ func main() {
 		if l.RepeatPenalty != nil {
 			cfg.name += fmt.Sprintf(" repeat_penalty=%g", *l.RepeatPenalty)
 		}
-		srv, envExtra, err := llamaServerSettings(l.BaseURL, *llamaCtx, llamaNamespace, llamaDeployment)
+		srv, envExtra, err := llamaServerSettings(l.BaseURL, *llamaCtx, llamaServerNamespace, llamaServerDeployment)
 		if err != nil {
 			log.Fatal(err)
 		}
