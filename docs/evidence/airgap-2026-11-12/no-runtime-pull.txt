@@ -1,0 +1,87 @@
+2026-11-12T17:54:21Z
+== every container spec in namespace fleetops-system (pods present now): image, imagePullPolicy, imageID
+fleetops-agent-7bcb4bc7ff-7gsvx
+  container fleetops-agent image=fleet-ops-copilot:dev imagePullPolicy=IfNotPresent
+  status fleetops-agent imageID=
+fleetops-approvals-6fb55fdcc4-v2h7z
+  container fleetops-approvals image=fleet-ops-copilot:dev imagePullPolicy=IfNotPresent
+  ephemeral egresscheck-1794505456 image=ghcr.io/ggml-org/llama.cpp:server-b12004 imagePullPolicy=IfNotPresent
+  ephemeral egresscheck-1794505655 image=ghcr.io/ggml-org/llama.cpp:server-b12004 imagePullPolicy=IfNotPresent
+  status fleetops-approvals imageID=docker.io/library/import-2026-11-12@sha256:704b7ba728e7616a7f64ab4fcc6de995f73383840beb3b5e930f8dae890cfd7b
+fleetops-conn-check
+  container check image=ghcr.io/ggml-org/llama.cpp:server-b12004 imagePullPolicy=IfNotPresent
+  status check imageID=docker.io/library/import-2026-11-12@sha256:b7504e20ac23be18064401f6e5b4ee0dfbe9fb51a5c7a77dfac2d9cd70fc9cf9
+fleetops-egress-probe-xp6r7
+  container probe image=ghcr.io/ggml-org/llama.cpp:server-b12004 imagePullPolicy=IfNotPresent
+  status probe imageID=docker.io/library/import-2026-11-12@sha256:b7504e20ac23be18064401f6e5b4ee0dfbe9fb51a5c7a77dfac2d9cd70fc9cf9
+fleetops-jaeger-69d95469f8-269tk
+  container jaeger image=jaegertracing/jaeger:2.22.0@sha256:836b967b5abcf1f7758066aa6b348619267a2f1459f72d472840570f9bd88a17 imagePullPolicy=IfNotPresent
+  status jaeger imageID=docker.io/jaegertracing/jaeger@sha256:836b967b5abcf1f7758066aa6b348619267a2f1459f72d472840570f9bd88a17
+fleetops-mcp-85d477589d-phtpp
+  container fleetops-mcp image=fleet-ops-copilot:dev imagePullPolicy=IfNotPresent
+  ephemeral egresscheck-1794505424 image=ghcr.io/ggml-org/llama.cpp:server-b12004 imagePullPolicy=IfNotPresent
+  ephemeral egresscheck-1794505614 image=ghcr.io/ggml-org/llama.cpp:server-b12004 imagePullPolicy=IfNotPresent
+  status fleetops-mcp imageID=docker.io/library/import-2026-11-12@sha256:704b7ba728e7616a7f64ab4fcc6de995f73383840beb3b5e930f8dae890cfd7b
+fleetops-otel-collector-f5f5d9b55-nmqcx
+  container otel-collector image=otel/opentelemetry-collector:0.164.0@sha256:28b6d41ac51bff6b41ba5e8fe503569ffb9d6a1ea90f7a78419e86f34e44f750 imagePullPolicy=IfNotPresent
+  status otel-collector imageID=docker.io/otel/opentelemetry-collector@sha256:28b6d41ac51bff6b41ba5e8fe503569ffb9d6a1ea90f7a78419e86f34e44f750
+llama-server-7bcf974fd6-5hp4k
+  init check-model image=ghcr.io/ggml-org/llama.cpp:server-b12004 imagePullPolicy=IfNotPresent
+  container llama-server image=ghcr.io/ggml-org/llama.cpp:server-b12004 imagePullPolicy=IfNotPresent
+  status llama-server imageID=docker.io/library/import-2026-11-12@sha256:b7504e20ac23be18064401f6e5b4ee0dfbe9fb51a5c7a77dfac2d9cd70fc9cf9
+
+== Deployments' pod templates
+fleetops-agent fleetops-agent image=fleet-ops-copilot:dev imagePullPolicy=IfNotPresent
+fleetops-approvals fleetops-approvals image=fleet-ops-copilot:dev imagePullPolicy=IfNotPresent
+fleetops-jaeger jaeger image=jaegertracing/jaeger:2.22.0@sha256:836b967b5abcf1f7758066aa6b348619267a2f1459f72d472840570f9bd88a17 imagePullPolicy=IfNotPresent
+fleetops-mcp fleetops-mcp image=fleet-ops-copilot:dev imagePullPolicy=IfNotPresent
+fleetops-otel-collector otel-collector image=otel/opentelemetry-collector:0.164.0@sha256:28b6d41ac51bff6b41ba5e8fe503569ffb9d6a1ea90f7a78419e86f34e44f750 imagePullPolicy=IfNotPresent
+llama-server llama-server image=ghcr.io/ggml-org/llama.cpp:server-b12004 imagePullPolicy=IfNotPresent
+
+== events in fleetops-system by reason (all retained events)
+   5 Completed
+  26 Created
+   3 Failed
+   1 FailedScheduling
+   8 Killing
+  29 Pulled
+   2 Pulling
+  14 ScalingReplicaSet
+  21 Scheduled
+  26 Started
+  15 SuccessfulCreate
+   4 SuccessfulDelete
+   6 Unhealthy
+
+== Pulling and Pulled events in fleetops-system
+2026-11-12T17:35:29Z Pulling fleetops-otel-collector-c874476cf-42dkc: Pulling image "otel/opentelemetry-collector:0.164.0@sha256:28b6d41ac51bff6b41ba5e8fe503569ffb9d6a1ea90f7a78419e86f34e44f750"
+2026-11-12T17:35:29Z Pulling fleetops-jaeger-69d95469f8-269tk: Pulling image "jaegertracing/jaeger:2.22.0@sha256:836b967b5abcf1f7758066aa6b348619267a2f1459f72d472840570f9bd88a17"
+2026-11-12T17:35:29Z Pulled fleetops-mcp-fc8949fbd-wvpmc: Container image "fleet-ops-copilot:dev" already present on machine
+2026-11-12T17:35:29Z Pulled fleetops-approvals-86975f7584-vrmwp: Container image "fleet-ops-copilot:dev" already present on machine
+2026-11-12T17:35:29Z Pulled fleetops-agent-7bcb4bc7ff-7gsvx: Container image "fleet-ops-copilot:dev" already present on machine
+2026-11-12T17:35:33Z Pulled fleetops-otel-collector-c874476cf-42dkc: Successfully pulled image "otel/opentelemetry-collector:0.164.0@sha256:28b6d41ac51bff6b41ba5e8fe503569ffb9d6a1ea90f7a78419e86f34e44f750" in 4.13s (4.13s including waiting). Image size: 43069426 bytes.
+2026-11-12T17:35:40Z Pulled fleetops-jaeger-69d95469f8-269tk: Successfully pulled image "jaegertracing/jaeger:2.22.0@sha256:836b967b5abcf1f7758066aa6b348619267a2f1459f72d472840570f9bd88a17" in 6.495s (10.614s including waiting). Image size: 51413034 bytes.
+2026-11-12T17:37:07Z Pulled fleetops-conn-check: Container image "ghcr.io/ggml-org/llama.cpp:server-b12004" already present on machine
+2026-11-12T17:37:42Z Pulled hdrcheck: Container image "ghcr.io/ggml-org/llama.cpp:server-b12004" already present on machine
+2026-11-12T17:37:53Z Pulled hdrcheck2: Container image "ghcr.io/ggml-org/llama.cpp:server-b12004" already present on machine
+2026-11-12T17:38:29Z Pulled fleetops-conn-check: Container image "ghcr.io/ggml-org/llama.cpp:server-b12004" already present on machine
+2026-11-12T17:38:47Z Pulled hdrcheck3: Container image "ghcr.io/ggml-org/llama.cpp:server-b12004" already present on machine
+2026-11-12T17:39:30Z Pulled fleetops-conn-check: Container image "ghcr.io/ggml-org/llama.cpp:server-b12004" already present on machine
+2026-11-12T17:39:39Z Pulled llama-server-7bcf974fd6-5hp4k: Container image "ghcr.io/ggml-org/llama.cpp:server-b12004" already present on machine
+2026-11-12T17:39:40Z Pulled llama-server-7bcf974fd6-5hp4k: Container image "ghcr.io/ggml-org/llama.cpp:server-b12004" already present on machine
+2026-11-12T17:39:50Z Pulled fleetops-mcp-85d477589d-phtpp: Container image "fleet-ops-copilot:dev" already present on machine
+2026-11-12T17:39:50Z Pulled fleetops-approvals-6fb55fdcc4-v2h7z: Container image "fleet-ops-copilot:dev" already present on machine
+2026-11-12T17:40:07Z Pulled fleetops-egress-probe-7lx4n: Container image "ghcr.io/ggml-org/llama.cpp:server-b12004" already present on machine
+2026-11-12T17:40:29Z Pulled fleetops-egress-probe-p6crm: Container image "ghcr.io/ggml-org/llama.cpp:server-b12004" already present on machine
+2026-11-12T17:40:51Z Pulled fleetops-egress-probe-xp6r7: Container image "ghcr.io/ggml-org/llama.cpp:server-b12004" already present on machine
+2026-11-12T17:41:22Z Pulled fleetops-egress-window-dd5wd: Container image "ghcr.io/ggml-org/llama.cpp:server-b12004" already present on machine
+2026-11-12T17:42:24Z Pulled fleetops-egress-window-5cv7g: Container image "ghcr.io/ggml-org/llama.cpp:server-b12004" already present on machine
+2026-11-12T17:43:44Z Pulled fleetops-mcp-85d477589d-phtpp: Container image "ghcr.io/ggml-org/llama.cpp:server-b12004" already present on machine
+2026-11-12T17:44:16Z Pulled fleetops-approvals-6fb55fdcc4-v2h7z: Container image "ghcr.io/ggml-org/llama.cpp:server-b12004" already present on machine
+2026-11-12T17:44:49Z Pulled fleetops-otel-collector-c874476cf-42dkc: Container image "ghcr.io/ggml-org/llama.cpp:server-b12004" already present on machine
+2026-11-12T17:46:54Z Pulled fleetops-mcp-85d477589d-phtpp: Container image "ghcr.io/ggml-org/llama.cpp:server-b12004" already present on machine
+2026-11-12T17:47:35Z Pulled fleetops-approvals-6fb55fdcc4-v2h7z: Container image "ghcr.io/ggml-org/llama.cpp:server-b12004" already present on machine
+2026-11-12T17:48:22Z Pulled fleetops-otel-collector-c874476cf-42dkc: Container image "ghcr.io/ggml-org/llama.cpp:server-b12004" already present on machine
+2026-11-12T17:50:41Z Pulled fleetops-otel-collector-6f756ff7bc-77mxx: Container image "otel/opentelemetry-collector:0.164.0@sha256:28b6d41ac51bff6b41ba5e8fe503569ffb9d6a1ea90f7a78419e86f34e44f750" already present on machine
+2026-11-12T17:51:38Z Pulled fleetops-otel-collector-6f756ff7bc-77mxx: Container image "ghcr.io/ggml-org/llama.cpp:server-b12004" already present on machine
+2026-11-12T17:52:51Z Pulled fleetops-otel-collector-f5f5d9b55-nmqcx: Container image "otel/opentelemetry-collector:0.164.0@sha256:28b6d41ac51bff6b41ba5e8fe503569ffb9d6a1ea90f7a78419e86f34e44f750" already present on machine

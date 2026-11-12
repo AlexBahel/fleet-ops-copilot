@@ -1,0 +1,25 @@
+2026-11-12T17:39:39Z
+kubectl --context kind-fleetops-demo apply -f config/airgap/llama-storage-hostpath.yaml -f config/airgap/llama-server.yaml
+persistentvolume/fleetops-llama-models created
+persistentvolumeclaim/llama-models created
+deployment.apps/llama-server created
+service/llama-server created
+kubectl --context kind-fleetops-demo -n fleetops-system rollout status deploy/llama-server --timeout=900s
+Waiting for deployment "llama-server" rollout to finish: 0 of 1 updated replicas are available...
+deployment "llama-server" successfully rolled out
+API server endpoint 172.18.0.2, Service 10.96.0.1
+networkpolicy.networking.k8s.io/fleetops-airgap-egress created
+networkpolicy.networking.k8s.io/fleetops-airgap-egress-apiserver created
+networkpolicy.networking.k8s.io/fleetops-airgap-egress-model created
+networkpolicy.networking.k8s.io/fleetops-airgap-egress-agent-mcp created
+networkpolicy.networking.k8s.io/llama-server-no-egress created
+networkpolicy.networking.k8s.io/llama-server-ingress created
+networkpolicy.networking.k8s.io/fleetops-airgap-egress-otlp created
+deployment.apps/fleetops-mcp restarted
+deployment.apps/fleetops-approvals restarted
+Waiting for deployment "fleetops-mcp" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "fleetops-mcp" rollout to finish: 1 old replicas are pending termination...
+deployment "fleetops-mcp" successfully rolled out
+deployment "fleetops-approvals" successfully rolled out
+exit 0 after 12 s
+2026-11-12T17:39:51Z

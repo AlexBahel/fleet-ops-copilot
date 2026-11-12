@@ -1,0 +1,14 @@
+2026-11-12T17:45:45Z
+from pod llama-server-7bcf974fd6-5hp4k (container llama-server, started 2026-11-12T17:39:39Z), via kubectl exec:
+https://10.96.0.1:443/version -> curl exit 28 http=000
+https://172.18.0.2:6443/version -> curl exit 28 http=000
+https://kubernetes.default.svc/version -> curl exit 28 http=000
+http://llama-server:8080/health -> curl exit 28 http=000
+http://10.244.0.21:8080/health -> curl exit 0 http=200
+http://10.244.0.22:8080/healthz -> curl exit 28 http=000
+http://10.244.0.23:8081/healthz -> curl exit 28 http=000
+http://10.244.0.14:16686/ -> curl exit 28 http=000
+https://1.1.1.1 -> curl exit 28 http=000
+https://8.8.8.8 -> curl exit 28 http=000
+https://example.com -> curl exit 28 http=000
+2026-11-12T17:46:35Z

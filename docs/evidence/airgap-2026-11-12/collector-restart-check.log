@@ -1,0 +1,44 @@
+# Collector restart check, 2026-11-12T17:50:08Z, cluster fleetops-demo, copilot 218c6b0
+# Policies on the Collector pod: fleetops-otel-collector-egress-jaeger (chart, D68; Jaeger's OTLP port and DNS) and fleetops-airgap-egress (config/airgap; DNS only).
+fleetops-airgap-egress                  2026-11-12T17:39:50Z
+fleetops-airgap-egress-agent-mcp        2026-11-12T17:39:50Z
+fleetops-airgap-egress-apiserver        2026-11-12T17:39:50Z
+fleetops-airgap-egress-model            2026-11-12T17:39:50Z
+fleetops-airgap-egress-otlp             2026-11-12T17:39:50Z
+fleetops-otel-collector-egress-jaeger   2026-11-12T17:35:29Z
+llama-server-ingress                    2026-11-12T17:39:50Z
+llama-server-no-egress                  2026-11-12T17:39:50Z
+== Collector pod before the restart
+fleetops-otel-collector-c874476cf-42dkc started 2026-11-12T17:35:29Z
+== 1. trace through the Collector started before the air-gapped policy
+17:50:09Z scripted zone-02-stop trace aa9bc5dbf3e1d21e784f0f26677a3e49 sent to the Collector via port-forward; spans in Jaeger 15 s later = 9
+== 2. rollout restart deploy/fleetops-otel-collector at 17:50:40Z
+deployment.apps/fleetops-otel-collector restarted
+Waiting for deployment "fleetops-otel-collector" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "fleetops-otel-collector" rollout to finish: 1 old replicas are pending termination...
+deployment "fleetops-otel-collector" successfully rolled out
+fleetops-otel-collector-6f756ff7bc-77mxx Running started 2026-11-12T17:50:40Z
+fleetops-otel-collector-c874476cf-42dkc Running started 2026-11-12T17:35:29Z
+== 3. trace through the restarted Collector (its connection to Jaeger is opened under the policy)
+17:50:46Z scripted zone-02-stop trace f0536a7dc42c2a72792dbc27ab5da0c3 sent to the Collector via port-forward; spans in Jaeger 15 s later = 0
+== 4. Collector log since the restart (export side)
+2026-11-12T17:50:41.327Z	warn	builders/builders.go:40	"otlp" alias is deprecated; use "otlp_grpc" instead	{"resource": {"service.instance.id": "7b0559a6-5818-4a88-a7ec-17974e6ad2fe", "service.name": "otelcol", "service.version": "0.164.0"}, "otelcol.component.id": "otlp", "otelcol.component.kind": "
+2026-11-12T17:50:41.328Z	info	service@v0.164.0/service.go:256	Everything is ready. Begin running and processing data.	{"resource": {"service.instance.id": "7b0559a6-5818-4a88-a7ec-17974e6ad2fe", "service.name": "otelcol", "service.version": "0.164.0"}}
+(lines matching export|dial|refused|timeout|error|Everything is ready; 0 export failures)
+== 5. new connections from the restarted Collector pod's network namespace (ephemeral container, image ghcr.io/ggml-org/llama.cpp:server-b12004, IfNotPresent, uid 65532) at 17:51:38Z
+000 http://fleetops-jaeger.fleetops-system:4317/ curl exit 1 after 6 ms
+000 http://fleetops-jaeger.fleetops-system:16686/ curl exit 28 after 5010 ms
+000 https://1.1.1.1 curl exit 28 after 5013 ms
+(curl exit 1 on 4317: TCP connected, plain HTTP is not gRPC; exit 28 is a timeout)
+== 3 again, 2026-11-12T17:52:19Z: in step 3 above fleetops-eval's exporter got 'connection refused' from the local port-forward (it had attached to the terminating Collector pod), so nothing reached the Collector; repeated with the port-forward on the running pod
+fleetops-otel-collector-6f756ff7bc-77mxx Running started 2026-11-12T17:50:40Z
+17:52:19Z scripted zone-02-stop trace 6f16360a449b97ffc5817d5a5ba0bd3c sent to Collector pod fleetops-otel-collector-6f756ff7bc-77mxx via port-forward (0 export errors in fleetops-eval); spans in Jaeger 15 s later = 9
+== 3c. second rollout restart at 17:52:51Z, then a trace through the new pod
+deployment.apps/fleetops-otel-collector restarted
+Waiting for deployment "fleetops-otel-collector" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "fleetops-otel-collector" rollout to finish: 1 old replicas are pending termination...
+deployment "fleetops-otel-collector" successfully rolled out
+fleetops-otel-collector-f5f5d9b55-nmqcx Running started 2026-11-12T17:52:51Z
+17:53:23Z scripted zone-02-stop trace a0ff2871ecb9e0a0da19e39e08cdd6c6 sent to Collector pod fleetops-otel-collector-f5f5d9b55-nmqcx via port-forward (0 export errors in fleetops-eval); spans in Jaeger 15 s later = 9
+== 4c. log of Collector pod fleetops-otel-collector-f5f5d9b55-nmqcx: 0 export failures
+(step 3's fleetops-eval log: 4 export errors 'dial tcp 127.0.0.1:14317: connect: connection refused'; step 1's: 0)

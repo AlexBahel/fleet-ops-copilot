@@ -1,0 +1,5 @@
+0.00.005.601 I srv    load_model: loading model '/models/qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf'
+0.03.836.795 I cmn          init: llama threadpool init, n_threads = 8
+0.04.598.851 I srv    load_model: initializing, n_slots = 1, n_ctx_slot = 8192, kv_unified = 'false'
+0.04.601.004 I srv  server_run_i: model loaded
+0.04.601.012 I srv  server_on_li: listening on http://0.0.0.0:8080

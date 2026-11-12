@@ -1,0 +1,45 @@
+2026-11-12T17:46:54Z
+ephemeral container (image ghcr.io/ggml-org/llama.cpp:server-b12004, IfNotPresent, uid 65532) in each running pod; it shares the pod's network namespace, so the pod's NetworkPolicies apply. exit 0 with an http code = connected; 6 = name not resolved; 7/28 = blocked
+== fleetops-mcp pod fleetops-mcp-85d477589d-phtpp (started 2026-11-12T17:39:50Z)
+https://10.96.0.1:443/version -> curl exit 0 http=200
+https://172.18.0.2:6443/version -> curl exit 0 http=200
+https://kubernetes.default.svc/version -> curl exit 0 http=200
+http://llama-server:8080/health -> curl exit 28 http=000
+http://10.244.0.21:8080/health -> curl exit 28 http=000
+http://10.244.0.22:8080/healthz -> curl exit 0 http=200
+http://fleetops-otel-collector:4317/ -> curl exit 1 http=000
+http://10.244.0.14:4317/ -> curl exit 28 http=000
+http://10.244.0.23:8081/healthz -> curl exit 28 http=000
+http://10.244.0.14:16686/ -> curl exit 28 http=000
+https://1.1.1.1 -> curl exit 28 http=000
+https://8.8.8.8 -> curl exit 28 http=000
+https://example.com -> curl exit 28 http=000
+== fleetops-approvals pod fleetops-approvals-6fb55fdcc4-v2h7z (started 2026-11-12T17:39:50Z)
+https://10.96.0.1:443/version -> curl exit 0 http=200
+https://172.18.0.2:6443/version -> curl exit 0 http=200
+https://kubernetes.default.svc/version -> curl exit 0 http=200
+http://llama-server:8080/health -> curl exit 28 http=000
+http://10.244.0.21:8080/health -> curl exit 28 http=000
+http://10.244.0.22:8080/healthz -> curl exit 28 http=000
+http://fleetops-otel-collector:4317/ -> curl exit 28 http=000
+http://10.244.0.14:4317/ -> curl exit 28 http=000
+http://10.244.0.23:8081/healthz -> curl exit 0 http=404
+http://10.244.0.14:16686/ -> curl exit 28 http=000
+https://1.1.1.1 -> curl exit 28 http=000
+https://8.8.8.8 -> curl exit 28 http=000
+https://example.com -> curl exit 28 http=000
+== fleetops-otel-collector pod fleetops-otel-collector-c874476cf-42dkc (started 2026-11-12T17:35:29Z)
+https://10.96.0.1:443/version -> curl exit 28 http=000
+https://172.18.0.2:6443/version -> curl exit 28 http=000
+https://kubernetes.default.svc/version -> curl exit 28 http=000
+http://llama-server:8080/health -> curl exit 28 http=000
+http://10.244.0.21:8080/health -> curl exit 28 http=000
+http://10.244.0.22:8080/healthz -> curl exit 28 http=000
+http://fleetops-otel-collector:4317/ -> curl exit 28 http=000
+http://10.244.0.14:4317/ -> curl exit 1 http=000
+http://10.244.0.23:8081/healthz -> curl exit 28 http=000
+http://10.244.0.14:16686/ -> curl exit 28 http=000
+https://1.1.1.1 -> curl exit 28 http=000
+https://8.8.8.8 -> curl exit 28 http=000
+https://example.com -> curl exit 28 http=000
+2026-11-12T17:49:23Z

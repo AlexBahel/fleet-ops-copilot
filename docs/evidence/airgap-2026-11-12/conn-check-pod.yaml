@@ -1,0 +1,38 @@
+# Copyright 2026 Alex Bahel
+# Licensed under the Apache License, Version 2.0 (see LICENSE).
+#
+# Measurement only, not part of the profile. Started before the air-gapped
+# NetworkPolicies exist. One curl process requests the API server's /version
+# every 3 s over HTTP/1.1 and reuses its one connection (num_connects 0 =
+# reused; the API server ends an anonymous HTTP/2 connection with GOAWAY after
+# one request); a second loop opens a new connection with a new curl every
+# 15 s. Its label is not one the policies allow the API server, so once they
+# are applied this pod may reach cluster DNS only (fleetops-airgap-egress).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fleetops-conn-check
+  namespace: fleetops-system
+  labels: {app.kubernetes.io/name: fleetops-conn-check}
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  activeDeadlineSeconds: 1800
+  securityContext: {runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, seccompProfile: {type: RuntimeDefault}}
+  containers:
+    - name: check
+      image: ghcr.io/ggml-org/llama.cpp:server-b12004
+      imagePullPolicy: IfNotPresent
+      command: [bash, -c]
+      args:
+        - |
+          api=https://10.96.0.1:443/version
+          (while :; do
+             out=$(curl -sk -o /dev/null -w '%{http_code} curl exit %{exitcode}' --connect-timeout 5 --max-time 6 $api)
+             echo "$(date -u +%H:%M:%SZ) new connection: http=$out"
+             sleep 15
+           done) &
+          curl -sk --http1.1 --rate 20/m --connect-timeout 5 --max-time 6 -o /dev/null \
+            -w '%{stderr}old connection: request %{url_effective} http=%{http_code} num_connects=%{num_connects} curl exit %{exitcode}\n' \
+            "$api?i=[1-500]" 2>&1 | while IFS= read -r l; do echo "$(date -u +%H:%M:%SZ) $l"; done
+      securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}

@@ -1,0 +1,21 @@
+2026-11-12T17:39:58Z
+kubectl --context kind-fleetops-demo create namespace fleetops-egress-baseline --dry-run=client -o yaml | kubectl --context kind-fleetops-demo apply -f -
+namespace/fleetops-egress-baseline created
+kubectl --context kind-fleetops-demo -n fleetops-egress-baseline delete job fleetops-egress-probe --ignore-not-found --wait
+sed -e 's|value: "http://llama-server:8080/health"|value: ""|' -e 's|value: "https://kubernetes.default.svc:443/healthz"|value: ""|' config/airgap/egress-probe.yaml | kubectl --context kind-fleetops-demo -n fleetops-egress-baseline apply -f -
+job.batch/fleetops-egress-probe created
+egress probe: 2026-11-12T17:39:59Z; t is ms since the probe script started
+at-start t=181ms OPEN: https://1.1.1.1 (curl exit 0) 
+at-start t=265ms OPEN: https://8.8.8.8 (curl exit 0) 
+at-start t=407ms OPEN: https://example.com (curl exit 0) 
+at-start: egress open before the policy was in force for this pod (not counted; see docs/KNOWN-LIMITS.md)
+no policy sentinel (baseline run): no wait
+no control target (baseline run)
+after-wait t=504ms OPEN: https://1.1.1.1 (curl exit 0) 
+after-wait t=575ms OPEN: https://8.8.8.8 (curl exit 0) 
+after-wait t=778ms OPEN: https://example.com (curl exit 0) 
+RESULT: egress is NOT blocked
+namespace "fleetops-egress-baseline" deleted
+baseline: egress is open without the policy, as expected; the probe can detect it
+exit 0
+2026-11-12T17:40:02Z

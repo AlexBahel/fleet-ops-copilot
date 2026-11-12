@@ -1,0 +1,20 @@
+2026-11-12T17:40:50Z
+kubectl --context kind-fleetops-demo -n fleetops-system delete job fleetops-egress-probe --ignore-not-found --wait
+job.batch "fleetops-egress-probe" deleted from fleetops-system namespace
+kubectl --context kind-fleetops-demo -n fleetops-system apply -f config/airgap/egress-probe.yaml
+job.batch/fleetops-egress-probe created
+egress probe: 2026-11-12T17:40:51Z; t is ms since the probe script started
+at-start t=102ms OPEN: https://1.1.1.1 (curl exit 0) 
+at-start t=176ms OPEN: https://8.8.8.8 (curl exit 0) 
+at-start t=452ms OPEN: https://example.com (curl exit 0) 
+at-start: egress open before the policy was in force for this pod (not counted; see docs/KNOWN-LIMITS.md)
+policy in force: t=2475ms sentinel https://kubernetes.default.svc:443/healthz denied (curl exit 28)
+control ok: t=2484ms http://llama-server:8080/health http 200
+after-wait t=7492ms blocked: https://1.1.1.1 (curl exit 28)
+after-wait t=12504ms blocked: https://8.8.8.8 (curl exit 28)
+after-wait t=17516ms blocked: https://example.com (curl exit 28)
+RESULT: all external targets blocked
+verify-egress: PASS (after the policy was in force: external blocked, control reachable; the at-start line is not counted)
+exit 0
+probe pod fleetops-egress-probe-xp6r7 image=ghcr.io/ggml-org/llama.cpp:server-b12004 imagePullPolicy=IfNotPresent imageID=docker.io/library/import-2026-11-12@sha256:b7504e20ac23be18064401f6e5b4ee0dfbe9fb51a5c7a77dfac2d9cd70fc9cf9 started=2026-11-12T17:40:51Z
+2026-11-12T17:41:12Z

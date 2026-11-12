@@ -1,0 +1,13 @@
+2026-11-12T17:41:22Z
+Job labelled app.kubernetes.io/name=fleetops-egress-probe (same policies as the probe); curl https://1.1.1.1 every ~0.5 s + attempt time; exit 0 = connected, 28 = blocked
+== run 1
+t=0ms since container start: curl exit 0
+t=1302ms since container start: curl exit 28
+(last) t=57344ms since container start: curl exit 28
+2026-11-12T17:41:22Z  container started
+== run 2
+t=0ms since container start: curl exit 0
+t=1214ms since container start: curl exit 28
+(last) t=57267ms since container start: curl exit 28
+2026-11-12T17:42:24Z  container started
+2026-11-12T17:43:25Z

@@ -1,0 +1,7 @@
+{
+ "build_info": "b12004-3c809f443",
+ "model_alias": "qwen2.5-7b-instruct",
+ "model_path": "/models/qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf",
+ "total_slots": 1,
+ "n_ctx": 8192
+}

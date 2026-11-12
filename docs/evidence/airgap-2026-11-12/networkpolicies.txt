@@ -1,0 +1,10 @@
+2026-11-12T17:54:10Z
+NAME                                    POD-SELECTOR                                                                 AGE
+fleetops-airgap-egress                  app.kubernetes.io/name notin (llama-server)                                  14m
+fleetops-airgap-egress-agent-mcp        app.kubernetes.io/name=fleetops-agent                                        14m
+fleetops-airgap-egress-apiserver        app.kubernetes.io/name in (fleetops-agent,fleetops-approvals,fleetops-mcp)   14m
+fleetops-airgap-egress-model            app.kubernetes.io/name in (fleetops-agent,fleetops-egress-probe)             14m
+fleetops-airgap-egress-otlp             app.kubernetes.io/name in (fleetops-agent,fleetops-mcp)                      14m
+fleetops-otel-collector-egress-jaeger   app.kubernetes.io/name=fleetops-otel-collector                               18m
+llama-server-ingress                    app.kubernetes.io/name=llama-server                                          14m
+llama-server-no-egress                  app.kubernetes.io/name=llama-server                                          14m

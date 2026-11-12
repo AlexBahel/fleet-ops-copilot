@@ -1,0 +1,10 @@
+== pod addresses at 2026-11-12T17:54:38Z (the restarted Collector's address changed after the check above)
+fleetops-agent-7bcb4bc7ff-7gsvx           10.244.0.12
+fleetops-approvals-6fb55fdcc4-v2h7z       10.244.0.23
+fleetops-conn-check                       10.244.0.20
+fleetops-egress-probe-xp6r7               10.244.0.27
+fleetops-jaeger-69d95469f8-269tk          10.244.0.14
+fleetops-mcp-85d477589d-phtpp             10.244.0.22
+fleetops-otel-collector-f5f5d9b55-nmqcx   10.244.0.31
+llama-server-7bcf974fd6-5hp4k             10.244.0.21
+Service kubernetes 10.96.0.1

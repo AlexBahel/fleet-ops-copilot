@@ -1,0 +1,4 @@
+2026-11-12T17:54:10Z
+pod llama-server-7bcf974fd6-5hp4k started 2026-11-12T17:39:39Z; Ready since 2026-11-12T17:39:50Z; restarts 0; image ghcr.io/ggml-org/llama.cpp:server-b12004 imageID docker.io/library/import-2026-11-12@sha256:b7504e20ac23be18064401f6e5b4ee0dfbe9fb51a5c7a77dfac2d9cd70fc9cf9
+requests {"cpu":"2","memory":"5Gi"} limits {"memory":"7Gi"}
+args ["--model","/models/qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf","--alias","qwen2.5-7b-instruct","--host","0.0.0.0","--port","8080","--offline","--jinja","--ctx-size","8192","--parallel","1","--no-webui"]
