@@ -11,16 +11,16 @@ copied from them unchanged. None measures a pass rate.
    fleetops-approvals, an activation request from the same conversation, dana's approval of it,
    `fleetops activate` by dana, and the FleetTask **Succeeded**. See
    [End to end](#end-to-end) and [`end-to-end/`](end-to-end/).
-3. **2026-11-09 01:22–01:28 UTC, end to end after the P13 fix.** A third `make demo`, at `233a815`
-   (BACKLOG-v4 P13 fixed in `hack/demo-sim-fleet.sh`). All three robots took a move, then the
+3. **2026-11-09 01:22–01:28 UTC, end to end after the sim fleet fix.** A third `make demo`, at `233a815`
+   (`hack/demo-sim-fleet.sh` points each Robot at its adapter first). All three robots took a move, then the
    README's own example, "Send a robot to staging-shelf-a.", ran end to end and Succeeded on the
    robot Swarmada picked, sim-robot-002. See [End to end, run 2](#end-to-end-run-2) and
    [`end-to-end/run-2/`](end-to-end/run-2/).
 
 | Item | Value |
 |---|---|
-| Copilot | `d17064d` (branch `golive`); the image `fleet-ops-copilot:dev` built from it by `make demo` |
-| Swarmada | v0.4, `558da47` (tag `rfc-0001-v0.4`) through the `go.mod` pin; quickstart `healthy-fleet` from a writable copy of the pinned module; admission webhooks served (`config/controlstream-tls`); three sim adapters kept live by `hack/demo-sim-fleet.sh` (R73) |
+| Copilot | `d17064d`; the image `fleet-ops-copilot:dev` built from it by `make demo` |
+| Swarmada | v0.4, `558da47` (tag `rfc-0001-v0.4`) through the `go.mod` pin; quickstart `healthy-fleet` from a writable copy of the pinned module; admission webhooks served (`config/controlstream-tls`); three sim adapters kept live by `hack/demo-sim-fleet.sh` |
 | Cluster | kind `fleetops-demo`, kind v0.33.0, single node `kindest/node:v1.37.0` pinned by digest (`hack/demo-up.sh`) |
 | Host | Mac mini (Mac18,5), macOS 27.0.1; Docker 29.9.2, VM 8 CPUs, 23066771456 bytes memory |
 | Command | `DEMO_TRACING=1 DEMO_ANTHROPIC_KEY_FILE=<key file> make demo`: exit 0, "stack running on kind-fleetops-demo in 2m29s (149s)", 21:32:58–21:35:27 |
@@ -62,9 +62,9 @@ the request, unchanged. It holds no token. The fields:
 - The catalogue's version and sha256.
 - `checks.verdict: likely feasible`, with the three checks no client can make listed as `NotChecked`.
 
-The `NotChecked` text for `validate_action` still says "Swarmada draft 5, C5". It is a string in
-`internal/feasibility/feasibility.go` that is recorded as written; the documents now say "a later
-Swarmada version" (BACKLOG-v4, C5). BACKLOG-v4 A5 changes the string with the next eval-surface change.
+The `NotChecked` text for `validate_action` in these files says "Swarmada draft 5, C5", the string
+`internal/feasibility/feasibility.go` held then; it now says "proposed for a later Swarmada version,
+C5".
 
 ## The trace
 
@@ -103,7 +103,7 @@ The prices are those recorded for `claude-sonnet-5-5` in
 ## `make test-live`
 
 21:37:21–21:38:45, `make test-live` (`hack/live-approval-path.sh`, `PHASE=webhooks`): 1:24.05 total,
-exit 0. Requests are filed with sam's token and decided by dana with hers.
+exit 0. Requests are filed with sam's token and decided by dana with dana's own.
 
 ```text
 --- SKIP: TestLiveDraftGateAbsent (0.00s)
@@ -135,10 +135,10 @@ What some of the tests logged:
 | Subtest | Observed |
 |---|---|
 | `requester-is-authenticated-not-asserted` | dana's approval of a request with `requestedFor` `unverified:dana` was refused ("the requester \"unverified:dana\" was not authenticated …; such a request can be rejected but never approved"), and the request stayed Pending |
-| `executor-writes-only-after-named-approval` | dana's approval of her own request was refused ("\"dana\" asked for this change and cannot also approve it") |
+| `executor-writes-only-after-named-approval` | dana's approval of a request dana filed was refused ("\"dana\" asked for this change and cannot also approve it") |
 | `every-write-traces-to-a-named-approval` | FleetTask `fleetops-live-draft-1794173846` and ZoneMaintenance `fleetops-areq-nllr9` each trace to an Executed request decided by dana, requested for sam |
 | `audit-record` | `fleetops-approvals audit file: 14 entries, chain intact` |
-| `TestLiveSwarmadaAuditActor` | Swarmada's safety audit log records the approved zone stop as `ESTOP_TRIGGERED` with actor `system:serviceaccount:fleetops-system:fleetops-approvals`, `outcome=Allowed`, `robots:3 stopped:3 unconfirmed:0`. On 2026-11-05, before the sim fleet was kept live (R73), the outcome was `Error` with `unconfirmed:3` (`docs/evidence/foc-live-2026-11-05/`) |
+| `TestLiveSwarmadaAuditActor` | Swarmada's safety audit log records the approved zone stop as `ESTOP_TRIGGERED` with actor `system:serviceaccount:fleetops-system:fleetops-approvals`, `outcome=Allowed`, `robots:3 stopped:3 unconfirmed:0`. |
 
 ## Teardown
 
@@ -154,7 +154,7 @@ pidfile/log state". No kind cluster and no `sim_adapter.py` process was left.
 | Copilot | `dfba88e` (main); the image built from it by `make demo` |
 | Swarmada, cluster, host | as above |
 | Command | `DEMO_TRACING=1 DEMO_ANTHROPIC_KEY_FILE=<key file> make demo`: exit 0, "stack running on kind-fleetops-demo in 2m19s (139s)", 23:32:26–23:34:45 |
-| People | sam files every request with his token kubeconfig; dana approves and activates with hers |
+| People | sam files every request with sam's token kubeconfig; dana approves and activates with dana's |
 
 Two chains of requests ran. Chain 1 had every step up to activation, but its task never ran
 (below). Chain 2 asked for the one robot that completes work on this stack, and its task Succeeded.
@@ -216,35 +216,14 @@ Verdicts and two Activations),
 
 ### Chain 1: approved and activated, never ran
 
-[`end-to-end/chain-1.txt`](end-to-end/chain-1.txt). This is the conversation of the 21:35 run
-repeated. "Send a robot to staging-shelf-a." at 23:34:59 gave the same preview, and "1" filed
-`areq-wkhgv`. dana approved it at 23:39:05: Verdict `areq-wkhgv-mvl4m`, draft
-`move-staging-shelf-a-f548` created. "Activate the draft move-staging-shelf-a-f548." and "1" filed
-`areq-675hq` at 23:39:23. dana approved it (`areq-675hq-s4tkx`) and ran `fleetops activate` at 23:39:39
-(Activation `areq-675hq-activation-k8mcc`, `activatedBy: dana`). Swarmada assigned the member to
-sim-robot-003, and its FleetAction stayed `Assigned`, lease renewed, until teardown 19 minutes later
+[`end-to-end/chain-1.txt`](end-to-end/chain-1.txt): the 21:35 conversation repeated (`areq-wkhgv`, then the activation
+request `areq-675hq`), approved and activated by dana at 23:39; Swarmada assigned the member to sim-robot-003, whose
+adapter's register had been refused (39 `ROBOT_AUTHZ_DENIED` entries for `sim-fleet-adapter-2` and `-3`, 23:34:22–23:34:26),
+and its FleetAction stayed `Assigned` until teardown 19 minutes later
 ([`fleettask-move-staging-shelf-a-f548.yaml`](end-to-end/fleettask-move-staging-shelf-a-f548.yaml),
 [`fleetaction-move-staging-shelf-a-f548-move.yaml`](end-to-end/fleetaction-move-staging-shelf-a-f548-move.yaml)).
-
-What was seen:
-
-- The sim adapter of sim-robot-003 logged one line at start: `register refused robot=sim-robot-003:
-  PERMISSION_DENIED: not authorized for robot sim-robot-003`. The adapter of sim-robot-002 logged the
-  same for its robot.
-- Swarmada's safety audit log has 39 `ROBOT_AUTHZ_DENIED` entries from `sim-fleet-adapter-2` and
-  `-3`, 23:34:22–23:34:26: "robot \"sim-robot-003\" is bound to adapter \"sim-fleet-adapter\", not
-  \"sim-fleet-adapter-3\"". `hack/demo-sim-fleet.sh` starts the adapters before it points the two
-  Robots at them.
-- sim-robot-002 stayed `InProgress` on the quickstart's `inspect-receiving-dock`, `Assigned` for the
-  whole run. sim-robot-001, served by the quickstart's own adapter, completed every action given to it
-  (`deliver-pallet-001`, `receiving-round-001-inspect-dock`, chain 2's move).
-- At 23:51:08, sim-robot-003's adapter process was restarted by hand with the same arguments, after
-  its Robot pointed at it. Nothing changed by 23:56. Its log after the restart is empty.
-
-So on this stack all three Robots show as live (Idle or InProgress, `AdapterLive`), and on
-2026-11-08 at 21:38 all three confirmed a zone stop. But only sim-robot-001 completed work. Why the
-other two never act is not established beyond the refused register. Listed as BACKLOG-v4 P13, fixed
-since: see [End to end, run 2](#end-to-end-run-2).
+Restarting that adapter by hand at 23:51:08 changed nothing by 23:56. The start order of
+`hack/demo-sim-fleet.sh` is fixed since: see [End to end, run 2](#end-to-end-run-2).
 
 ### Trace and cost
 
@@ -280,18 +259,18 @@ pidfile/log state". The restarted adapter was in the pidfile and stopped with th
 
 | Item | Value |
 |---|---|
-| Copilot | `233a815` (branch `golive2`: main `dfba88e` and the end-to-end evidence above, plus the P13 fix); the image built from it by `make demo` |
+| Copilot | `233a815` (the sim fleet fix of `hack/demo-sim-fleet.sh`); the image built from it by `make demo` |
 | Swarmada, cluster, host | as above |
 | Command | `DEMO_TRACING=1 DEMO_ANTHROPIC_KEY_FILE=<key file> make demo`: exit 0, "stack running on kind-fleetops-demo in 2m47s (167s)", 01:22:19–01:25:08 (2026-11-09) |
-| People | sam files every request with his token kubeconfig; dana approves and activates with hers |
+| People | sam files every request with sam's token kubeconfig; dana approves and activates with dana's |
 
 Each file in [`end-to-end/run-2/`](end-to-end/run-2/) is unchanged as `kubectl get -o yaml`, the
 API, the pod or the command printed it, unless noted. None holds a token.
 
 ### The sim fleet after the fix
 
-`hack/demo-sim-fleet.sh` now points each Robot at its adapter before the adapter that stays starts
-(BACKLOG-v4 P13). Swarmada's Robot webhook admits only a Connected adapter, so for sim-robot-002 and
+`hack/demo-sim-fleet.sh` now points each Robot at its adapter before the adapter that stays starts.
+Swarmada's Robot webhook admits only a Connected adapter, so for sim-robot-002 and
 -003 a short connect process of their adapter ran while the Robot was pointed, and was then stopped.
 [`run-2/sim-fleet-start.txt`](end-to-end/run-2/sim-fleet-start.txt) has the stage's output and the
 five adapter logs:
