@@ -230,7 +230,7 @@ func TestActivationRecordIsTheAuthenticatedUser(t *testing.T) {
 	}
 	waitState(t, actName, fleetopsv1.StateApproved)
 	time.Sleep(1100 * time.Millisecond)
-	// eve may record, but may not activate (she holds no Swarmada role).
+	// eve may record, but may not activate (eve holds no Swarmada role).
 	var task swarmv1.FleetTask
 	if err := admin.Get(ctx, client.ObjectKey{Namespace: swarmNS, Name: "act-move"}, &task); err != nil {
 		t.Fatal(err)
