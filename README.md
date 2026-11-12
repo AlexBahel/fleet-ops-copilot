@@ -171,14 +171,14 @@ one sample of three runs per scenario; Claude runs at the API's default sampling
 fixed on these models (D43). The comparison classifies every failed run as model, scenario, judge
 or product ([`comparison-v6.md`](evals/results/comparison-v6.md), "Failure classes", and each
 `failures.md`); defects are counted as failures (on v6: 5 scenario runs, dispatch-07 for both Claude
-models; no product or judge runs). The scripted self-test of the same
-surface passes 150/150 ([`evals/results/fixtures/results.json`](evals/results/fixtures/results.json)).
+models; no product or judge runs).
 
 **Fixes after the record, not record-run.** The defects the v6 runs found were fixed afterwards on
 eval surface v7 (D101): a refusal of an unused field that repeated without limit (D98), a judge
 gap for refusal wording (judge v7, D99) and a scenario that counted a correct reading as a failure
 (D100), plus regression scenario guided-24. These postdate the record and no model has been run on v7, so the
-table above does not reflect them. The v7 scripted self-test, 51 scenarios × 3, is held at 153/153
+table above does not reflect them. The v7 scripted self-test, 51 scenarios × 3, passes 153/153
+([`evals/results/fixtures/results.json`](evals/results/fixtures/results.json)) and is held there
 by [`evals/baseline.json`](evals/baseline.json).
 
 ### Air-gapped: what a small local model does, and what it cannot do
