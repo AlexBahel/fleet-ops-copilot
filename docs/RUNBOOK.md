@@ -1,16 +1,15 @@
 # Fleet Ops Copilot — Runbook
 
 **What has been run.** Each command below follows the chart and the code on main. `make demo`
-(section 0, with the trace backend of section 8) has run on one kind cluster (2026-11-05,
-[`docs/evidence/foc-up-2026-11-05/`](evidence/foc-up-2026-11-05/README.md)). On 2026-11-08 it ran
-twice more with the API key Secret ([`docs/evidence/live-2026-11-08/`](evidence/live-2026-11-08/README.md)).
-The first run had one `fleetops chat` conversation as sam against Sonnet 5.5 (sections 7 and 9) that
-filed a request, the Jaeger export of section 8, `make test-live` and `make demo-down`. The second ran
+(section 0, with the trace backend of section 8) has run three times on one kind cluster with the
+API key Secret (2026-11-08 and 2026-11-09 UTC,
+[`docs/evidence/live-2026-11-08/`](evidence/live-2026-11-08/README.md)). The first run had one
+`fleetops chat` conversation as sam against Sonnet 5.5 (sections 7 and 9) that filed a request,
+the Jaeger export of section 8, `make test-live` and `make demo-down`. The second and third ran
 section 9 end to end: a guided request, `fleetops approve` by dana, an activation request, its
-approval, `fleetops activate` by dana, and the FleetTask Succeeded. A third run (2026-11-09 UTC,
-same folder) ran section 9 end to end again for "a robot", after the sim fleet fix (BACKLOG-v4 P13).
-Section 4's audit file was read and verified (`fleetops audit verify`) in both. The other sections have not been run as a sequence. Items
-that depend on parts not built yet (the air-gapped profile in the chart) say so.
+approval, `fleetops activate` by dana, and the FleetTask Succeeded. Section 4's audit file was read
+and verified (`fleetops audit verify`) in both. The other sections have not been run as a
+sequence. Items that depend on parts not built yet (the air-gapped profile in the chart) say so.
 
 Conventions: every `kubectl` and `helm` command names its context explicitly. The examples use a
 kind cluster `fleetops-<name>`, context `kind-fleetops-<name>`, a kubeconfig file that holds only that
@@ -28,7 +27,7 @@ One command from an empty machine state to a running stack. Needs Docker (runnin
 kubectl, helm 3.8+, jq, openssl, curl, make, Go and python3 (Swarmada's live quickstart runs a
 simulated adapter with the first `python3` on `PATH`, which must import `grpc` and
 `google.protobuf`; `make demo` checks this before it creates anything and stops with the fix,
-R59, D82). Everything it keeps (kubeconfig, the people's tokens and kubeconfigs, the
+D82). Everything it keeps (kubeconfig, the people's tokens and kubeconfigs, the
 Swarmada copy, logs) is in `$DEMO_DIR`, by default `~/.local/state/fleet-ops-copilot/demo`,
 **outside the repository**; the scripts refuse a directory inside it. It never reads or writes
 `~/.kube/config`:
@@ -57,7 +56,7 @@ What it does, in order (each stage prints its elapsed time; the total is the las
    `simbot-v1` (a labelled demo workaround: the quickstart names it but does not ship it), one
    FleetAdapter identity per robot, and one `sim_adapter.py` per robot plus a port-forward in the
    background (PIDs `$DEMO_DIR/sim-fleet/pids`, logs `$DEMO_DIR/logs/sim-adapter-*.log`). Each
-   Robot is pointed at its adapter before the adapter that stays starts (BACKLOG-v4 P13; a short
+   Robot is pointed at its adapter before the adapter that stays starts (a short
    connect process of the adapter runs while the Robot is pointed, `$DEMO_DIR/logs/sim-adapter-*-connect.log`,
    whose one refused register is expected). It waits until every robot is registered and ready for
    work: the Robot names its adapter, the adapter is Connected, no register was refused, and the
@@ -123,18 +122,13 @@ Values worth setting (see `charts/fleet-ops-copilot/values.yaml`):
 | `tracing.backend.enabled` | `false` | Development trace backend (OpenTelemetry Collector + Jaeger) and its wiring; exclusive with `tracing.otlpEndpoint` (section 8) |
 | `networkPolicy.enabled` | `false` | Cloud-profile NetworkPolicy; needs `networkPolicy.apiServer.cidrs` |
 
-A cluster on which `make deploy-kind` already installed the plain manifests has the same objects
-without Helm's ownership metadata; `helm install` refuses to take them over. Use a fresh cluster,
-or remove the objects `config/rbac`, `config/admission` and `config/deploy` created first
-(keep the CRDs: deleting a CRD deletes every ApprovalRequest and ApprovalDecision).
-
 ### Open the web UI
 
 fleetops-agent serves a chat and a list of ApprovalRequests. It cannot approve: each pending request
 shows the exact object or patch it leads to and the `fleetops approve` / `fleetops reject` command to run
 with your own kubeconfig. The page has no login, so the name typed in it is recorded as the
 requester `unverified:<name>`, and fleetops-approvals refuses to approve any such request
-(`DENY_REQUESTER_UNVERIFIED`, R38): a request filed from the page can be rejected or left to
+(`DENY_REQUESTER_UNVERIFIED`, D56): a request filed from the page can be rejected or left to
 expire, never approved. The Service is ClusterIP only and the chart renders no Ingress
 (`make chart-parity` refuses one); reach the page with a port-forward:
 
@@ -143,7 +137,7 @@ kubectl --context $CTX -n fleetops-system port-forward svc/fleetops-agent 8090:8
 # then open http://127.0.0.1:8090/
 ```
 
-### Who is recorded as the requester (R39)
+### Who is recorded as the requester (D57)
 
 fleetops-mcp records as `requestedFor` the username of the caller's own Kubernetes bearer token, which
 it verifies with a TokenReview (its ServiceAccount holds `create` on `tokenreviews`). A name
@@ -180,7 +174,7 @@ Approving also requires the Swarmada permission for the underlying change (for e
 decision otherwise. Approvers must be people: a ServiceAccount's decision is refused at admission.
 
 Activating an approved draft needs Swarmada's `activate` verb on `fleettasks` (and `patch`); any
-person who holds it may run `fleetops activate`, not only the approver (R69). Reading the fleet for its
+person who holds it may run `fleetops activate`, not only the approver (D79). Reading the fleet for its
 checks needs `get`/`list` on the Swarmada kinds; a read the person lacks is reported as not checked.
 
 ### Upgrade and policy changes
@@ -240,8 +234,8 @@ anyway, revoke it.
 
 | Profile | Model | Status on main |
 |---|---|---|
-| `cloud` | Claude via the Claude API | Chart value `llm.profile: cloud` (default). The chart runs fleetops-agent with `-backend=claude` (`internal/llm/claude.go`); it starts once the API key Secret exists (section 2). fleetops-agent has run against Sonnet 5.5 on the demo stack, end to end up to a Succeeded FleetTask, twice (`docs/evidence/live-2026-11-08/`; docs/KNOWN-LIMITS.md); Sonnet 5.5 and Opus 5.5 were measured through `fleetops-eval` on eval surfaces v3 to v6; the record is v6 (`evals/results/comparison-v6.md`, 2026-11-08), and no model has run on v7. |
-| `airgap` | Qwen2.5-7B-Instruct served by `llama-server` in the cluster | Plain manifests and make targets (`config/airgap/`, `hack/airgap.mk`) and the `llamacpp` backend (`internal/llm/llamacpp.go`); not templated in the chart. Run on single-node kind clusters with kindnet (`docs/evidence/airgap-2026-11-04/`, `docs/evidence/airgap-2026-11-05/`); the `llamacpp` backend ran four evaluations against Qwen2.5-7B-Instruct through `fleetops-eval` (`evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-05/` on eval surface v3, `evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-07/` on v4, `evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-08-v5/` on v5, `evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-08-v6/` on v6), and one against Qwen2.5-14B-Instruct on v6 (`evals/results/airgap-llamacpp-qwen2.5-14b-instruct-2026-11-08-v6/`, with this manifest's model files, alias and memory changed: its `model.md`). fleetops-agent does not run with it yet (docs/KNOWN-LIMITS.md). `llm.profile: airgap` makes the chart render fail on purpose. |
+| `cloud` | Claude via the Claude API | Chart value `llm.profile: cloud` (default). The chart runs fleetops-agent with `-backend=claude` (`internal/llm/claude.go`); it starts once the API key Secret exists (section 2). fleetops-agent has run against Sonnet 5.5 on the demo stack, end to end up to a Succeeded FleetTask, twice (`docs/evidence/live-2026-11-08/`; docs/KNOWN-LIMITS.md); Sonnet 5.5 and Opus 5.5 were measured through `fleetops-eval` on eval surface v6, the record (`evals/results/comparison-v6.md`, 2026-11-08); no model has run on v7. |
+| `airgap` | Qwen2.5-7B-Instruct served by `llama-server` in the cluster | Plain manifests and make targets (`config/airgap/`, `hack/airgap.mk`) and the `llamacpp` backend (`internal/llm/llamacpp.go`); not templated in the chart. Run on single-node kind clusters with kindnet (`docs/evidence/airgap-2026-11-04/`, `docs/evidence/airgap-2026-11-05/`); the `llamacpp` backend's record runs on eval surface v6 are against Qwen2.5-7B-Instruct (`evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-08-v6/`) and Qwen2.5-14B-Instruct (`evals/results/airgap-llamacpp-qwen2.5-14b-instruct-2026-11-08-v6/`, with this manifest's model files, alias and memory changed: its `model.md`). fleetops-agent does not run with it yet (docs/KNOWN-LIMITS.md). `llm.profile: airgap` makes the chart render fail on purpose. |
 
 Until the air-gapped profile is in the chart, it is installed beside the chart with these targets,
 in this order:
@@ -354,10 +348,10 @@ Swarmada operation, not a copilot one: follow Swarmada's documentation there.
 
 A request is approvable only if its requester is verified: the person's own bearer token, checked
 with a TokenReview (docs/DESIGN.md D57). A person who authenticates with a client certificate
-(kind's admin, `hack/kind-person.sh`) has no bearer token and files `unverified:<name>` requests
+(kind's admin) has no bearer token and files `unverified:<name>` requests
 that can only be rejected. Two ways to give people tokens:
 
-### On kind: a static token file (test only, R43)
+### On kind: a static token file (test only, D60)
 
 `make demo` makes the fictional people **sam** (group `supervisors`; `fleetops:approver`,
 `swarmada:operator`), **dana** (`fleet-ops`; `fleetops:approver`, `swarmada:fleet-manager`) and
