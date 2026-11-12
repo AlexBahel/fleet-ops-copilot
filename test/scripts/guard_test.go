@@ -34,9 +34,9 @@ var scripts = []script{
 		vars: func(t *testing.T, e env) map[string]string {
 			return map[string]string{
 				"SWARMADA_DIR": t.TempDir(), "SWARMCTL": filepath.Join(e.stubs, "swarmctl"), "OUT": t.TempDir(),
-				// No scenario uses live/comms-flaky or live/estop-drill, so a passing
-				// run starts the port-forward and then has nothing to run.
-				"FIXTURES": "comms-flaky estop-drill",
+				// No scenario uses live/no-such-fixture, so a passing run starts
+				// the port-forward and then has nothing to run.
+				"FIXTURES": "no-such-fixture",
 			}
 		},
 		accept: func(t *testing.T, calls []string) {

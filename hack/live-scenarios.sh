@@ -32,7 +32,7 @@ guard_cluster live-scenarios.sh
 ctx="kind-$CLUSTER"
 repo="$(cd "$(dirname "$0")/.." && pwd)"
 BACKENDS="${BACKENDS:-scripted}" RUNS="${RUNS:-3}"
-FIXTURES="${FIXTURES:-battery-edge battery-handoff hardware-fault comms-flaky estop-drill zone-estop healthy-fleet}"
+FIXTURES="${FIXTURES:-battery-edge battery-handoff hardware-fault zone-estop healthy-fleet}"
 
 kubectl --context "$ctx" -n fleetops-system port-forward svc/fleetops-mcp 18080:8080 >/dev/null 2>&1 &
 pf=$!
@@ -41,7 +41,7 @@ for _ in $(seq 30); do curl -sf http://127.0.0.1:18080/healthz >/dev/null && bre
 
 scenarios_for() { # fixture -> comma-separated scenario ids, dispatch excluded; empty if none
   # grep exits 1 on no match; under pipefail that would stop the whole script at a
-  # fixture no scenario uses (live/comms-flaky, live/estop-drill).
+  # fixture no scenario uses.
   { grep -l "^fixture: live/$1\$" "$repo"/evals/scenarios/*.yaml || true; } | xargs -r -n1 basename | sed 's/\.yaml$//' \
     | { grep -v '^dispatch-' || true; } | paste -sd, -
 }

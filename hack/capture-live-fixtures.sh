@@ -6,9 +6,10 @@
 #
 # For each scenario: tear the quickstart cluster down (run.sh --clean), run
 # `make quickstart SCENARIO=<s>` in a Swarmada checkout, then write
-# evals/fixtures/live/<s>.yaml with evals/cmd/fleetops-capture. For the stop
-# scenario, after the quickstart it also triggers a zone estop with
-# `swarmctl estop trigger` and captures that state as zone-estop.yaml.
+# evals/fixtures/live/<s>.yaml with evals/cmd/fleetops-capture. The stop
+# scenario (estop-drill) gets no fixture of its own: after its quickstart a zone
+# estop is triggered with `swarmctl estop trigger` and that state is captured as
+# zone-estop.yaml.
 #
 # Required environment:
 #   SWARMADA_DIR  a Swarmada checkout at the pinned commit (read only; nothing in it is edited)
@@ -29,7 +30,7 @@ guard_cluster capture-live-fixtures.sh
 CTX="kind-$CLUSTER"
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$REPO/evals/fixtures/live"
-SCENARIOS="${SCENARIOS:-healthy-fleet battery-edge battery-handoff hardware-fault comms-flaky estop-drill}"
+SCENARIOS="${SCENARIOS:-healthy-fleet battery-edge battery-handoff hardware-fault estop-drill}"
 mkdir -p "$OUT"
 (cd "$REPO" && go build -o bin/ ./evals/cmd/fleetops-capture)
 
@@ -38,10 +39,11 @@ for s in $SCENARIOS; do
   (cd "$SWARMADA_DIR" && QUICKSTART_CLUSTER="$CLUSTER" bash examples/warehouse-quickstart/run.sh --clean)
   echo "==> $s: quickstart"
   (cd "$SWARMADA_DIR" && QUICKSTART_CLUSTER="$CLUSTER" CI=true make quickstart SCENARIO="$s")
-  "$REPO/bin/fleetops-capture" -context "$CTX" -scenario "$s" \
-    -source "Swarmada v0.4 quickstart, make quickstart SCENARIO=$s, after it reached its end state and exited (the quickstart stops its sim adapter process on exit, so robot phase and connectivity drift afterwards)${SOURCE_NOTE:+; $SOURCE_NOTE}" \
-    -out "$OUT/$s.yaml"
-  if [[ "$s" == estop-drill ]]; then
+  if [[ "$s" != estop-drill ]]; then
+    "$REPO/bin/fleetops-capture" -context "$CTX" -scenario "$s" \
+      -source "Swarmada v0.4 quickstart, make quickstart SCENARIO=$s, after it reached its end state and exited (the quickstart stops its sim adapter process on exit, so robot phase and connectivity drift afterwards)${SOURCE_NOTE:+; $SOURCE_NOTE}" \
+      -out "$OUT/$s.yaml"
+  else
     echo "==> zone-estop: swarmctl estop trigger"
     "$SWARMCTL" --context "$CTX" -n warehouse-a estop trigger warehouse-a \
       --reason "fixture capture: zone stop drill (fictional site)" --yes
