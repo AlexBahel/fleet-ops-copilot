@@ -48,25 +48,27 @@ import (
 	"github.com/AlexBahel/fleet-ops-copilot/evals/harness"
 )
 
+// baselineFile is the gate's baseline, relative to the repository root.
+const baselineFile = "evals/baseline.json"
+
 func main() {
-	file := flag.String("file", "evals/baseline.json", "baseline file, relative to the repository root")
 	base := flag.String("base", "", "base revision to compare with")
 	fallback := flag.String("fallback", "origin/main", "revision whose merge base with HEAD is used when -base is unusable")
 	flag.Parse()
 
-	cur, err := os.ReadFile(*file)
+	cur, err := os.ReadFile(baselineFile)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "baseline-lowered:", err)
 		os.Exit(1)
 	}
 	rev := resolveBase(*base, *fallback)
 	if rev == "" {
-		fmt.Println("::notice title=eval baseline::no base revision to compare " + *file + " with (new branch without " + *fallback + "); nothing checked")
+		fmt.Println("::notice title=eval baseline::no base revision to compare " + baselineFile + " with (new branch without " + *fallback + "); nothing checked")
 		return
 	}
-	old, err := gitShow(rev, *file)
+	old, err := gitShow(rev, baselineFile)
 	if err != nil {
-		fmt.Printf("::notice title=eval baseline::%s does not exist at %s; nothing to compare\n", *file, short(rev))
+		fmt.Printf("::notice title=eval baseline::%s does not exist at %s; nothing to compare\n", baselineFile, short(rev))
 		return
 	}
 	lowered, err := compare(old, cur)
@@ -74,10 +76,10 @@ func main() {
 		fmt.Printf("::notice title=eval baseline::%v; nothing compared\n", err)
 		return
 	}
-	report(os.Stdout, *file, rev, lowered)
+	report(os.Stdout, baselineFile, rev, lowered)
 	if p := os.Getenv("GITHUB_STEP_SUMMARY"); p != "" {
 		if f, err := os.OpenFile(p, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o600); err == nil { //nolint:gosec // G304: the runner names this file
-			summary(f, *file, rev, lowered)
+			summary(f, baselineFile, rev, lowered)
 			_ = f.Close()
 		}
 	}

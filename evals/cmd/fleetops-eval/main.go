@@ -72,12 +72,20 @@ import (
 // passes -out evals/results/fixtures/results.json.
 const defaultOut = "evals/results/tmp/selftest/results.json"
 
+// fixturesDir holds the fixtures the scenarios name.
+const fixturesDir = "evals/fixtures"
+
+// The llama-server Deployment (and its container) whose settings a llamacpp
+// measurement records with -llama-context, as config/airgap deploys it.
+const (
+	llamaNamespace  = "fleetops-system"
+	llamaDeployment = "llama-server"
+)
+
 func main() {
 	scenarios := flag.String("scenarios", "evals/scenarios", "scenario directory")
-	fixtures := flag.String("fixtures", "evals/fixtures", "fixture directory")
 	runs := flag.Int("runs", 3, "runs per scenario (N)")
-	out := flag.String("out", defaultOut, "results file")
-	traces := flag.String("traces", "", "trace file (default: traces.jsonl next to -out)")
+	out := flag.String("out", defaultOut, "results file; traces.jsonl is written next to it")
 	policyPath := flag.String("policy", "policies/default.yaml", "policy file")
 	cataloguePath := flag.String("catalogue", "catalogue/warehouse-a.yaml", "site catalogue fleetops-agent reads (D70); its SHA-256 is recorded")
 	backend := flag.String("backend", "scripted", "backend: scripted, claude or llamacpp")
@@ -91,8 +99,6 @@ func main() {
 	liveMCP := flag.String("live-mcp-url", "", "with -live-context: fleetops-mcp streamable HTTP endpoint")
 	otlp := flag.String("otlp-endpoint", "", "OTLP/gRPC collector (host:port, http:// or https://): trace each run as services fleetops-eval-agent and fleetops-eval-mcp; the trace ID goes into results.json and traces.jsonl. Empty: no tracing")
 	llamaCtx := flag.String("llama-context", "", "llamacpp: kubeconfig context of the cluster running llama-server; its Deployment, pod log and node are recorded")
-	llamaNS := flag.String("llama-namespace", "fleetops-system", "llamacpp: namespace of the llama-server Deployment")
-	llamaDeploy := flag.String("llama-deployment", "llama-server", "llamacpp: name of the llama-server Deployment and its container")
 	rejudge := flag.String("rejudge", "", "judge the answers of a recorded traces.jsonl again with this judge, no backend called (criteria 1, 3 and 4 from the trace, harness.Rejudge); -scenarios must be the files the runs were made with. Writes one JSON line per run to -rejudge-out")
 	rejudgeOut := flag.String("rejudge-out", "", "with -rejudge: output file")
 	var pr harness.Pricing
@@ -103,16 +109,14 @@ func main() {
 	flag.StringVar(&pr.Source, "pricing-source", "", "claude: pricing page URL")
 	flag.StringVar(&pr.ReadOn, "pricing-read-on", "", "claude: date the pricing page was read (YYYY-MM-DD)")
 	flag.Parse()
-	if *traces == "" {
-		*traces = filepath.Join(filepath.Dir(*out), "traces.jsonl")
-	}
+	traces := filepath.Join(filepath.Dir(*out), "traces.jsonl")
 	if *rejudge != "" {
-		if err := runRejudge(*scenarios, *fixtures, *rejudge, *rejudgeOut); err != nil {
+		if err := runRejudge(*scenarios, fixturesDir, *rejudge, *rejudgeOut); err != nil {
 			log.Fatal(err)
 		}
 		return
 	}
-	cfg := runConfig{scenarioDir: *scenarios, fixtureDir: *fixtures, runs: *runs, out: *out, tracePath: *traces, policyPath: *policyPath, cataloguePath: *cataloguePath, baseline: *baselinePath, updateBaseline: *updateBaseline, only: *only, liveCtx: *liveCtx, liveMCP: *liveMCP, otlp: *otlp}
+	cfg := runConfig{scenarioDir: *scenarios, fixtureDir: fixturesDir, runs: *runs, out: *out, tracePath: traces, policyPath: *policyPath, cataloguePath: *cataloguePath, baseline: *baselinePath, updateBaseline: *updateBaseline, only: *only, liveCtx: *liveCtx, liveMCP: *liveMCP, otlp: *otlp}
 	switch *backend {
 	case "scripted":
 		cfg.name, cfg.factory = "scripted", harness.ScriptedFactory
@@ -152,7 +156,7 @@ func main() {
 		if l.RepeatPenalty != nil {
 			cfg.name += fmt.Sprintf(" repeat_penalty=%g", *l.RepeatPenalty)
 		}
-		srv, envExtra, err := llamaServerSettings(l.BaseURL, *llamaCtx, *llamaNS, *llamaDeploy)
+		srv, envExtra, err := llamaServerSettings(l.BaseURL, *llamaCtx, llamaNamespace, llamaDeployment)
 		if err != nil {
 			log.Fatal(err)
 		}

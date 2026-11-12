@@ -62,13 +62,12 @@ type obj = map[string]any
 
 func main() {
 	rendered := flag.String("rendered", "", "helm template output (with --include-crds)")
-	repo := flag.String("repo", ".", "repository root")
 	flag.Parse()
 	if *rendered == "" {
 		fmt.Fprintln(os.Stderr, "chart-parity: -rendered is required")
 		os.Exit(2)
 	}
-	problems, err := check(*repo, *rendered)
+	problems, err := check(".", *rendered) // run from the repository root, as make chart-parity does
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "chart-parity:", err)
 		os.Exit(2)
