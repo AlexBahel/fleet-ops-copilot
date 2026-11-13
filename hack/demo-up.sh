@@ -284,17 +284,40 @@ if [[ "$DRY" == 1 ]]; then
 else
   echo "demo: stack running on $ctx in $(fmt $total) (${total}s)."
 fi
+# What to run next, in order: the KUBECONFIG export, the verified way to ask,
+# the web chat, then make demo-down. Command lines carry no comment, so each
+# pastes into zsh as it is.
 cat <<EOT
 
-  export KUBECONFIG=$KUBECONFIG
-  kubectl --context $ctx -n $ns get pods
-  people (test only, static tokens): $dir/persons/{sam,dana,eve}.kubeconfig  (context <person>@$CLUSTER)
-  file a verified request:  kubectl --context $ctx -n $ns port-forward svc/fleetops-agent 8090:8090
-                            KUBECONFIG=$dir/persons/sam.kubeconfig bin/fleetops chat --context sam@$CLUSTER "..."
-  verified-requester live run:  make test-live
+      export KUBECONFIG=$KUBECONFIG
+  Run the line above first in every new terminal you use for this demo.
+EOT
+if [[ "$DRY" != 1 ]] && ! k -n "$ns" get secret fleet-ops-copilot-claude >/dev/null 2>&1; then
+  echo "  fleetops-agent is not running (no API key Secret), so nothing below can answer yet: docs/RUNBOOK.md section 2."
+fi
+cat <<EOT
+
+  1. Ask as sam, verified: a request sam files can be approved by dana.
+     In a second terminal, run these two lines; the second stays in the foreground:
+      export KUBECONFIG=$KUBECONFIG
+      kubectl --context $ctx -n $ns port-forward svc/fleetops-agent 8090:8090
+     Then here, in $repo (bin/fleetops comes from make build):
+      KUBECONFIG=$dir/persons/sam.kubeconfig bin/fleetops chat --context sam@$CLUSTER "Show me all robots"
+
+  2. Or ask in the web chat, through the same port-forward: open the address below and type sam in "Your name".
+     It has no login, so a request filed there is recorded for unverified:sam and can only be rejected.
+      http://127.0.0.1:8090/
+
+  People (test only, static tokens): $dir/persons/{sam,dana,eve}.kubeconfig, context <person>@$CLUSTER.
+  Approval paths against this stack: make test-live.
+  Sim fleet (3 adapters, background): PIDs in $dir/sim-fleet/pids, logs in $dir/logs/sim-adapter-*.log.
 EOT
 if [[ "${DEMO_TRACING:-0}" == 1 ]]; then
-  echo "  traces:  kubectl --context $ctx -n $ns port-forward svc/fleetops-jaeger 16686:16686   (http://127.0.0.1:16686/)"
+  echo "  Traces: in another terminal, after the export line, run this and open http://127.0.0.1:16686/"
+  echo "      kubectl --context $ctx -n $ns port-forward svc/fleetops-jaeger 16686:16686"
 fi
-echo "  sim fleet (3 adapters, background): PIDs $dir/sim-fleet/pids, logs $dir/logs/sim-adapter-*.log"
-echo "  tear down:  make demo-down"
+cat <<EOT
+
+  Remove the cluster, its kubeconfig and the people's tokens (stop the port-forwards with Ctrl-C first):
+      make demo-down
+EOT

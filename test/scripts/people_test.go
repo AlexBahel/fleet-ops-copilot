@@ -375,6 +375,60 @@ func TestDemoUpDryRunPlan(t *testing.T) {
 	}
 }
 
+// The summary after make demo is what a person runs next: the KUBECONFIG
+// export first, then the verified way to ask (fleetops chat as sam, with the
+// port-forward in its own terminal), then the web chat and its URL, and
+// make demo-down last. Every command line pastes into zsh as it is: no
+// inline comment.
+func TestDemoUpSummaryOrder(t *testing.T) {
+	e := newEnv(t)
+	work := t.TempDir()
+	kc := e.dedicated(t)
+	out, err := e.runScript(t, "hack/demo-up.sh", map[string]string{
+		"CLUSTER": "fleetops-test-1", "KUBECONFIG": kc, "DEMO_DIR": work, "DEMO_DRY_RUN": "1",
+	})
+	if err != nil {
+		t.Fatalf("dry run failed: %v\n%s", err, out)
+	}
+	i := strings.Index(out, "dry run finished")
+	if i < 0 {
+		t.Fatalf("no summary:\n%s", out)
+	}
+	summary := out[i:]
+	var lines []string
+	for _, l := range strings.Split(summary, "\n")[1:] {
+		if strings.TrimSpace(l) != "" {
+			lines = append(lines, strings.TrimSpace(l))
+		}
+	}
+	if len(lines) == 0 || lines[0] != "export KUBECONFIG="+kc {
+		t.Fatalf("the summary does not start with the export line:\n%s", summary)
+	}
+	order := []string{
+		"export KUBECONFIG=" + kc,
+		"export KUBECONFIG=" + kc + "\n", "kubectl --context kind-fleetops-test-1 -n fleetops-system port-forward svc/fleetops-agent 8090:8090",
+		"KUBECONFIG=" + filepath.Join(work, "persons", "sam.kubeconfig") + " bin/fleetops chat --context sam@fleetops-test-1 \"Show me all robots\"",
+		"unverified:", "http://127.0.0.1:8090/",
+		"make demo-down",
+	}
+	at := 0
+	for _, want := range order {
+		j := strings.Index(summary[at:], want)
+		if j < 0 {
+			t.Fatalf("summary lacks %q after offset %d:\n%s", want, at, summary)
+		}
+		at += j + len(want)
+	}
+	if lines[len(lines)-1] != "make demo-down" {
+		t.Errorf("make demo-down is not the last line:\n%s", summary)
+	}
+	for _, l := range lines {
+		if strings.Contains(l, " #") || strings.HasPrefix(l, "#") {
+			t.Errorf("summary line with a # comment: %s", l)
+		}
+	}
+}
+
 // The tokens, the kubeconfigs and the Swarmada copy never go in the work tree:
 // demo-up.sh, demo-down.sh and kind-people gen refuse a directory inside the repository.
 func TestTokenDirectoryMustBeOutsideRepo(t *testing.T) {
