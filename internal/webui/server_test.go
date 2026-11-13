@@ -23,6 +23,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -126,6 +127,55 @@ func TestChatValidatesInput(t *testing.T) {
 	}
 	if len(r.got) != 0 {
 		t.Fatalf("runner called for invalid input: %v", r.got)
+	}
+}
+
+// The page sends no token, so a missing or malformed name is refused in words
+// for a person, with the field to highlight; the rule itself is unchanged.
+func TestChatNameRefusalIsForAPerson(t *testing.T) {
+	r := &stubRunner{}
+	ts := newServer(t, r, nil)
+	for _, body := range []string{`{"message":"hi"}`, `{"operator":"Show me all robots","message":"hi"}`, `{"operator":"` + strings.Repeat("a", 129) + `","message":"hi"}`} {
+		code, out := postChat(t, ts, body, nil)
+		if code != 400 || out.Error != NameRefusal || out.Field != "operator" {
+			t.Errorf("%s: %d %q field %q", body, code, out.Error, out.Field)
+		}
+	}
+	if NameRefusal != "Type your name in the field at the top (for example sam), then send again." {
+		t.Errorf("NameRefusal = %q", NameRefusal)
+	}
+	if len(r.got) != 0 {
+		t.Fatalf("runner called: %v", r.got)
+	}
+}
+
+// The name is a small labelled field with an example; the cursor starts in
+// the message box; the page checks the name with the server's own rule and
+// refuses with the server's own words before sending.
+func TestPageNameFieldAndFocus(t *testing.T) {
+	ts := newServer(t, &stubRunner{}, nil)
+	_, page := get(t, ts.URL+"/")
+	_, js := get(t, ts.URL+"/app.js")
+	input := regexp.MustCompile(`<input id="operator"[^>]*>`).FindString(page)
+	textarea := regexp.MustCompile(`<textarea id="message"[^>]*>`).FindString(page)
+	if input == "" || textarea == "" {
+		t.Fatalf("name field or message box missing:\n%s", page)
+	}
+	if !strings.Contains(page, `<label for="operator">Your name</label>`) || !strings.Contains(input, `placeholder="e.g. sam"`) || !strings.Contains(input, `class="name"`) {
+		t.Errorf("name field: %s", input)
+	}
+	// An HTML pattern is anchored to the whole value, as operatorRE is.
+	want := `pattern="` + strings.TrimSuffix(strings.TrimPrefix(operatorRE.String(), "^"), "$") + `"`
+	if !strings.Contains(input, want) {
+		t.Errorf("name field %s lacks %s", input, want)
+	}
+	if strings.Contains(input, "autofocus") || !strings.Contains(textarea, "autofocus") {
+		t.Errorf("focus must start in the message box: %s / %s", input, textarea)
+	}
+	for _, s := range []string{NameRefusal, "checkValidity()", `"invalid"`, `out.field === "operator"`} {
+		if !strings.Contains(js, s) {
+			t.Errorf("app.js lacks %q", s)
+		}
 	}
 }
 

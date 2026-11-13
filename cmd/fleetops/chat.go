@@ -98,6 +98,7 @@ func chat(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		Notice         string `json:"notice"`
 		Answer         string `json:"answer"`
 		Error          string `json:"error"`
+		Field          string `json:"field"`
 		ToolCalls      []struct {
 			Name, PolicyCode, Created string
 			Refused, IsError          bool
@@ -123,6 +124,10 @@ func chat(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	}
 	if out.Notice != "" {
 		_, _ = fmt.Fprintln(stderr, "fleetops: "+out.Notice)
+	}
+	if out.Field == "operator" {
+		// The agent words this for its web page; here the name is a flag.
+		return errors.New("fleetops-agent refused the name: -operator NAME is required when the kubeconfig user has no bearer token, and takes letters, digits and . _ @ : + -, at most 128")
 	}
 	if out.Error != "" {
 		return fmt.Errorf("fleetops-agent: %s", out.Error)

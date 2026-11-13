@@ -96,6 +96,11 @@ const (
 	readyzTimeout = 3 * time.Second
 )
 
+// NameRefusal is the answer to a chat message whose name is missing or not a
+// Kubernetes username (operatorRE); the response's field is "operator". The
+// page shows the same words before it sends.
+const NameRefusal = "Type your name in the field at the top (for example sam), then send again."
+
 var (
 	operatorRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._@:+-]{0,127}$`)
 	// Session ids become a label value on ApprovalRequests (fleet.SessionLabel).
@@ -200,9 +205,11 @@ type chatResponse struct {
 	Dialogue *agent.DialogueEvent `json:"dialogue,omitempty"`
 	// Requester is what any request filed by this message records as
 	// requestedFor when no token was sent; with a token fleetops-mcp decides it.
-	Requester string     `json:"requester,omitempty"`
-	Answer    string     `json:"answer,omitempty"`
-	Error     string     `json:"error,omitempty"`
+	Requester string `json:"requester,omitempty"`
+	Answer    string `json:"answer,omitempty"`
+	Error     string `json:"error,omitempty"`
+	// Field names the request field an Error refers to, for the page to highlight.
+	Field     string     `json:"field,omitempty"`
 	Turns     int        `json:"turns"`
 	LatencyMs float64    `json:"latencyMs"`
 	ToolCalls []ToolCall `json:"toolCalls"`
@@ -231,7 +238,7 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 	token := authn.BearerToken(r.Header.Get("Authorization"))
 	switch {
 	case (token == "" || in.Operator != "") && !operatorRE.MatchString(in.Operator):
-		writeJSON(w, http.StatusBadRequest, chatResponse{Error: "operator: enter your Kubernetes username (letters, digits and . _ @ : + -, at most 128)"})
+		writeJSON(w, http.StatusBadRequest, chatResponse{Error: NameRefusal, Field: "operator"})
 		return
 	case (in.Message == "" && in.FollowUp == "") || len(in.Message) > maxMessage:
 		writeJSON(w, http.StatusBadRequest, chatResponse{Error: "message: between 1 and 8000 characters"})

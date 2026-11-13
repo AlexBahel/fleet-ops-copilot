@@ -16,13 +16,13 @@
 <main>
   <section class="chat" aria-label="Chat">
     <div class="who">
-      <label for="operator">Your Kubernetes username</label>
-      <input id="operator" autocomplete="username" spellcheck="false" placeholder="e.g. jane@example.com">
-      <span class="hint" id="requester">Recorded as "unverified:&lt;name&gt;": there is no login, so requests filed from this page can be rejected but never approved.</span>
+      <label for="operator">Your name</label>
+      <input id="operator" class="name" autocomplete="username" spellcheck="false" placeholder="e.g. sam" pattern="[A-Za-z0-9][A-Za-z0-9._@:+-]{0,127}" maxlength="128" aria-describedby="requester">
+      <span class="hint" id="requester">Your Kubernetes username. This page has no login, so a request filed here is recorded for "unverified:&lt;name&gt;" and can only be rejected. To file a request a person can approve, use <code>bin/fleetops chat</code> with your own kubeconfig.</span>
     </div>
     <ol class="log" id="log" aria-live="polite"></ol>
     <form id="ask" class="ask">
-      <textarea id="message" rows="3" placeholder="Ask about robots, tasks or zones, or ask for a draft task, maintenance window or zone stop. Enter sends, Shift+Enter is a new line."></textarea>
+      <textarea id="message" rows="3" autofocus placeholder="Ask about robots, tasks or zones, or ask for a draft task, maintenance window or zone stop. Enter sends, Shift+Enter is a new line."></textarea>
       <div class="row">
         <span class="hint" id="session"></span>
         <button type="button" id="new-session" class="secondary">New session</button>

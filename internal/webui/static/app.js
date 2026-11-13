@@ -67,11 +67,28 @@ function chips(calls) {
   return foot;
 }
 
+// The server's words (webui.NameRefusal) for a missing or malformed name.
+const NAME_REFUSAL = "Type your name in the field at the top (for example sam), then send again.";
+
+// refuseName highlights the name field and says what to do; the message
+// stays in its box to send again.
+function refuseName() {
+  const f = $("operator");
+  f.classList.add("invalid");
+  f.setAttribute("aria-invalid", "true");
+  f.focus();
+  addMessage("error", NAME_REFUSAL);
+}
+
 async function send(ev) {
   ev.preventDefault();
-  const operator = $("operator").value.trim();
+  const field = $("operator");
+  field.value = field.value.trim();
+  const operator = field.value;
   const message = $("message").value.trim();
-  if (!operator) { $("operator").focus(); addMessage("error", "Enter your Kubernetes username first."); return; }
+  // The field's pattern is the server's rule; an empty value passes a
+  // pattern, so it is checked on its own.
+  if (!operator || !field.checkValidity()) { refuseName(); return; }
   if (!message) return;
   save("localStorage", "fleetops.operator", operator);
   addMessage("user", message);
@@ -90,7 +107,10 @@ async function send(ev) {
     if (out.conversationId) conversationId = out.conversationId;
     if (out.notice) addMessage("pending", out.notice);
     if (out.requester) $("requester").textContent = "Requests from this page are recorded for " + out.requester + " and cannot be approved; a person can only reject them.";
-    if (out.error) {
+    if (out.field === "operator") {
+      $("message").value = message;
+      refuseName();
+    } else if (out.error) {
       const li = addMessage("error", out.error);
       if (out.toolCalls?.length) li.append(chips(out.toolCalls));
     } else {
@@ -191,6 +211,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("operator").value = load("localStorage", "fleetops.operator");
   showSession();
   $("ask").addEventListener("submit", send);
+  $("operator").addEventListener("input", () => {
+    $("operator").classList.remove("invalid");
+    $("operator").removeAttribute("aria-invalid");
+  });
   $("message").addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("ask").requestSubmit(); }
   });

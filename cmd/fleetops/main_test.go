@@ -110,6 +110,22 @@ func TestChatSendsTheKubeconfigToken(t *testing.T) {
 	}
 }
 
+// fleetops-agent words a refused name for its web page; the CLI names its own
+// flag instead.
+func TestChatNameRefusalNamesTheFlag(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":"Type your name in the field at the top (for example sam), then send again.","field":"operator","toolCalls":null}`))
+	}))
+	defer ts.Close()
+	t.Setenv("KUBECONFIG", writeKubeconfig(t, `{username: u, password: p}`))
+	var out, errOut bytes.Buffer
+	err := chat(context.Background(), []string{"-agent", ts.URL, "hi"}, &out, &errOut)
+	if err == nil || !strings.Contains(err.Error(), "-operator NAME") || strings.Contains(err.Error(), "field at the top") {
+		t.Fatalf("error %v", err)
+	}
+}
+
 // D75: fleetops chat keeps the conversation id per context and sends it back;
 // -new starts a fresh one.
 func TestChatKeepsTheConversation(t *testing.T) {
