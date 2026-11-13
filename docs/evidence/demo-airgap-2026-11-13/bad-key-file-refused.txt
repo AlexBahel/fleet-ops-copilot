@@ -1,0 +1,26 @@
+Pasted into a new zsh (zsh -f -i) in the clone, in this order (the shell does not echo input):
+  (umask 077; printf '<a 94-character sentence with a web address>' > ~/<key file>)
+  hack/check-key-file.sh ~/<key file>
+  make demo DEMO_MODEL=cloud DEMO_ANTHROPIC_KEY_FILE=$HOME/<key file>
+The first line stands in for the README's pbpaste with clipboard text. The file was not the README's
+~/fleetops-key.txt, so that an existing file of that name was not touched; its name is shown as
+<key file> here, as home directories are shown as ~. Docker's
+containers and the demo directory's listing were the same before and after (no cluster, nothing created).
+
+
+ 
+[22:13:32Z T3] <clone> % % 
+ 
+[22:13:34Z T3] <clone> % ~/<key file>: not a Claude API key: it is one line of 94 characters with spaces in it (14 words); it looks like copied text, not a key.
+Copy the key from the Claude Console again, write it to the file again, then run hack/check-key-file.sh ~/<key file> again.
+
+ 
+[22:13:35Z T3] <clone> % CLUSTER=fleetops-demo KUBECONFIG=~/.local/state/fleet-ops-copilot/demo/kubeconfig DEMO_DIR=~/.local/state/fleet-ops-copilot/demo hack/demo-up.sh
+~/<key file>: not a Claude API key: it is one line of 94 characters with spaces in it (14 words); it looks like copied text, not a key.
+Copy the key from the Claude Console again, write it to the file again, then run hack/check-key-file.sh ~/<key file> again.
+demo: DEMO_ANTHROPIC_KEY_FILE=~/<key file> is not a key file (above). Nothing was started.
+make: *** [demo] Error 1
+
+ 
+[22:13:35Z T3] <clone> % % 
+ 

@@ -320,8 +320,10 @@ bytes (4.4 GiB) together, from the official Qwen repository on Hugging Face at a
 into `~/.cache/fleet-ops-copilot/models`. Each is checked against its sha256 in
 [`config/airgap/model-SHA256SUMS`](config/airgap/model-SHA256SUMS), the files of the v6 record runs. It
 also pulls the pinned llama.cpp server image, the one the record used. Later runs check the cached
-files and reuse them; nothing is downloaded inside the cluster. The last line `make demo` prints is
-the total time, followed by what to run next.
+files and reuse them; nothing is downloaded inside the cluster. On a Mac mini the first run took
+6m45s, 3m37s of it for the model files, and a run with them cached 3m18s
+([`docs/evidence/demo-airgap-2026-11-13/`](docs/evidence/demo-airgap-2026-11-13/README.md)). The last
+line `make demo` prints is the total time, followed by what to run next.
 
 **Cloud, with a Claude API key.** Instead of the command above, put the key in a file only you can
 read; `make demo` creates the Secret from it, and the key never appears on a command line. Copy the

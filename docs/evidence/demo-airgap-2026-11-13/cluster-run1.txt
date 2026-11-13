@@ -1,0 +1,19 @@
+NAME                                      READY   STATUS    RESTARTS   AGE     IP            NODE                          NOMINATED NODE   READINESS GATES
+pod/fleetops-agent-7b54c5bff9-ng55k       1/1     Running   0          4m52s   10.244.0.16   fleetops-demo-control-plane   <none>           <none>
+pod/fleetops-approvals-64f844854f-hxjm6   1/1     Running   0          4m53s   10.244.0.15   fleetops-demo-control-plane   <none>           <none>
+pod/fleetops-mcp-58f7747d5b-gplz9         1/1     Running   0          4m53s   10.244.0.14   fleetops-demo-control-plane   <none>           <none>
+pod/llama-server-7bcf974fd6-dnb6m         1/1     Running   0          5m4s    10.244.0.13   fleetops-demo-control-plane   <none>           <none>
+
+NAME                                                               POD-SELECTOR                                                                 AGE
+networkpolicy.networking.k8s.io/fleetops-airgap-egress             app.kubernetes.io/name notin (llama-server)                                  4m53s
+networkpolicy.networking.k8s.io/fleetops-airgap-egress-agent-mcp   app.kubernetes.io/name=fleetops-agent                                        4m53s
+networkpolicy.networking.k8s.io/fleetops-airgap-egress-apiserver   app.kubernetes.io/name in (fleetops-agent,fleetops-approvals,fleetops-mcp)   4m53s
+networkpolicy.networking.k8s.io/fleetops-airgap-egress-model       app.kubernetes.io/name in (fleetops-agent,fleetops-egress-probe)             4m53s
+networkpolicy.networking.k8s.io/llama-server-ingress               app.kubernetes.io/name=llama-server                                          4m53s
+networkpolicy.networking.k8s.io/llama-server-no-egress             app.kubernetes.io/name=llama-server                                          4m53s
+
+$ kubectl -n fleetops-system get secret
+NAME                             TYPE                 DATA   AGE
+sh.helm.release.v1.fleetops.v1   helm.sh/release.v1   1      5m43s
+
+fleetops-agent 2026/11/13 22:03:32 listening on :8090; backend llamacpp:qwen2.5-7b-instruct; fleetops-mcp http://fleetops-mcp:8080/mcp; namespaces warehouse-a; catalogue /etc/fleetops/catalogue/site.yaml version 1 sha256 0cd8d8f8ee646e02f4b13d7cd117bc58f84714bc4398b9f20995e19c95051de1; tracing off

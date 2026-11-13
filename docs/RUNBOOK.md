@@ -10,7 +10,9 @@ section 9 end to end: a guided request, `fleetops approve` by dana, an activatio
 approval, `fleetops activate` by dana, and the FleetTask Succeeded. Section 4's audit file was read
 and verified (`fleetops audit verify`) in both. The other sections have not been run as a
 sequence. Those runs were of the cloud profile; `make demo` has run the air-gapped profile by
-default since D103. Items that depend on parts not built yet say so.
+default since D103, twice on 2026-11-13 with one question each through `fleetops chat` and the web
+chat in the first, and `make verify-egress` in the second
+([`docs/evidence/demo-airgap-2026-11-13/`](evidence/demo-airgap-2026-11-13/README.md)). Items that depend on parts not built yet say so.
 
 Conventions: every `kubectl` and `helm` command names its context explicitly. The examples use a
 kind cluster `fleetops-<name>`, context `kind-fleetops-<name>`, a kubeconfig file that holds only that

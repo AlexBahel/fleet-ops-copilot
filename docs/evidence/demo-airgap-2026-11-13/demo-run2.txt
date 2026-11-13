@@ -1,0 +1,418 @@
+CLUSTER=fleetops-demo KUBECONFIG=~/.local/state/fleet-ops-copilot/demo/kubeconfig DEMO_DIR=~/.local/state/fleet-ops-copilot/demo hack/demo-up.sh
+==> demo [0m00s] tools and Docker
+  quickstart python: ~/fleetops-venv/bin/python3 (imports grpc and google.protobuf)
+  Docker VM memory: 21.5 GiB (the air-gapped profile needs 12 GiB)
+  cluster fleetops-demo (context kind-fleetops-demo), kubeconfig ~/.local/state/fleet-ops-copilot/demo/kubeconfig, scenario healthy-fleet
+  model profile: airgap (Qwen2.5-7B-Instruct on llama-server in the cluster, egress denied, no API key)
+==> demo [0m00s] model files, llama.cpp image
+  Qwen2.5-7B-Instruct GGUF Q4_K_M, 2 files, 4,683,073,632 bytes (4.4 GiB). The first run downloads them
+  into ~/.cache/fleet-ops-copilot/models/qwen2.5-7b-instruct-q4_k_m and checks each sha256 (config/airgap/model-SHA256SUMS); later runs reuse them.
+  qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf: in the cache, sha256 OK
+  qwen2.5-7b-instruct-q4_k_m-00002-of-00002.gguf: in the cache, sha256 OK
+  llama.cpp server image already here: ghcr.io/ggml-org/llama.cpp@sha256:b32890309c1a33a534a01b0b461e953dc2c5a6bac20213abcf48e22847a19c85
+==> demo [0m09s] people tokens (D60, test only)
+kind-people: wrote ~/.local/state/fleet-ops-copilot/demo/people/tokens.csv (3 people)
+==> demo [0m09s] kind cluster fleetops-demo
+  kind configuration: ~/.local/state/fleet-ops-copilot/demo/kind-config.yaml
+Creating cluster "fleetops-demo" ...
+ • Ensuring node image (kindest/node:v1.37.0) 🖼️  ...
+ ✓ Ensuring node image (kindest/node:v1.37.0) 🖼️
+ • Preparing nodes 📦   ...
+ ✓ Preparing nodes 📦 
+ • Writing configuration 📜  ...
+ ✓ Writing configuration 📜
+ • Starting control-plane 🕹️  ...
+ ✓ Starting control-plane 🕹️
+ • Installing CNI 🔌  ...
+ ✓ Installing CNI 🔌
+ • Installing StorageClass 💾  ...
+ ✓ Installing StorageClass 💾
+ • Waiting ≤ 3m0s for control-plane = Ready ⏳  ...
+ ✓ Waiting ≤ 3m0s for control-plane = Ready ⏳
+ • Ready after 16s 💚
+Set kubectl context to "kind-fleetops-demo"
+You can now use your cluster with:
+kubectl cluster-info --context kind-fleetops-demo --kubeconfig ~/.local/state/fleet-ops-copilot/demo/kubeconfig
+Not sure what to do next? 😅  Check out https://kind.sigs.k8s.io/docs/user/quick-start/
+==> demo [0m32s] people: tokens accepted by the API server
+  sam's token authenticates as sam
+  dana's token authenticates as dana
+  eve's token authenticates as eve
+==> demo [0m32s] Swarmada quickstart (go.mod pin)
+  Swarmada v0.0.0-20261104205854-558da47fdb44 -> ~/.local/state/fleet-ops-copilot/demo/swarmada (a writable copy: the module cache is read-only and the quickstart builds in its tree)
+==> 0/7 — Preflight
+    required tools present; Docker daemon reachable
+==> Scenario — healthy-fleet
+    the control plane, CRDs, and scheduler are identical for every scenario.
+    LIVE mode (default): sim-robot-001 will be driven by a real sim_adapter.py process
+    against the real ControlStream (--scenario healthy-fleet). The other two
+    robots stay status-projected — they have no Fleet Adapter, so nothing can
+    ever drive their readiness the real way.
+    sim-robot-001's connection, registration, telemetry, AND phase are all real:
+    the Robot reconciler advances a live robot Discovered->Idle on its own
+    (ADR-0029). See docs/quickstart.md, Honest notes.
+    This deploys via config/overlays/quickstart-mtls (DEV/DEMO ONLY — see
+    that overlay's own header comment).
+==> 0.5/7 — Clean up any leftover processes from a previous run
+    no pidfile — nothing to clean up
+==> 1/7 — Create kind cluster (fleetops-demo)
+    cluster 'fleetops-demo' already exists and looks healthy — reusing it
+==> 2/7 — Build the controller-manager image (swarmada-controller:dev)
+docker build --build-arg VERSION=0.4.0 -t swarmada-controller:dev .
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/sgewykxz38x15p91m5pli1z90
+==> 3/7 — Load the image into the kind cluster
+Image: "swarmada-controller:dev" with ID "sha256:b0b345510aa3a8b05d01e7c93abda02ed75f6c19a02d00212034f8c843b086a5" not yet present on node "fleetops-demo-control-plane", loading...
+==> 4/7 — Install CRDs and deploy the control plane
+    installing cert-manager v1.16.2 (issues the ControlStream + adapter certs)…
+namespace/cert-manager created
+customresourcedefinition.apiextensions.k8s.io/certificaterequests.cert-manager.io created
+customresourcedefinition.apiextensions.k8s.io/certificates.cert-manager.io created
+customresourcedefinition.apiextensions.k8s.io/challenges.acme.cert-manager.io created
+customresourcedefinition.apiextensions.k8s.io/clusterissuers.cert-manager.io created
+customresourcedefinition.apiextensions.k8s.io/issuers.cert-manager.io created
+customresourcedefinition.apiextensions.k8s.io/orders.acme.cert-manager.io created
+serviceaccount/cert-manager-cainjector created
+serviceaccount/cert-manager created
+serviceaccount/cert-manager-webhook created
+clusterrole.rbac.authorization.k8s.io/cert-manager-cainjector created
+clusterrole.rbac.authorization.k8s.io/cert-manager-controller-issuers created
+clusterrole.rbac.authorization.k8s.io/cert-manager-controller-clusterissuers created
+clusterrole.rbac.authorization.k8s.io/cert-manager-controller-certificates created
+clusterrole.rbac.authorization.k8s.io/cert-manager-controller-orders created
+clusterrole.rbac.authorization.k8s.io/cert-manager-controller-challenges created
+clusterrole.rbac.authorization.k8s.io/cert-manager-controller-ingress-shim created
+clusterrole.rbac.authorization.k8s.io/cert-manager-cluster-view created
+clusterrole.rbac.authorization.k8s.io/cert-manager-view created
+clusterrole.rbac.authorization.k8s.io/cert-manager-edit created
+clusterrole.rbac.authorization.k8s.io/cert-manager-controller-approve:cert-manager-io created
+clusterrole.rbac.authorization.k8s.io/cert-manager-controller-certificatesigningrequests created
+clusterrole.rbac.authorization.k8s.io/cert-manager-webhook:subjectaccessreviews created
+clusterrolebinding.rbac.authorization.k8s.io/cert-manager-cainjector created
+clusterrolebinding.rbac.authorization.k8s.io/cert-manager-controller-issuers created
+clusterrolebinding.rbac.authorization.k8s.io/cert-manager-controller-clusterissuers created
+clusterrolebinding.rbac.authorization.k8s.io/cert-manager-controller-certificates created
+clusterrolebinding.rbac.authorization.k8s.io/cert-manager-controller-orders created
+clusterrolebinding.rbac.authorization.k8s.io/cert-manager-controller-challenges created
+clusterrolebinding.rbac.authorization.k8s.io/cert-manager-controller-ingress-shim created
+clusterrolebinding.rbac.authorization.k8s.io/cert-manager-controller-approve:cert-manager-io created
+clusterrolebinding.rbac.authorization.k8s.io/cert-manager-controller-certificatesigningrequests created
+clusterrolebinding.rbac.authorization.k8s.io/cert-manager-webhook:subjectaccessreviews created
+role.rbac.authorization.k8s.io/cert-manager-cainjector:leaderelection created
+role.rbac.authorization.k8s.io/cert-manager:leaderelection created
+role.rbac.authorization.k8s.io/cert-manager-tokenrequest created
+role.rbac.authorization.k8s.io/cert-manager-webhook:dynamic-serving created
+rolebinding.rbac.authorization.k8s.io/cert-manager-cainjector:leaderelection created
+rolebinding.rbac.authorization.k8s.io/cert-manager:leaderelection created
+rolebinding.rbac.authorization.k8s.io/cert-manager-cert-manager-tokenrequest created
+rolebinding.rbac.authorization.k8s.io/cert-manager-webhook:dynamic-serving created
+service/cert-manager-cainjector created
+service/cert-manager created
+service/cert-manager-webhook created
+deployment.apps/cert-manager-cainjector created
+deployment.apps/cert-manager created
+deployment.apps/cert-manager-webhook created
+mutatingwebhookconfiguration.admissionregistration.k8s.io/cert-manager-webhook created
+validatingwebhookconfiguration.admissionregistration.k8s.io/cert-manager-webhook created
+    waiting for cert-manager to become Available…
+Waiting for deployment "cert-manager" rollout to finish: 0 of 1 updated replicas are available...
+deployment "cert-manager" successfully rolled out
+deployment "cert-manager-cainjector" successfully rolled out
+Waiting for deployment "cert-manager-webhook" rollout to finish: 0 of 1 updated replicas are available...
+deployment "cert-manager-webhook" successfully rolled out
+    waiting for the cert-manager webhook to answer (a Certificate applied before it does is refused)…
+    cert-manager webhook answering after 0s ✓
+    LIVE mode — deploying via config/overlays/quickstart-mtls (DEV/DEMO ONLY)
+namespace/system serverside-applied
+customresourcedefinition.apiextensions.k8s.io/artifactstores.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/computeendpoints.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/computeworkloadtemplates.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/discoveredrobots.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/edgenodes.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/firmwarerollouts.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/fleetactions.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/fleetadapters.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/fleettasks.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/fleetzones.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/modelpolicies.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/modelrollouts.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/resultsinks.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/robotclasses.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/robotprobes.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/robots.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/semanticevents.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/semanticeventsources.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/swarmadaconfigs.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/tasktriggers.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/zonemaintenances.swarmada.io serverside-applied
+serviceaccount/swarmada-manager serverside-applied
+clusterrole.rbac.authorization.k8s.io/swarmada-manager-role serverside-applied
+clusterrole.rbac.authorization.k8s.io/swarmada:admin serverside-applied
+clusterrole.rbac.authorization.k8s.io/swarmada:edge serverside-applied
+clusterrole.rbac.authorization.k8s.io/swarmada:fleet-manager serverside-applied
+clusterrole.rbac.authorization.k8s.io/swarmada:operator serverside-applied
+clusterrole.rbac.authorization.k8s.io/swarmada:robot serverside-applied
+clusterrole.rbac.authorization.k8s.io/swarmada:viewer serverside-applied
+clusterrolebinding.rbac.authorization.k8s.io/swarmada-manager-rolebinding serverside-applied
+service/swarmada-controlstream serverside-applied
+deployment.apps/swarmada-controller-manager serverside-applied
+certificate.cert-manager.io/controlstream-ca serverside-applied
+certificate.cert-manager.io/controlstream-server serverside-applied
+certificate.cert-manager.io/sim-fleet-adapter-client serverside-applied
+issuer.cert-manager.io/controlstream-ca-issuer serverside-applied
+issuer.cert-manager.io/controlstream-selfsigned serverside-applied
+    waiting for cert-manager to issue the sim-fleet-adapter client certificate…
+    sim-fleet-adapter client certificate ready ✓ (/tmp/swq-fleetops-demo-adapter-tls)
+    waiting for the controller-manager to become Available…
+Waiting for deployment "swarmada-controller-manager" rollout to finish: 0 of 1 updated replicas are available...
+deployment "swarmada-controller-manager" successfully rolled out
+==> 4.5/7 — Reset namespace warehouse-a to a clean slate
+    namespace warehouse-a does not exist yet — nothing to reset
+==> 5/7 — Apply the sample fleet (reuses config/samples/demo_a.yaml)
+namespace/warehouse-a created
+fleetzone.swarmada.io/warehouse-a created
+robot.swarmada.io/sim-robot-001 created
+robot.swarmada.io/sim-robot-002 created
+robot.swarmada.io/sim-robot-003 created
+fleetaction.swarmada.io/deliver-pallet-001 created
+fleetaction.swarmada.io/inspect-receiving-dock created
+fleettask.swarmada.io/receiving-round-001 created
+    applied 1 FleetZone, 3 Robots, 2 standalone FleetActions, and 1 FleetTask (1 member)
+Warning: resource swarmadaconfigs/swarmada-config is missing the kubectl.kubernetes.io/last-applied-configuration annotation which is required by kubectl apply. kubectl apply should only be used on resources created declaratively by either kubectl create --save-config or kubectl apply. The missing annotation will be patched automatically.
+sim-conformance-report: running the conformance harness against the simulation adapter (port 49293)…
+sim-conformance-report: harness verdict conformant=true contract_version=1.4.0 (pass 60, fail 0, advisory 1, skip 10)
+    FleetAdapter sim-fleet-adapter ready (digest-verified conformance; phase becomes
+    Connected for real once the live adapter registers below)
+==> 6/7 — Drive the robots ready: sim-robot-001 is LIVE (scenario 'healthy-fleet')
+robot.swarmada.io/sim-robot-002 patched
+robot.swarmada.io/sim-robot-003 patched
+    port-forwarding to the ControlStream Service (127.0.0.1:19443 -> service/swarmada-controlstream:9445)…
+    port-forward ready ✓
+    launching the live sim adapter for sim-robot-001 (scenario 'healthy-fleet')…
+    watch it live, in another terminal:
+        kubectl -n warehouse-a get robot sim-robot-001 -w
+        tail -f /tmp/swq-fleetops-demo-adapter.log
+    waiting up to 20s for real telemetry from sim-robot-001 (proves the live handshake worked)…
+    real telemetry confirmed (battery reported by the live adapter) ✓
+    waiting up to 15s for sim-robot-001 to leave Discovered for real (ADR-0029,
+    RFC-0001 #control-plane-robot-health-and-connectivity — not patched: the Robot reconciler advances a live robot's phase
+    Discovered->{Idle,InProgress} on its own once fresh liveness arrives)…
+    sim-robot-001 phase=InProgress (real) ✓
+    waiting up to 15s for FleetAdapter sim-fleet-adapter to reach Connected
+    for real (verified mTLS identity — not patched)…
+    FleetAdapter sim-fleet-adapter phase=Connected (real) ✓
+==> 7/7 — Wait for the verifiable end state
+    waiting up to 15s for all 3 robots to reach Idle…
+    all robots Idle ✓
+    waiting up to 15s for the scheduler to assign a FleetAction…
+    a FleetAction was assigned by the scheduler ✓
+    waiting up to 45s for the live robot to complete its FleetAction…
+    a FleetAction was completed by the live robot ✓
+NAME            PHASE   ZONE          BATTERY   ACTION   AGE
+sim-robot-001   Idle    warehouse-a   99                 40s
+sim-robot-002   Idle    warehouse-a   85                 40s
+sim-robot-003   Idle    warehouse-a   85                 40s
+NAME                               TYPE       VERB   PHASE       OUTCOME   PRIORITY   ROBOT           ZONE          AGE
+deliver-pallet-001                 Navigate          Succeeded             High       sim-robot-001   warehouse-a   40s
+inspect-receiving-dock             Navigate          Pending               Normal                     warehouse-a   40s
+receiving-round-001-inspect-dock   Navigate          Pending               Normal                     warehouse-a   40s
+NAME                  PHASE     ACTIONS         DESIRED   AGE
+receiving-round-001   Running   0/1 Succeeded   Running   40s
+✅ Quickstart end state reached: all robots Idle, the real scheduler
+   assigned a FleetAction in warehouse-a, and the live robot completed one.
+The cluster 'fleetops-demo' is left running so you can explore it:
+    kubectl get robots,fleetactions -n warehouse-a
+    watch -n1 kubectl get robots,fleetactions -n warehouse-a   # live fleet inspector
+The live sim adapter and its port-forward keep running until this script exits.
+Remember to clean up the 'fleetops-demo' cluster when you're done with it:
+    examples/warehouse-quickstart/run.sh --clean
+or:
+    kind delete cluster --name fleetops-demo
+examples/warehouse-quickstart/run.sh: line 189: 48221 Terminated: 15          kubectl -n "$MANAGER_NS" port-forward service/swarmada-controlstream "${LOCAL_CS_PORT}:9445" > "$PF_LOG" 2>&1
+==> demo [1m49s] Swarmada admission webhooks
+namespace/system serverside-applied
+customresourcedefinition.apiextensions.k8s.io/artifactstores.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/computeendpoints.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/computeworkloadtemplates.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/discoveredrobots.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/edgenodes.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/firmwarerollouts.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/fleetactions.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/fleetadapters.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/fleettasks.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/fleetzones.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/modelpolicies.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/modelrollouts.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/resultsinks.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/robotclasses.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/robotprobes.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/robots.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/semanticevents.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/semanticeventsources.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/swarmadaconfigs.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/tasktriggers.swarmada.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/zonemaintenances.swarmada.io serverside-applied
+serviceaccount/swarmada-manager serverside-applied
+clusterrole.rbac.authorization.k8s.io/swarmada-manager-role serverside-applied
+clusterrole.rbac.authorization.k8s.io/swarmada:admin serverside-applied
+clusterrole.rbac.authorization.k8s.io/swarmada:edge serverside-applied
+clusterrole.rbac.authorization.k8s.io/swarmada:fleet-manager serverside-applied
+clusterrole.rbac.authorization.k8s.io/swarmada:operator serverside-applied
+clusterrole.rbac.authorization.k8s.io/swarmada:robot serverside-applied
+clusterrole.rbac.authorization.k8s.io/swarmada:viewer serverside-applied
+clusterrolebinding.rbac.authorization.k8s.io/swarmada-manager-rolebinding serverside-applied
+service/swarmada-controlstream serverside-applied
+service/webhook-service serverside-applied
+deployment.apps/swarmada-controller-manager serverside-applied
+certificate.cert-manager.io/controlstream-ca serverside-applied
+certificate.cert-manager.io/controlstream-server serverside-applied
+certificate.cert-manager.io/webhook-serving-cert serverside-applied
+issuer.cert-manager.io/controlstream-ca-issuer serverside-applied
+issuer.cert-manager.io/controlstream-selfsigned serverside-applied
+mutatingwebhookconfiguration.admissionregistration.k8s.io/mutating-webhook-configuration serverside-applied
+validatingwebhookconfiguration.admissionregistration.k8s.io/validating-webhook-configuration serverside-applied
+Waiting for deployment "swarmada-controller-manager" rollout to finish: 0 out of 1 new replicas have been updated...
+Waiting for deployment "swarmada-controller-manager" rollout to finish: 0 out of 1 new replicas have been updated...
+Waiting for deployment "swarmada-controller-manager" rollout to finish: 0 out of 1 new replicas have been updated...
+Waiting for deployment "swarmada-controller-manager" rollout to finish: 0 of 1 updated replicas are available...
+deployment "swarmada-controller-manager" successfully rolled out
+==> demo [2m01s] preflight: webhooks present and answering
+preflight: ok: dedicated kubeconfig ~/.local/state/fleet-ops-copilot/demo/kubeconfig
+preflight: ok: every context in the file is kind-fleetops-*; kind-fleetops-demo present
+preflight: ok: kind-fleetops-demo is kind cluster fleetops-demo at https://127.0.0.1:49229, ready
+preflight: ok: Swarmada CRDs installed
+preflight: ok: fail-closed validating webhook for UPDATE fleettasks.swarmada.io (draft gate): validating-webhook-configuration/vfleettask.swarmada.io 
+preflight: ok: validating webhook for UPDATE fleetzones.swarmada.io: validating-webhook-configuration/vfleetzone.swarmada.io 
+preflight: ok: validating webhook for CREATE zonemaintenances.swarmada.io: validating-webhook-configuration/vzonemaintenance.swarmada.io 
+preflight: ok: mutating webhook for UPDATE fleetzones.swarmada.io (estop actor): mutating-webhook-configuration/mfleetzone.swarmada.io 
+preflight: ok: webhook Service system/webhook-service: 1 ready endpoint(s)
+preflight: ok: FleetTask webhook answered: dry-run held draft admitted (fleettask.swarmada.io/fleetops-preflight-1794607863 created (server dry run))
+preflight: PASSED for kind-fleetops-demo
+==> demo [2m07s] Swarmada sim fleet: three live adapters
+  sim fleet: RobotClass simbot-v1 (labelled fleetops.alexbahel.github.io/demo-workaround)
+  sim fleet: client certificates of sim-fleet-adapter sim-fleet-adapter-2 sim-fleet-adapter-3 in ~/.local/state/fleet-ops-copilot/demo/sim-fleet
+  sim fleet: FleetAdapters sim-fleet-adapter-2, sim-fleet-adapter-3 (sim-fleet-adapter's spec)
+  sim fleet: sim-robot-002 points at sim-fleet-adapter-2
+  sim fleet: sim-robot-003 points at sim-fleet-adapter-3
+  sim fleet: port-forward 127.0.0.1:19443 and 3 adapters started; PIDs in ~/.local/state/fleet-ops-copilot/demo/sim-fleet/pids, logs in ~/.local/state/fleet-ops-copilot/demo/logs
+  sim fleet: every robot registered and ready for work: its Robot names its adapter, the adapter is Connected, no register refused, the Robot Idle or InProgress
+==> demo [2m22s] image fleet-ops-copilot:dev
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o bin/linux-arm64/ ./cmd/fleetops-mcp ./cmd/fleetops-approvals ./cmd/fleetops-agent
+docker build --platform linux/arm64 -t fleet-ops-copilot:dev .
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/wc65f72sc03jqnxibxe2vi2eo
+Image: "fleet-ops-copilot:dev" with ID "sha256:7113722ff631b368424c61a6a1e1602f8b4994d27a1c4cf61c9dce9a60428b04" not yet present on node "fleetops-demo-control-plane", loading...
+==> demo [2m26s] Helm chart
+customresourcedefinition.apiextensions.k8s.io/approvaldecisions.fleetops.alexbahel.github.io serverside-applied
+customresourcedefinition.apiextensions.k8s.io/approvalrequests.fleetops.alexbahel.github.io serverside-applied
+Release "fleetops" does not exist. Installing it now.
+NAME: fleetops
+LAST DEPLOYED: Fri Nov 13 22:11:22 2026
+NAMESPACE: fleetops-system
+STATUS: deployed
+REVISION: 1
+DESCRIPTION: Install complete
+TEST SUITE: None
+NOTES:
+Fleet Ops Copilot 0.1.0 installed in fleetops-system.
+Workloads: fleetops-mcp (Service fleetops-mcp:8080), fleetops-approvals, fleetops-agent (Service fleetops-agent:8090).
+Web UI (no login, ClusterIP only, never exposed by an Ingress). It cannot decide; requests filed
+from it record the typed name as unverified:<name> and can be rejected but never approved:
+  kubectl --context <context> -n fleetops-system port-forward svc/fleetops-agent 8090:8090
+  then open http://127.0.0.1:8090/
+fleetops-agent answers once llama-server (http://llama-server:8080) is installed from config/airgap (make deploy-airgap).
+Swarmada namespaces: warehouse-a
+Model profile: airgap (qwen2.5-7b-instruct on llama-server at http://llama-server:8080); no API key is read. llama-server, its model files and the egress policy come from config/airgap.
+Tracing: off.
+NetworkPolicy: disabled.
+Drafts are refused (DENY_DRAFT_GATE_ABSENT) unless Swarmada's FleetTask
+admission webhook is served. Bind ClusterRole fleetops:approver to the people
+who decide requests. See docs/RUNBOOK.md.
+==> demo [2m26s] llama-server, egress policy
+docker image inspect ghcr.io/ggml-org/llama.cpp@sha256:b32890309c1a33a534a01b0b461e953dc2c5a6bac20213abcf48e22847a19c85 >/dev/null 2>&1 || docker pull --platform linux/arm64 ghcr.io/ggml-org/llama.cpp@sha256:b32890309c1a33a534a01b0b461e953dc2c5a6bac20213abcf48e22847a19c85
+docker tag ghcr.io/ggml-org/llama.cpp@sha256:b32890309c1a33a534a01b0b461e953dc2c5a6bac20213abcf48e22847a19c85 ghcr.io/ggml-org/llama.cpp:server-b12004
+docker save --platform linux/arm64 -o bin/airgap/llama-server-arm64.tar ghcr.io/ggml-org/llama.cpp:server-b12004
+kind load image-archive bin/airgap/llama-server-arm64.tar --name fleetops-demo
+image in the node's containerd store:
+docker exec fleetops-demo-control-plane crictl images | grep -E 'IMAGE|llama.cpp'
+IMAGE                                           TAG                  IMAGE ID            SIZE
+ghcr.io/ggml-org/llama.cpp                      server-b12004        9210c212957aa       296MB
+cd "~/.cache/fleet-ops-copilot/models/qwen2.5-7b-instruct-q4_k_m" && shasum -a 256 -c "<clone>/config/airgap/model-SHA256SUMS"
+qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf: OK
+qwen2.5-7b-instruct-q4_k_m-00002-of-00002.gguf: OK
+docker exec fleetops-demo-control-plane mkdir -p /models
+for f in qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf qwen2.5-7b-instruct-q4_k_m-00002-of-00002.gguf; do docker cp "~/.cache/fleet-ops-copilot/models/qwen2.5-7b-instruct-q4_k_m/$f" fleetops-demo-control-plane:/models/$f || exit 1; done
+docker exec fleetops-demo-control-plane chmod -R a+rX /models
+docker exec -i fleetops-demo-control-plane sh -c 'cd /models && sha256sum -c -' < "<clone>/config/airgap/model-SHA256SUMS"
+qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf: OK
+qwen2.5-7b-instruct-q4_k_m-00002-of-00002.gguf: OK
+kubectl --context kind-fleetops-demo apply -f config/airgap/llama-storage-hostpath.yaml -f config/airgap/llama-server.yaml
+persistentvolume/fleetops-llama-models created
+persistentvolumeclaim/llama-models created
+deployment.apps/llama-server created
+service/llama-server created
+kubectl --context kind-fleetops-demo -n fleetops-system rollout status deploy/llama-server --timeout=900s
+Waiting for deployment "llama-server" rollout to finish: 0 of 1 updated replicas are available...
+deployment "llama-server" successfully rolled out
+API server endpoint 172.18.0.2, Service 10.96.0.1
+networkpolicy.networking.k8s.io/fleetops-airgap-egress created
+networkpolicy.networking.k8s.io/fleetops-airgap-egress-apiserver created
+networkpolicy.networking.k8s.io/fleetops-airgap-egress-model created
+networkpolicy.networking.k8s.io/fleetops-airgap-egress-agent-mcp created
+networkpolicy.networking.k8s.io/llama-server-no-egress created
+networkpolicy.networking.k8s.io/llama-server-ingress created
+no fleetops-otel-collector in fleetops-system (tracing.backend.enabled off): networkpolicy-tracing.yaml not applied
+deployment.apps/fleetops-mcp restarted
+deployment.apps/fleetops-approvals restarted
+Waiting for deployment "fleetops-mcp" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "fleetops-mcp" rollout to finish: 1 old replicas are pending termination...
+deployment "fleetops-mcp" successfully rolled out
+deployment "fleetops-approvals" successfully rolled out
+deployment.apps/fleetops-agent restarted
+Waiting for deployment "fleetops-agent" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "fleetops-agent" rollout to finish: 1 old replicas are pending termination...
+deployment "fleetops-agent" successfully rolled out
+==> demo [3m18s] people: RoleBindings
+kind-people: bound 3 people in warehouse-a
+==> demo [3m18s] health checks
+deployment "fleetops-mcp" successfully rolled out
+deployment "fleetops-approvals" successfully rolled out
+  fleetops-mcp /healthz ok
+deployment "fleetops-agent" successfully rolled out
+deployment "llama-server" successfully rolled out
+  air-gapped NetworkPolicies present in fleetops-system (config/airgap/networkpolicy.yaml)
+  tools and Docker                   0m00s
+  model files, llama.cpp image       0m09s
+  people tokens (D60, test only)     0m00s
+  kind cluster fleetops-demo         0m23s
+  people: tokens accepted by the API server 0m00s
+  Swarmada quickstart (go.mod pin)   1m17s
+  Swarmada admission webhooks        0m12s
+  preflight: webhooks present and answering 0m06s
+  Swarmada sim fleet: three live adapters 0m15s
+  image fleet-ops-copilot:dev        0m04s
+  Helm chart                         0m00s
+  llama-server, egress policy        0m52s
+  people: RoleBindings               0m00s
+  health checks                      0m00s
+demo: stack running on kind-fleetops-demo in 3m18s (198s).
+      export KUBECONFIG=~/.local/state/fleet-ops-copilot/demo/kubeconfig
+  Run the line above first in every new terminal you use for this demo.
+  Model: Qwen2.5-7B-Instruct (Q4_K_M) on llama-server in this cluster; fleetops-system's egress is denied
+  by NetworkPolicy and no API key is used. On the v6 record this model passed 26/150 and Claude Sonnet 5.5
+  120/150 (evals/results/comparison-v6.md); its answers are slower (p50 10.23 s, p95 124.78 s there) and more
+  often wrong, and a wrong answer still cannot change the fleet: every change waits for a person's approval.
+  For the cloud model instead: make demo-down, then make demo DEMO_MODEL=cloud DEMO_ANTHROPIC_KEY_FILE=<key file>
+  1. Ask as sam, verified: a request sam files can be approved by dana.
+     In a second terminal, run these two lines; the second stays in the foreground:
+      export KUBECONFIG=~/.local/state/fleet-ops-copilot/demo/kubeconfig
+      kubectl --context kind-fleetops-demo -n fleetops-system port-forward svc/fleetops-agent 8090:8090
+     Then here, in <clone> (bin/fleetops comes from make build):
+      KUBECONFIG=~/.local/state/fleet-ops-copilot/demo/persons/sam.kubeconfig bin/fleetops chat --context sam@fleetops-demo "Show me all robots"
+  2. Or ask in the web chat, through the same port-forward: open the address below and type sam in "Your name".
+     It has no login, so a request filed there is recorded for unverified:sam and can only be rejected.
+      http://127.0.0.1:8090/
+  People (test only, static tokens): ~/.local/state/fleet-ops-copilot/demo/persons/{sam,dana,eve}.kubeconfig, context <person>@fleetops-demo.
+  Approval paths against this stack: make test-live.
+  Sim fleet (3 adapters, background): PIDs in ~/.local/state/fleet-ops-copilot/demo/sim-fleet/pids, logs in ~/.local/state/fleet-ops-copilot/demo/logs/sim-adapter-*.log.
+  Egress check (a probe Job that must reach nothing outside the cluster): make verify-egress KIND_CLUSTER=fleetops-demo
+  Remove the cluster, its kubeconfig, the people's tokens and their kept chat conversations (stop the port-forwards with Ctrl-C first):
+      make demo-down

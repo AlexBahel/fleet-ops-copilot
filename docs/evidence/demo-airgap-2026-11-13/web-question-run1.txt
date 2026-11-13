@@ -1,0 +1,37 @@
+Web chat, http://127.0.0.1:8090/ through the port-forward, Chrome, name field "sam", "New session",
+message "Show me all robots", sent at 2026-11-13T22:07:32Z (page clock). Page text after the answer
+(get_page_text), up to the requests panel:
+
+backend llamacpp:qwen2.5-7b-instruct · namespaces warehouse-a
+Requests from this page are recorded for unverified:sam and cannot be approved; a person can only reject them.
+Show me all robots
+Here are the details of the robots in the warehouse-a namespace:
+
+- **Robot/sim-robot-001**:
+- Manufacturer: Simulated
+- Model: SimBot-v1
+- Current Zone: warehouse-a
+- Battery Percentage: 99%
+- Capabilities: camera_front (Active), navigation (Active)
+- Conditions: robot reachable via its Fleet Adapter (Ready), position frame not reported for this robot (ZonePositionOverdue)
+
+- **Robot/sim-robot-002**:
+- Manufacturer: Simulated
+- Model: SimBot-v1
+- Current Zone: warehouse-a
+- Battery Percentage: 99%
+- Capabilities: camera_front (Active), navigation (Active)
+- Conditions: robot reachable via its Fleet Adapter (Ready), position frame not reported for this robot (ZonePositionOverdue)
+
+- **Robot/sim-robot-003**:
+- Manufacturer: Simulated
+- Model: SimBot-v1
+- Current Zone: warehouse-a
+- Battery Percentage: 99%
+- Capabilities: camera_front (Active), navigation (Active)
+- Conditions: robot reachable via its Fleet Adapter (Ready), position frame not reported for this robot (ZonePositionOverdue)
+
+All robots are in an idle state and have a healthy condition.
+list_robots
+2 model turn(s), 33227 ms
+session web-b04059e2236b6b87

@@ -1,0 +1,2 @@
+["-backend=llamacpp","-llama-url=http://llama-server:8080","-model=qwen2.5-7b-instruct","-listen=:8090","-mcp-url=http://fleetops-mcp:8080/mcp","-namespaces=warehouse-a","-max-concurrent=4","-catalogue=/etc/fleetops/catalogue/site.yaml","-policy=/etc/fleetops/policy/default.yaml","-audit=/var/lib/fleetops/audit/fleetops-agent.jsonl"]
+[{"name":"FLEETOPS_LLAMACPP_TEMPERATURE","value":"0.7"},{"name":"FLEETOPS_LLAMACPP_TOP_P","value":"0.8"},{"name":"FLEETOPS_LLAMACPP_TOP_K","value":"20"},{"name":"FLEETOPS_LLAMACPP_REPEAT_PENALTY","value":"1.05"}]

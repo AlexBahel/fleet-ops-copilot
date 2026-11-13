@@ -22,7 +22,7 @@ remove it.
   policies are installed beside the chart from `config/airgap` (`make deploy-airgap`). The image is
   built from binaries compiled on the host. `make demo` installs the air-gapped profile by default
   and the cloud profile with `DEMO_MODEL=cloud` (D103); it has run on one machine (see "Not measured
-  yet"). Its Docker memory requirement, 12 GiB, is a threshold set from llama-server's memory limit
+  yet"; the air-gapped profile: `docs/evidence/demo-airgap-2026-11-13/`). Its Docker memory requirement, 12 GiB, is a threshold set from llama-server's memory limit
   and the rest of the stack on the v6 record's node (D103), not a measured minimum.
 - Tracing: no stdout exporter and no OTLP/HTTP exporter (OTLP/gRPC only), and no spans in
   `fleetops-approvals` for approval and execution (D54). `fleetops-eval -otlp-endpoint` (D65) traces the
@@ -74,8 +74,10 @@ remove it.
   `evals/results/airgap-llamacpp-qwen2.5-14b-instruct-2026-11-08-v6/`). `config/airgap/llama-server.yaml` names
   the Qwen2.5-7B-Instruct files; the 14B run used it with the model files, alias and memory
   request and limit changed (that directory's `model.md`). fleetops-agent runs it in `make demo`'s
-  default profile (D103); no eval has been run through the deployed fleetops-agent with it, so its pass
-  rate and latency there are not measured.
+  default profile (D103) and answered two single questions there (`docs/evidence/demo-airgap-2026-11-13/`:
+  134 s through `fleetops chat`, 33 s in the web chat, one condition misread in the latter); no eval has
+  been run through the deployed fleetops-agent with it, so its pass rate and latency there are not
+  measured.
 - The air-gapped manifests (`config/airgap/`) and the `hack/airgap.mk` targets have run on
   single-node kind clusters (kind v0.33.0, CNI kindnet, Docker Desktop on arm64;
   `docs/evidence/airgap-2026-11-12/`), on no other CNI or node.

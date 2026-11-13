@@ -1,0 +1,10 @@
+ [22:03:54Z T1] <clone> % %  [22:04:12Z T1] <clone> %   tool list_robots
+Here are the current details of the robots in the `warehouse-a` namespace:
+
+- **Robot/sim-robot-001**: Manufacturer is Simulated, Model is SimBot-v1. Capabilities include camera_front and navigation. The robot's battery is at 99%. It is currently idle.
+- **Robot/sim-robot-002**: Manufacturer is Simulated, Model is SimBot-v1. Capabilities include camera_front and navigation. The robot's battery is at 99%. It is currently idle.
+- **Robot/sim-robot-003**: Manufacturer is Simulated, Model is SimBot-v1. Capabilities include camera_front and navigation. The robot's battery is at 99%. It is currently idle.
+
+All robots are in the `warehouse-a` zone and are healthy.
+(session web-86ffd81f180f8992)
+ [22:06:26Z T1] <clone> % CLUSTER=fleetops-demo KUBECONFIG=~/.local/state/fleet-ops-copilot/demo/kubeconfig DEMO_DIR=~/.local/state/fleet-ops-copilot/demo hack/demo-down.sh

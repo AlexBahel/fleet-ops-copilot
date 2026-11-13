@@ -1,0 +1,15 @@
+kubectl --context kind-fleetops-demo -n fleetops-system delete job fleetops-egress-probe --ignore-not-found --wait
+kubectl --context kind-fleetops-demo -n fleetops-system apply -f config/airgap/egress-probe.yaml
+job.batch/fleetops-egress-probe created
+egress probe: 2026-11-13T22:12:34Z; t is ms since the probe script started
+at-start t=131ms OPEN: https://1.1.1.1 (curl exit 0) 
+at-start t=199ms OPEN: https://8.8.8.8 (curl exit 0) 
+at-start t=280ms OPEN: https://example.com (curl exit 0) 
+at-start: egress open before the policy was in force for this pod (not counted; see docs/KNOWN-LIMITS.md)
+policy in force: t=2301ms sentinel https://kubernetes.default.svc:443/healthz denied (curl exit 28)
+control ok: t=2309ms http://llama-server:8080/health http 200
+after-wait t=7322ms blocked: https://1.1.1.1 (curl exit 28)
+after-wait t=12340ms blocked: https://8.8.8.8 (curl exit 28)
+after-wait t=17351ms blocked: https://example.com (curl exit 28)
+RESULT: all external targets blocked
+verify-egress: PASS (after the policy was in force: external blocked, control reachable; the at-start line is not counted)
