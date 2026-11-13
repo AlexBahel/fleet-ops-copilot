@@ -169,6 +169,12 @@ func TestPageNameFieldAndFocus(t *testing.T) {
 	if !strings.Contains(input, want) {
 		t.Errorf("name field %s lacks %s", input, want)
 	}
+	// Browsers compile a pattern with the v flag, where a bare - in a
+	// character class is a syntax error and the pattern is then ignored
+	// (Chrome accepted "sam x"); the class's - must be escaped.
+	if !strings.Contains(input, `+\-]`) || strings.Contains(input, `+-]`) {
+		t.Errorf("name field pattern: the - in its character class is not escaped: %s", input)
+	}
 	if strings.Contains(input, "autofocus") || !strings.Contains(textarea, "autofocus") {
 		t.Errorf("focus must start in the message box: %s / %s", input, textarea)
 	}

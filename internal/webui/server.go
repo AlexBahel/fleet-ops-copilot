@@ -102,7 +102,7 @@ const (
 const NameRefusal = "Type your name in the field at the top (for example sam), then send again."
 
 var (
-	operatorRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._@:+-]{0,127}$`)
+	operatorRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._@:+\-]{0,127}$`)
 	// Session ids become a label value on ApprovalRequests (fleet.SessionLabel).
 	sessionRE = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{6,61}[a-z0-9])$`)
 	requestRE = regexp.MustCompile(`^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$`)

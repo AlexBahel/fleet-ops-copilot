@@ -17,7 +17,7 @@
   <section class="chat" aria-label="Chat">
     <div class="who">
       <label for="operator">Your name</label>
-      <input id="operator" class="name" autocomplete="username" spellcheck="false" placeholder="e.g. sam" pattern="[A-Za-z0-9][A-Za-z0-9._@:+-]{0,127}" maxlength="128" aria-describedby="requester">
+      <input id="operator" class="name" autocomplete="username" spellcheck="false" placeholder="e.g. sam" pattern="[A-Za-z0-9][A-Za-z0-9._@:+\-]{0,127}" maxlength="128" aria-describedby="requester">
       <span class="hint" id="requester">Your Kubernetes username. This page has no login, so a request filed here is recorded for "unverified:&lt;name&gt;" and can only be rejected. To file a request a person can approve, use <code>bin/fleetops chat</code> with your own kubeconfig.</span>
     </div>
     <ol class="log" id="log" aria-live="polite"></ol>
