@@ -341,6 +341,9 @@ export KUBECONFIG=$HOME/.local/state/fleet-ops-copilot/demo/kubeconfig
 kubectl --context kind-fleetops-demo -n fleetops-system port-forward svc/fleetops-agent 8090:8090
 ```
 
+If it stops with `error: lost connection to pod`, fleetops-agent's pod was replaced; run the
+`kubectl` line again in the same terminal.
+
 **Verified: ask with `bin/fleetops chat` as sam.** Back in the first terminal, ask as a person,
 with that person's own kubeconfig. The copilot records who asked from the person's verified token,
 never from a typed name (RUNBOOK section 7), so a request sam files this way can be approved by
