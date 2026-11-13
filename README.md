@@ -281,51 +281,86 @@ export PATH="$HOME/fleetops-venv/bin:$PATH"
 
 Full list: [`docs/RUNBOOK.md`](docs/RUNBOOK.md), section 0.
 
-fleetops-agent, the process that talks to the model, starts only when the API key Secret exists.
-Put the key in a file only you can read and pass it to `make demo`, which creates the Secret; the
-key never appears on a command line:
+Run every command below from the top directory of a clone of this repository, in a terminal
+(the examples were run in zsh, the macOS default). Build the command-line client first:
 
 ```bash
-make build                                             # bin/fleetops, the CLI used below
-(umask 077; pbpaste > ~/fleetops-key.txt)              # copy the key from the Claude Console first
-DEMO_ANTHROPIC_KEY_FILE=~/fleetops-key.txt make demo   # 2m47s measured on a Mac mini (above)
+make build
+```
+
+fleetops-agent, the process that talks to the model, starts only when the API key Secret exists.
+Put the key in a file only you can read; `make demo` creates the Secret from it, and the key never
+appears on a command line. To write the file from the clipboard, copy the key from the Claude
+Console, then run:
+
+```bash
+(umask 077; pbpaste > ~/fleetops-key.txt)
+```
+
+Start the demo with that file. On a Mac mini it took 2m47s (above); the last line it prints is the
+total time, followed by what to run next:
+
+```bash
+DEMO_ANTHROPIC_KEY_FILE=~/fleetops-key.txt make demo
+```
+
+Once it has finished, the key is in the Secret; delete the file:
+
+```bash
 rm ~/fleetops-key.txt
 ```
 
 `make demo` creates the kind cluster `fleetops-demo`, runs Swarmada's quickstart at the commit
 `go.mod` pins, turns on Swarmada's admission webhooks, keeps the simulated fleet's three robots
 live (one sim adapter per robot, in the background; `make demo-down` stops them), builds the image
-and installs the chart into `fleetops-system`, and creates three fictional people with test-only tokens: **sam**, **dana** and **eve**. The last line is the
-total time. Everything it keeps is in `~/.local/state/fleet-ops-copilot/demo` (`$DEMO_DIR`),
-outside the repository; it never reads or writes `~/.kube/config`. Without a key file, plain
-`make demo` starts everything except fleetops-agent.
+and installs the chart into `fleetops-system`, and creates three fictional people with test-only
+tokens: **sam**, **dana** and **eve**. Everything it keeps is in
+`~/.local/state/fleet-ops-copilot/demo` (`$DEMO_DIR`), outside the repository, including its own
+kubeconfig: it never reads or writes `~/.kube/config`. Without a key file, plain `make demo` starts
+everything except fleetops-agent; to add the key to a stack that is already running, see RUNBOOK
+section 2.
 
-To add the key to a stack that is already running, see RUNBOOK section 2. Check that all three
-workloads are ready:
+Because of that, `kubectl` finds the demo cluster only after you point `KUBECONFIG` at the demo's
+kubeconfig. Do it in this terminal, and again in every new terminal you open for the demo. Then
+check that the three workloads, fleetops-agent, fleetops-approvals and fleetops-mcp, are each
+`1/1 Running`:
 
 ```bash
-export KUBECONFIG=~/.local/state/fleet-ops-copilot/demo/kubeconfig
-kubectl --context kind-fleetops-demo -n fleetops-system get pods    # fleetops-agent, fleetops-approvals, fleetops-mcp: 1/1 Running
+export KUBECONFIG=$HOME/.local/state/fleet-ops-copilot/demo/kubeconfig
+kubectl --context kind-fleetops-demo -n fleetops-system get pods
 ```
 
 ### 2. Ask questions
 
-Open the connection to fleetops-agent in a second terminal and leave it running:
+Both ways of asking reach fleetops-agent through a port-forward. Open a second terminal (in
+Terminal, Cmd-N), go to the repository directory, and run these two lines there. The
+port-forward stays in the foreground: leave that terminal open while you use the demo.
 
 ```bash
+export KUBECONFIG=$HOME/.local/state/fleet-ops-copilot/demo/kubeconfig
 kubectl --context kind-fleetops-demo -n fleetops-system port-forward svc/fleetops-agent 8090:8090
 ```
 
-Ask as a person, with that person's own kubeconfig. The copilot records who asked from the
-person's verified token, never from a typed name (RUNBOOK section 7):
+**Verified: ask with `bin/fleetops chat` as sam.** Back in the first terminal, ask as a person,
+with that person's own kubeconfig. The copilot records who asked from the person's verified token,
+never from a typed name (RUNBOOK section 7), so a request sam files this way can be approved by
+dana:
 
 ```bash
-P=~/.local/state/fleet-ops-copilot/demo/persons
-KUBECONFIG=$P/sam.kubeconfig bin/fleetops chat --context sam@fleetops-demo "Which robots in warehouse-a are idle, and what is each one's battery?"
+P=$HOME/.local/state/fleet-ops-copilot/demo/persons
+KUBECONFIG=$P/sam.kubeconfig bin/fleetops chat --context sam@fleetops-demo "Show me all robots"
 ```
 
-`bin/fleetops` comes from `make build` (`make demo` builds only the image). Three kinds of question
-show what the copilot does:
+**Web chat: its requests can only be rejected.** With the port-forward running, open
+http://127.0.0.1:8090/ in a browser, type `sam` in "Your name" at the top, and ask in the message
+box. The page has no login, so it cannot tell who you are: a request filed from it is recorded
+for `unverified:sam` (`unverified:<name>` for any name), fleetops-approvals refuses to approve it
+(`DENY_REQUESTER_UNVERIFIED`), and a person can only reject it. For a request that can be approved,
+use `bin/fleetops chat` as above. The page also lists pending requests with the exact
+`fleetops approve` / `fleetops reject` command to run; it cannot approve (RUNBOOK section 1, "Open
+the web UI").
+
+Three kinds of question show what the copilot does:
 
 | Ask | What happens |
 |---|---|
@@ -395,19 +430,19 @@ could not run now:
 KUBECONFIG=$P/dana.kubeconfig bin/fleetops activate <activation-request> -n warehouse-a --context dana@fleetops-demo
 ```
 
-The web chat is at http://127.0.0.1:8090/ through the same port-forward. It shows pending
-requests and the exact `fleetops approve` / `fleetops reject` command; it cannot approve, and a request
-filed from it can only be rejected (RUNBOOK section 1, "Open the web UI").
-
 Each question is a call to the Claude API. On the v6 record, 100 requests cost 1.5449 USD with
 Claude Sonnet 5.5 ([`comparison-v6.md`](evals/results/comparison-v6.md)). For the air-gapped
 profile, which needs no API key, see RUNBOOK section 3.
 
 ### 3. Finish
 
+Stop the port-forward in the second terminal with Ctrl-C. Then, in the first terminal, remove the
+cluster `fleetops-demo`, its kubeconfig and the people's tokens, and stop pointing `kubectl` at the
+removed kubeconfig:
+
 ```bash
-# stop the port-forward in the second terminal with Ctrl-C, then:
-make demo-down   # removes the cluster fleetops-demo, its kubeconfig and the people's tokens
+make demo-down
+unset KUBECONFIG
 ```
 
 ### Connect to a Swarmada you run yourself
@@ -439,8 +474,10 @@ cd "$(go list -m -f '{{.Dir}}' github.com/swarmada/swarmada)"
 kubectl --context $CTX apply -k config/controlstream-tls/ --server-side --force-conflicts
 kubectl --context $CTX -n system rollout status deploy/swarmada-controller-manager --timeout=300s
 cd -
-KIND_CLUSTER=fleetops-sw KUBECONFIG=$KUBECONFIG scripts/demo-preflight.sh   # must end with PASSED
+KIND_CLUSTER=fleetops-sw KUBECONFIG=$KUBECONFIG scripts/demo-preflight.sh
 ```
+
+The preflight's last line must be `PASSED`.
 
 **3. Install the copilot:**
 
@@ -479,18 +516,13 @@ The audit files are lost with the pods, so copy them first (RUNBOOK section 4).
 
 ### Other commands
 
-```bash
-DEMO_DRY_RUN=1 make demo   # print every command that would change anything; run none
-DEMO_TRACING=1 make demo   # also install the development trace backend (RUNBOOK section 8)
-make test-live             # live approval paths on the demo stack, requests filed with sam's own token
-```
-
-Without a cluster:
-
-```bash
-make ci             # build, vet, lint, ShellCheck 0.11.0, unit tests, envtest, fixture evals held to evals/baseline.json
-make chart-check    # helm lint, kubeconform, chart parity with config/
-```
+| Command | What it does |
+|---|---|
+| `DEMO_DRY_RUN=1 make demo` | Prints every command that would change anything; runs none. |
+| `DEMO_TRACING=1 make demo` | Also installs the development trace backend (RUNBOOK section 8). |
+| `make test-live` | Live approval paths on the demo stack, requests filed with sam's own token. |
+| `make ci` | Without a cluster: build, vet, lint, ShellCheck 0.11.0, unit tests, envtest, fixture evals held to `evals/baseline.json`. |
+| `make chart-check` | Without a cluster: helm lint, kubeconform, chart parity with `config/`. |
 
 Model evaluations call the Claude API and read `ANTHROPIC_API_KEY` from the environment:
 

@@ -14,10 +14,12 @@ sequence. Items that depend on parts not built yet (the air-gapped profile in th
 Conventions: every `kubectl` and `helm` command names its context explicitly. The examples use a
 kind cluster `fleetops-<name>`, context `kind-fleetops-<name>`, a kubeconfig file that holds only that
 cluster (`$KUBECONFIG`), the copilot namespace `fleetops-system`, and the Swarmada namespace
-`warehouse-a`.
+`warehouse-a`. The kubeconfig is a dedicated file, mode 600, outside the repository; export it in
+every terminal you use, including one that only runs a port-forward. Shell blocks carry no
+comments, so each pastes into zsh as it is.
 
 ```bash
-export KUBECONFIG=$HOME/.kube/fleetops-<name>.kubeconfig   # dedicated file, mode 600, outside the repository
+export KUBECONFIG=$HOME/.kube/fleetops-<name>.kubeconfig
 CTX=kind-fleetops-<name>
 ```
 
@@ -30,14 +32,14 @@ simulated adapter with the first `python3` on `PATH`, which must import `grpc` a
 D82). Everything it keeps (kubeconfig, the people's tokens and kubeconfigs, the
 Swarmada copy, logs) is in `$DEMO_DIR`, by default `~/.local/state/fleet-ops-copilot/demo`,
 **outside the repository**; the scripts refuse a directory inside it. It never reads or writes
-`~/.kube/config`:
+`~/.kube/config`.
 
-```bash
-make demo                       # prints the plan's stages and, at the end, the elapsed time
-DEMO_DRY_RUN=1 make demo      # prints every command that would change anything, runs none
-DEMO_TRACING=1 make demo      # also installs the optional trace backend (section 8)
-make demo-down                     # removes cluster fleetops-demo, its kubeconfig and the people's tokens
-```
+| Command | What it does |
+|---|---|
+| `make demo` | Prints the plan's stages and, at the end, the elapsed time and what to run next: the `export KUBECONFIG=` line for its kubeconfig, the verified way to ask (`fleetops chat` as sam), the web chat, `make demo-down`. |
+| `DEMO_DRY_RUN=1 make demo` | Prints every command that would change anything; runs none. |
+| `DEMO_TRACING=1 make demo` | Also installs the optional trace backend (section 8). |
+| `make demo-down` | Removes cluster fleetops-demo, its kubeconfig and the people's tokens. |
 
 What it does, in order (each stage prints its elapsed time; the total is the last line):
 
@@ -102,7 +104,11 @@ kind load docker-image fleet-ops-copilot:dev --name fleetops-<name>
 helm --kube-context $CTX install fleetops charts/fleet-ops-copilot \
   --namespace fleetops-system --create-namespace
 kubectl --context $CTX -n fleetops-system rollout status deploy/fleetops-mcp deploy/fleetops-approvals --timeout=180s
-# fleetops-agent starts once the API key Secret exists (section 2):
+```
+
+fleetops-agent starts once the API key Secret exists (section 2):
+
+```bash
 kubectl --context $CTX -n fleetops-system rollout status deploy/fleetops-agent --timeout=180s
 ```
 
@@ -130,12 +136,17 @@ with your own kubeconfig. The page has no login, so the name typed in it is reco
 requester `unverified:<name>`, and fleetops-approvals refuses to approve any such request
 (`DENY_REQUESTER_UNVERIFIED`, D56): a request filed from the page can be rejected or left to
 expire, never approved. The Service is ClusterIP only and the chart renders no Ingress
-(`make chart-parity` refuses one); reach the page with a port-forward:
+(`make chart-parity` refuses one); reach the page with a port-forward. Run it in its own
+terminal, after exporting `KUBECONFIG` there (conventions above): it stays in the foreground until
+Ctrl-C.
 
 ```bash
 kubectl --context $CTX -n fleetops-system port-forward svc/fleetops-agent 8090:8090
-# then open http://127.0.0.1:8090/
 ```
+
+Then open http://127.0.0.1:8090/, type your Kubernetes username in "Your name" at the top, and ask
+in the message box. To file a request a person can approve, use `fleetops chat` with your own
+kubeconfig instead (section 7).
 
 ### Who is recorded as the requester (D57)
 
@@ -206,10 +217,11 @@ The key lives only in a Kubernetes Secret that the operator creates; the chart h
 environment variable and does not start without it. The model evaluations read
 `ANTHROPIC_API_KEY` from the shell environment instead.
 
-Create or replace the Secret without putting the key on a command line or in shell history:
+Create or replace the Secret without putting the key on a command line or in shell history. Put
+the key in a file readable only by you, `key.txt`, for example from the clipboard with
+`(umask 077; pbpaste > key.txt)`, then:
 
 ```bash
-# key in a file readable only by you, for example created with: umask 077; pbpaste > key.txt
 kubectl --context $CTX -n fleetops-system create secret generic fleet-ops-copilot-claude \
   --from-file=ANTHROPIC_API_KEY=key.txt --dry-run=client -o yaml \
   | kubectl --context $CTX apply -f -
@@ -244,9 +256,12 @@ in this order:
 make load-llama-image KIND_CLUSTER=fleetops-<name>
 make load-llama-model KIND_CLUSTER=fleetops-<name> MODEL_DIR=<dir> MODEL_SUMS=<sha256sum file>
 make deploy-airgap    KIND_CLUSTER=fleetops-<name>
-make verify-egress-baseline KIND_CLUSTER=fleetops-<name>   # must report open egress
-make verify-egress    KIND_CLUSTER=fleetops-<name>         # must report every external target blocked
+make verify-egress-baseline KIND_CLUSTER=fleetops-<name>
+make verify-egress    KIND_CLUSTER=fleetops-<name>
 ```
+
+`make verify-egress-baseline` must report open egress (before the policy); `make verify-egress`
+must report every external target blocked.
 
 `make verify-egress` prints an `at-start` line (not counted), the time the policy came into force
 for the probe pod, and the `after-wait` line that decides. On kind's default CNI the `at-start`
@@ -273,8 +288,10 @@ for p in fleetops-mcp fleetops-approvals; do
   kubectl --context $CTX -n fleetops-system exec deploy/$p -- cat /var/lib/fleetops/audit/$p.jsonl > $p-audit.jsonl
 done
 make build
-bin/fleetops audit verify fleetops-approvals-audit.jsonl   # "<file>: N entries, chain intact" or the first bad entry
+bin/fleetops audit verify fleetops-approvals-audit.jsonl
 ```
+
+`fleetops audit verify` prints `<file>: N entries, chain intact`, or the first bad entry.
 
 Each line has `seq`, `time`, `kind` (for example `approved`, `executed`, `activation_observed`),
 `actor`, `sessionID`, `namespace`, `object` (`ApprovalRequest/<name>`), `code` (policy reason codes
@@ -412,11 +429,13 @@ default, D61):
 
 ```bash
 helm --kube-context $CTX upgrade --install fleetops charts/fleet-ops-copilot -n fleetops-system \
-  --reuse-values --set tracing.backend.enabled=true      # leave tracing.otlpEndpoint empty
+  --reuse-values --set tracing.backend.enabled=true
 kubectl --context $CTX -n fleetops-system rollout status deploy/fleetops-otel-collector deploy/fleetops-jaeger
 kubectl --context $CTX -n fleetops-system port-forward svc/fleetops-jaeger 16686:16686
-# open http://127.0.0.1:16686/ , service fleetops-agent, operation fleetops.request
 ```
+
+Leave `tracing.otlpEndpoint` empty. The port-forward stays in the foreground; open
+http://127.0.0.1:16686/ and pick service `fleetops-agent`, operation `fleetops.request`.
 
 Both Services are ClusterIP and the UI has no login: reach it only through the port-forward.
 Traces live in the Jaeger pod's memory (the image's default of 100000 traces) and are lost when it

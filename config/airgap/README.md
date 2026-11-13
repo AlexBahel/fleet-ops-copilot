@@ -78,8 +78,10 @@ it enforces policy before the pod's containers start, and check it with
 
 ## Make targets (kind clusters named `fleetops-*` only)
 
+The first loads the llama-server image into the node:
+
 ```sh
-make load-llama-image KIND_CLUSTER=fleetops-airgap          # image into the node
+make load-llama-image KIND_CLUSTER=fleetops-airgap
 make load-llama-model KIND_CLUSTER=fleetops-airgap MODEL_DIR=<dir> MODEL_SUMS=<sha256sum file>
 make deploy-airgap    KIND_CLUSTER=fleetops-airgap
 make verify-egress-baseline KIND_CLUSTER=fleetops-airgap
