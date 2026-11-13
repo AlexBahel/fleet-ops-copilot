@@ -440,8 +440,8 @@ profile, which needs no API key, see RUNBOOK section 3.
 ### 3. Finish
 
 Stop the port-forward in the second terminal with Ctrl-C. Then, in the first terminal, remove the
-cluster `fleetops-demo`, its kubeconfig and the people's tokens, and stop pointing `kubectl` at the
-removed kubeconfig:
+cluster `fleetops-demo`, its kubeconfig, the people's tokens and the conversations `fleetops chat`
+kept for them, and stop pointing `kubectl` at the removed kubeconfig:
 
 ```bash
 make demo-down

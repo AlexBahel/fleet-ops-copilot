@@ -39,7 +39,7 @@ Swarmada copy, logs) is in `$DEMO_DIR`, by default `~/.local/state/fleet-ops-cop
 | `make demo` | Prints the plan's stages and, at the end, the elapsed time and what to run next: the `export KUBECONFIG=` line for its kubeconfig, the verified way to ask (`fleetops chat` as sam), the web chat, `make demo-down`. |
 | `DEMO_DRY_RUN=1 make demo` | Prints every command that would change anything; runs none. |
 | `DEMO_TRACING=1 make demo` | Also installs the optional trace backend (section 8). |
-| `make demo-down` | Removes cluster fleetops-demo, its kubeconfig and the people's tokens. |
+| `make demo-down` | Removes cluster fleetops-demo, its kubeconfig and the people's tokens, and the conversations `fleetops chat` kept for the demo's contexts (section 7). |
 
 What it does, in order (each stage prints its elapsed time; the total is the last line):
 
@@ -468,8 +468,11 @@ refuses a request whose confirmed preview is missing or differs (`DENY_NOT_CONFI
 `DENY_PREVIEW_MISMATCH`).
 
 **Conversations.** `fleetops chat` keeps the conversation per kubeconfig context and fleetops-agent URL in
-`$XDG_STATE_HOME/fleetops/conversations/` (default `~/.local/state/fleetops/conversations/`, mode 600);
-`fleetops chat --new` starts another. The web page keeps it in the page's memory; reload starts a new
+`$XDG_STATE_HOME/fleetops/conversations/ctx-<context>/` (default `~/.local/state/fleetops/conversations/`,
+mode 600); `fleetops chat --new` starts another. `make demo-down` removes the `ctx-` directories of the
+demo's contexts (`sam@fleetops-demo`, `dana@fleetops-demo`, `eve@fleetops-demo`,
+`kind-fleetops-demo`) and nothing else there, so the first question on the next demo starts a new
+conversation. Ids kept before this layout (files directly in `conversations/`) are no longer read. The web page keeps it in the page's memory; reload starts a new
 one. fleetops-agent holds conversations in memory for 30 minutes after the last message, bound to the
 requester fleetops-mcp verified: another person cannot continue one, even with its id. A fleetops-agent
 restart loses them; the chart runs one fleetops-agent replica and refuses more.

@@ -103,7 +103,7 @@ BASE ?=
 demo: ## kind cluster fleetops-demo with person tokens, Swarmada quickstart at the go.mod pin, its webhooks, the chart, health checks; prints the elapsed time (DEMO_DRY_RUN=1 prints the plan)
 	CLUSTER=$(FLEETOPS_CLUSTER) KUBECONFIG=$(FLEETOPS_KUBECONFIG) DEMO_DIR=$(DEMO_DIR) hack/demo-up.sh
 
-demo-down: ## Remove the demo cluster, its kubeconfig and the people's tokens
+demo-down: ## Remove the demo cluster, its kubeconfig, the people's tokens and fleetops chat's kept conversations for the demo's contexts
 	CLUSTER=$(FLEETOPS_CLUSTER) KUBECONFIG=$(FLEETOPS_KUBECONFIG) DEMO_DIR=$(DEMO_DIR) hack/demo-down.sh
 
 test-live: build ## Live approval paths on the demo stack, requests filed by sam's verified token (phase webhooks)

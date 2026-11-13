@@ -138,13 +138,16 @@ func chat(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 
 // conversationKey names the kept conversation of a kubeconfig context and a
 // fleetops-agent URL (D75): another context, or another fleetops-agent, starts its own.
+// It is a path under the conversations directory: one directory per context,
+// ctx-<context> (path-escaped), so make demo-down can forget the demo's
+// contexts, and in it one file per fleetops-agent URL.
 func conversationKey(kctx, agent string) string {
 	if kctx == "" {
 		if raw, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(clientcmd.NewDefaultClientConfigLoadingRules(), nil).RawConfig(); err == nil {
 			kctx = raw.CurrentContext
 		}
 	}
-	return fmt.Sprintf("%x", sha256.Sum256([]byte(kctx+"\x00"+agent)))[:32]
+	return filepath.Join("ctx-"+url.PathEscape(kctx), fmt.Sprintf("%x", sha256.Sum256([]byte(agent)))[:32])
 }
 
 // conversationFile is under the user's state directory: $XDG_STATE_HOME/fleetops,

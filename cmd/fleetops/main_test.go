@@ -148,8 +148,8 @@ func TestChatKeepsTheConversation(t *testing.T) {
 	if strings.Contains(bodies[0], `"conversationId":"abc`) || !strings.Contains(bodies[1], `"conversationId":"abcdefghijklmnopqrstuvwxyz"`) || strings.Contains(bodies[2], `"conversationId":"abc`) {
 		t.Fatalf("bodies %v", bodies)
 	}
-	files, _ := filepath.Glob(filepath.Join(state, "fleetops", "conversations", "*"))
-	if len(files) != 1 {
+	files, _ := filepath.Glob(filepath.Join(state, "fleetops", "conversations", "*", "*"))
+	if len(files) != 1 || filepath.Base(filepath.Dir(files[0])) != "ctx-kind-fleetops-test" {
 		t.Fatalf("files %v", files)
 	}
 	if fi, err := os.Stat(files[0]); err != nil || fi.Mode().Perm() != 0o600 {

@@ -318,6 +318,6 @@ if [[ "${DEMO_TRACING:-0}" == 1 ]]; then
 fi
 cat <<EOT
 
-  Remove the cluster, its kubeconfig and the people's tokens (stop the port-forwards with Ctrl-C first):
+  Remove the cluster, its kubeconfig, the people's tokens and their kept chat conversations (stop the port-forwards with Ctrl-C first):
       make demo-down
 EOT
