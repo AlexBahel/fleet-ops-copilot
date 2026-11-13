@@ -231,3 +231,20 @@ func TestDemoUpSummaryPerProfile(t *testing.T) {
 		}
 	}
 }
+
+// make demo-down removes the profile record make demo keeps for its cluster
+// (D103), so the next make demo starts without it.
+func TestDemoDownRemovesTheProfileRecord(t *testing.T) {
+	e := newEnv(t)
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "profile"), []byte("airgap\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, err := e.runScript(t, "hack/demo-down.sh", map[string]string{"CLUSTER": "fleetops-test-1", "KUBECONFIG": e.dedicated(t), "DEMO_DIR": dir})
+	if err != nil {
+		t.Fatalf("demo-down: %v\n%s", err, out)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "profile")); err == nil {
+		t.Error("the profile record survived make demo-down")
+	}
+}

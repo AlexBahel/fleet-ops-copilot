@@ -29,7 +29,7 @@ fi
 if kind get clusters 2>/dev/null | grep -qx "$CLUSTER"; then
   kind delete cluster --name "$CLUSTER" --kubeconfig "$KUBECONFIG"
 fi
-rm -rf "$dir/people" "$dir/persons" "$dir/kind-config.yaml" "$dir/last-run.txt" "$dir/live" "$dir/sim-fleet"
+rm -rf "$dir/people" "$dir/persons" "$dir/kind-config.yaml" "$dir/last-run.txt" "$dir/live" "$dir/sim-fleet" "$dir/profile"
 rm -f "$KUBECONFIG"
 # fleetops chat keeps a conversation id per context in its state directory
 # (cmd/fleetops/chat.go); the next demo's fleetops-agent never issued them.
