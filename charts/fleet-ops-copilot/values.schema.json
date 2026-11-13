@@ -104,6 +104,25 @@
       "required": ["profile", "cloud"],
       "properties": {
         "profile": {"enum": ["cloud", "airgap"]},
+        "airgap": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["url", "model", "sampling"],
+          "properties": {
+            "url": {"type": "string", "pattern": "^https?://[^/]+"},
+            "model": {"type": "string", "minLength": 1},
+            "sampling": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "temperature": {"type": "string"},
+                "topP": {"type": "string"},
+                "topK": {"type": "string"},
+                "repeatPenalty": {"type": "string"}
+              }
+            }
+          }
+        },
         "cloud": {
           "type": "object",
           "additionalProperties": false,

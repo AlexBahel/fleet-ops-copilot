@@ -98,9 +98,11 @@ tracing:
 
 # Model backend profile.
 llm:
-  # cloud | airgap. Only cloud is templated. airgap fails the render on
-  # purpose: the air-gapped profile (llama-server, its storage and egress
-  # policy) is installed beside the chart from config/airgap (make deploy-airgap).
+  # cloud | airgap. cloud: fleetops-agent runs the claude backend with the key
+  # from llm.cloud.apiKeySecretRef. airgap: fleetops-agent runs the llamacpp
+  # backend against llm.airgap.url and reads no key (docs/DESIGN.md D103);
+  # llama-server, its model storage and the egress policy are not in the chart
+  # and are installed beside it from config/airgap (make deploy-airgap).
   profile: cloud
   cloud:
     model: claude-sonnet-5-5
@@ -110,6 +112,19 @@ llm:
     apiKeySecretRef:
       name: fleet-ops-copilot-claude
       key: ANTHROPIC_API_KEY
+  airgap:
+    # llama-server's Service from config/airgap/llama-server.yaml.
+    url: http://llama-server:8080
+    # A label only: llama-server serves the one model it was started with.
+    model: qwen2.5-7b-instruct
+    # Sampling sent on every request: the settings of the v6 record runs of
+    # Qwen2.5-7B-Instruct (docs/DESIGN.md D49). Empty: not sent, so the
+    # server's default applies (temperature: the backend's default, 0).
+    sampling:
+      temperature: "0.7"
+      topP: "0.8"
+      topK: "20"
+      repeatPenalty: "1.05"
 
 # Audit files. emptyDir only, as in config/deploy: the files are lost when a
 # pod is replaced (docs/KNOWN-LIMITS.md, "Audit storage").

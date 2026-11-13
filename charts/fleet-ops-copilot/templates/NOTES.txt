@@ -6,10 +6,18 @@ Web UI (no login, ClusterIP only, never exposed by an Ingress). It cannot decide
 from it record the typed name as unverified:<name> and can be rejected but never approved:
   kubectl --context <context> -n {{ .Release.Namespace }} port-forward svc/fleetops-agent {{ .Values.agent.port }}:{{ .Values.agent.port }}
   then open http://127.0.0.1:{{ .Values.agent.port }}/
+{{- if eq .Values.llm.profile "airgap" }}
+fleetops-agent answers once llama-server ({{ .Values.llm.airgap.url }}) is installed from config/airgap (make deploy-airgap).
+{{- else }}
 fleetops-agent does not start until Secret {{ .Values.llm.cloud.apiKeySecretRef.name }} (key {{ .Values.llm.cloud.apiKeySecretRef.key }}) exists in {{ .Release.Namespace }}.
 {{- end }}
+{{- end }}
 Swarmada namespaces: {{ join ", " .Values.swarmadaNamespaces }}
-Model profile: {{ .Values.llm.profile }} ({{ .Values.llm.cloud.model }}); API key reference: Secret {{ .Values.llm.cloud.apiKeySecretRef.name }}, key {{ .Values.llm.cloud.apiKeySecretRef.key }}.
+{{- if eq .Values.llm.profile "airgap" }}
+Model profile: airgap ({{ .Values.llm.airgap.model }} on llama-server at {{ .Values.llm.airgap.url }}); no API key is read. llama-server, its model files and the egress policy come from config/airgap.
+{{- else }}
+Model profile: cloud ({{ .Values.llm.cloud.model }}); API key reference: Secret {{ .Values.llm.cloud.apiKeySecretRef.name }}, key {{ .Values.llm.cloud.apiKeySecretRef.key }}.
+{{- end }}
 Tracing: {{ if .Values.tracing.backend.enabled }}in-cluster backend (OpenTelemetry Collector -> Jaeger, in-memory store). Read traces with:
   kubectl --context <context> -n {{ .Release.Namespace }} port-forward svc/fleetops-jaeger 16686:16686
   then open http://127.0.0.1:16686/{{ else if include "fleetops.otlpEndpoint" . }}OTLP {{ include "fleetops.otlpEndpoint" . }}{{ else }}off{{ end }}.

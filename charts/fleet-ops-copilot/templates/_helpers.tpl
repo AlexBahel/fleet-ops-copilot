@@ -41,6 +41,37 @@ app.kubernetes.io/part-of: fleet-ops-copilot
 Environment for fleetops-agent's claude backend (templates/fleetops-agent.yaml). The key
 comes from an existing Secret; the chart never holds its value.
 */}}
+{{/*
+fleetops-agent's model backend: its flags and environment for llm.profile.
+cloud: the claude backend, the key from the existing Secret. airgap: the
+llamacpp backend against llama-server, no key (D103).
+*/}}
+{{- define "fleetops.agentBackendArgs" -}}
+{{- if eq .Values.llm.profile "airgap" -}}
+- -backend=llamacpp
+- -llama-url={{ .Values.llm.airgap.url }}
+- -model={{ .Values.llm.airgap.model }}
+{{- else -}}
+- -backend=claude
+{{- end -}}
+{{- end -}}
+
+{{- define "fleetops.agentBackendEnv" -}}
+{{- if eq .Values.llm.profile "airgap" -}}
+{{- $s := .Values.llm.airgap.sampling -}}
+{{- $names := dict "temperature" "FLEETOPS_LLAMACPP_TEMPERATURE" "topP" "FLEETOPS_LLAMACPP_TOP_P" "topK" "FLEETOPS_LLAMACPP_TOP_K" "repeatPenalty" "FLEETOPS_LLAMACPP_REPEAT_PENALTY" -}}
+{{- $env := list -}}
+{{- range $k := list "temperature" "topP" "topK" "repeatPenalty" -}}
+{{- with (get $s $k) -}}
+{{- $env = append $env (dict "name" (get $names $k) "value" (toString .)) -}}
+{{- end -}}
+{{- end -}}
+{{- toYaml $env -}}
+{{- else -}}
+{{- include "fleetops.claudeEnv" . -}}
+{{- end -}}
+{{- end -}}
+
 {{- define "fleetops.claudeEnv" -}}
 - name: ANTHROPIC_API_KEY
   valueFrom:
@@ -98,11 +129,11 @@ on a single file still fails on a bad configuration.
 {{- if ne .Release.Namespace "fleetops-system" -}}
 {{- fail (printf "release namespace is %q; this chart installs into fleetops-system only (the admission policies name ServiceAccounts in fleetops-system)" .Release.Namespace) -}}
 {{- end -}}
-{{- if eq .Values.llm.profile "airgap" -}}
-{{- fail "llm.profile=airgap is not templated yet: the air-gapped profile (llama-server, model storage, egress policy) is installed beside the chart from config/airgap with make deploy-airgap. Install with llm.profile=cloud; see docs/RUNBOOK.md, \"Switch between cloud and air-gapped\"." -}}
-{{- end -}}
-{{- if ne .Values.llm.profile "cloud" -}}
+{{- if not (has .Values.llm.profile (list "cloud" "airgap")) -}}
 {{- fail (printf "llm.profile must be cloud or airgap, got %q" .Values.llm.profile) -}}
+{{- end -}}
+{{- if and (eq .Values.llm.profile "airgap") .Values.networkPolicy.claudeApiEgress.cidrs -}}
+{{- fail "llm.profile=airgap with networkPolicy.claudeApiEgress.cidrs: the air-gapped profile reads no API key, and that rule would open egress to the Claude API that config/airgap's policy closes; leave the list empty" -}}
 {{- end -}}
 {{- if not .Values.swarmadaNamespaces -}}
 {{- fail "swarmadaNamespaces must list at least one Swarmada namespace" -}}

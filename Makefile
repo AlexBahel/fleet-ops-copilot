@@ -125,19 +125,24 @@ CHART_KUBE_VERSIONS ?= 1.30.0 1.37.0
 CHART_TRACING_SET := --set tracing.backend.enabled=true
 # RFC 5737 documentation addresses, used only to render the NetworkPolicy.
 CHART_NP_SET := --set networkPolicy.enabled=true --set 'networkPolicy.apiServer.cidrs={192.0.2.10/32,192.0.2.11/32}' --set 'networkPolicy.claudeApiEgress.cidrs={198.51.100.0/24}'
+# fleetops-agent with the llamacpp backend (llama-server itself is in config/airgap).
+CHART_AIRGAP_SET := --set llm.profile=airgap
 
 .PHONY: chart-lint chart-validate chart-parity chart-check
 
-chart-lint: ## helm lint the chart (strict): defaults, tracing backend with NetworkPolicy, tracing backend alone
+chart-lint: ## helm lint the chart (strict): defaults, air-gapped profile, tracing backend with NetworkPolicy, tracing backend alone
 	$(HELM) lint $(CHART) --namespace fleetops-system --strict
+	$(HELM) lint $(CHART) --namespace fleetops-system --strict $(CHART_AIRGAP_SET)
 	$(HELM) lint $(CHART) --namespace fleetops-system --strict $(CHART_TRACING_SET) $(CHART_NP_SET)
 	$(HELM) lint $(CHART) --namespace fleetops-system --strict $(CHART_TRACING_SET)
 
-chart-validate: ## Render the chart (defaults, with NetworkPolicy, with the tracing backend) and schema-check it with kubeconform
+chart-validate: ## Render the chart (defaults, air-gapped profile, with NetworkPolicy, with the tracing backend) and schema-check it with kubeconform
 	@command -v $(KUBECONFORM) >/dev/null || { echo "kubeconform not found (go install github.com/yannh/kubeconform/cmd/kubeconform@v0.7.0)"; exit 1; }
 	@for v in $(CHART_KUBE_VERSIONS); do \
 		echo "== Kubernetes $$v, defaults"; \
 		$(HELM) template fleetops $(CHART) -n fleetops-system | $(KUBECONFORM) -strict -summary -kubernetes-version $$v - || exit 1; \
+		echo "== Kubernetes $$v, llm.profile=airgap"; \
+		$(HELM) template fleetops $(CHART) -n fleetops-system $(CHART_AIRGAP_SET) | $(KUBECONFORM) -strict -summary -kubernetes-version $$v - || exit 1; \
 		echo "== Kubernetes $$v, networkPolicy.enabled"; \
 		$(HELM) template fleetops $(CHART) -n fleetops-system $(CHART_NP_SET) | $(KUBECONFORM) -strict -summary -kubernetes-version $$v - || exit 1; \
 		echo "== Kubernetes $$v, tracing.backend.enabled without networkPolicy (as beside config/airgap)"; \

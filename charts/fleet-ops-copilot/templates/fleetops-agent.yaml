@@ -1,7 +1,7 @@
 {{- include "fleetops.validate" . }}
 {{- if .Values.agent.enabled }}
 # fleetops-agent: talks to the model (cloud profile: the Claude API, key from an
-# existing Secret), reaches fleetops-mcp over MCP, and serves the web chat and the
+# existing Secret; airgap profile: llama-server in the cluster, no key), reaches fleetops-mcp over MCP, and serves the web chat and the
 # approval-requests panel on its Service. Its ServiceAccount may only get and
 # list ApprovalRequests: the page shows the `fleetops approve` / `fleetops reject`
 # command a person runs with their own kubeconfig; it cannot decide.
@@ -38,7 +38,7 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: [/usr/local/bin/fleetops-agent]
           args:
-            - -backend=claude
+            {{- include "fleetops.agentBackendArgs" . | nindent 12 }}
             - -listen=:{{ .Values.agent.port }}
             - -mcp-url=http://fleetops-mcp:{{ .Values.mcp.port }}/mcp
             - -namespaces={{ join "," .Values.swarmadaNamespaces }}
@@ -50,7 +50,7 @@ spec:
             - -otlp-endpoint={{ . }}
             {{- end }}
           env:
-            {{- include "fleetops.claudeEnv" . | nindent 12 }}
+            {{- include "fleetops.agentBackendEnv" . | nindent 12 }}
           ports: [{name: http, containerPort: {{ .Values.agent.port }}}]
           livenessProbe: {httpGet: {path: /healthz, port: http}, periodSeconds: 10}
           readinessProbe: {httpGet: {path: /readyz, port: http}, periodSeconds: 10, timeoutSeconds: 5}
