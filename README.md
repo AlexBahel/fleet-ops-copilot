@@ -30,12 +30,13 @@ the internet, so fleet state cannot be sent to a hosted model from there: a copi
 to run its model in the cluster, with egress denied by NetworkPolicy. Its offsite operations centre
 has no such restriction and can use a hosted model (Claude via the Claude API).
 
-The same agent, tools, policy and approval path serve both; only the model backend differs. The
-cloud profile is the default. The air-gapped profile is opt-in: llama-server with
-Qwen2.5-7B-Instruct and the egress policies are installed beside the chart from
-[`config/airgap/`](config/airgap/) with the `make deploy-airgap` targets (RUNBOOK section 3). A model
-small enough to run on site hardware is weaker, so the design has to keep a weak model harmless,
-not only a strong one useful.
+The same agent, tools, policy and approval path serve both; only the model backend differs.
+`make demo` runs the air-gapped profile unless the cloud model is asked for (D103): llama-server
+with Qwen2.5-7B-Instruct and the egress policies are installed beside the chart from
+[`config/airgap/`](config/airgap/) with the `make deploy-airgap` targets, and the chart's
+`llm.profile=airgap` runs fleetops-agent against it (RUNBOOK section 3). The Helm chart's own default
+is the cloud profile. A model small enough to run on site hardware is weaker, so the design has to
+keep a weak model harmless, not only a strong one useful.
 
 ## Approach
 
@@ -95,7 +96,7 @@ The copilot runs in the Kubernetes cluster where Swarmada runs, in the namespace
 
 | Process | What it does | What its ServiceAccount may do |
 |---|---|---|
-| `fleetops-agent` | Runs the model loop (Claude through the Claude API; a llama.cpp backend exists, but no manifest sets it), the guided dialogue from the site catalogue, and the web chat. Files a request only after the person confirms its preview. | `get` and `list` ApprovalRequests, for the web UI's requests panel. No write. |
+| `fleetops-agent` | Runs the model loop (Claude through the Claude API, or with `llm.profile=airgap` Qwen2.5-7B-Instruct on llama-server in the cluster), the guided dialogue from the site catalogue, and the web chat. Files a request only after the person confirms its preview. | `get` and `list` ApprovalRequests, for the web UI's requests panel. No write. |
 | `fleetops-mcp` | MCP server: read tools, `check_task`, and the request tools. Verifies the caller's bearer token, runs the policy engine, refuses a request without a confirmed preview. | Read Swarmada objects and webhook configurations; create ApprovalRequests, Events and TokenReviews. No Swarmada write. |
 | `fleetops-approvals` | Checks each decision, re-checks before executing, makes the one approved write, watches activations and outcomes. | Read Swarmada objects, requests and decisions; create held-draft FleetTasks and ZoneMaintenances; create FleetActions as a dry run only; add the estop annotation to a FleetZone and change nothing else on it; write ApprovalRequest status; create Events and SubjectAccessReviews. |
 
@@ -208,7 +209,8 @@ approves the filed request as a fixture person and runs the executor once
 
 ### Other measurements
 
-**Install time.** `DEMO_TRACING=1 DEMO_ANTHROPIC_KEY_FILE=<key file> make demo` took **2m47s**
+**Install time, cloud profile.** `DEMO_TRACING=1 DEMO_ANTHROPIC_KEY_FILE=<key file> make demo` (the
+cloud profile then; since D103 it needs `DEMO_MODEL=cloud`) took **2m47s**
 (exit 0) from no cluster to a running stack with fleetops-agent started, on one Mac mini
 (2026-11-09 UTC; this run waits until every simulated robot is ready for work). Two runs on
 2026-11-08 took 2m29s and 2m19s. A cold machine (no Docker images or build cache) has not been
@@ -257,9 +259,10 @@ they are not comparable with v6.
 
 [`docs/KNOWN-LIMITS.md`](docs/KNOWN-LIMITS.md) lists what is not built, measured or enforced. The
 main ones for reading the numbers above: model runs of record are fixture-mode only, not through the
-deployed fleetops-agent, which has one live end-to-end run with committed evidence; no deployment runs fleetops-agent with the llama.cpp backend yet (the Qwen
-models were measured through `fleetops-eval` against llama-server in the air-gapped profile), and
-that profile is installed beside the Helm chart, not from it; the five agent roles are not built (one
+deployed fleetops-agent, which has one live end-to-end run with committed evidence; the Qwen models
+were measured through `fleetops-eval` against llama-server in the air-gapped profile, not through the
+deployed fleetops-agent, which runs them in `make demo`'s default profile but has not been evaluated
+that way; llama-server and the egress policy are installed beside the Helm chart, not from it; the five agent roles are not built (one
 loop offers every tool but the request tools); the web UI has no login, so requests filed from it are
 never approvable; people on kind use a static token file (test only), and OIDC has not been run.
 [`docs/BACKLOG.md`](docs/BACKLOG.md) lists the open items.
@@ -268,11 +271,29 @@ never approvable; people on kind use a static token file (test only), and OIDC h
 
 ### 1. Start
 
+`make demo` runs the whole stack in a kind cluster on one machine. By default it is the
+**air-gapped profile**: the model, Qwen2.5-7B-Instruct, runs in the cluster on llama-server, the
+copilot's namespace has no egress beyond the cluster, and no API key is needed or used. The cloud
+model, Claude Sonnet 5.5 through the Claude API, is the second path below and needs a key.
+
+The two differ in how often the answer is right. On the v6 record (50 scenarios × 3 runs, fixture
+mode), the local Qwen2.5-7B-Instruct passed **26/150**
+([results.json](evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-08-v6/results.json)) and
+Claude Sonnet 5.5 **120/150**
+([results.json](evals/results/cloud-claude-sonnet-5-5-2026-11-08-v6/results.json)); both are compared
+in [`comparison-v6.md`](evals/results/comparison-v6.md). The safety design holds on either: the model
+is offered no write tool, every change waits for the asker's confirmation and a second person's
+approval, and in the 600 v6 runs the model changed 0 Swarmada objects
+([`comparison-v6.md`](evals/results/comparison-v6.md), "Containment"; and
+[above](#air-gapped-what-a-small-local-model-does-and-what-it-cannot-do)).
+
 Requires Docker (running), kind, kubectl, helm 3.8+, jq, openssl, curl, make, Go 1.25+ and
-python3 with the `grpcio` package: Swarmada's quickstart runs a simulated robot adapter in
-Python with the first `python3` on `PATH`. `make demo` checks that interpreter before it creates
-anything and stops with the fix if it cannot import `grpc` and `google.protobuf`. Put a virtual
-environment that has them first on `PATH`, outside the repository:
+python3 with the `grpcio` package. For the air-gapped profile, Docker's VM needs at least
+**12 GiB of memory** (Docker Desktop: Settings, Resources, Memory); `make demo` checks this before it
+creates anything and stops with the number it found. Swarmada's quickstart runs a simulated robot
+adapter in Python with the first `python3` on `PATH`; `make demo` checks that interpreter too and
+stops with the fix if it cannot import `grpc` and `google.protobuf`. Put a virtual environment that
+has them first on `PATH`, outside the repository:
 
 ```bash
 python3 -m venv ~/fleetops-venv && ~/fleetops-venv/bin/pip install grpcio protobuf
@@ -288,20 +309,41 @@ Run every command below from the top directory of a clone of this repository, in
 make build
 ```
 
-fleetops-agent, the process that talks to the model, starts only when the API key Secret exists.
-Put the key in a file only you can read; `make demo` creates the Secret from it, and the key never
-appears on a command line. To write the file from the clipboard, copy the key from the Claude
-Console, then run:
+**Air-gapped, no key.** Start the demo:
+
+```bash
+make demo
+```
+
+The first run downloads the model files before it creates the cluster: two files, 4,683,073,632
+bytes (4.4 GiB) together, from the official Qwen repository on Hugging Face at a fixed revision,
+into `~/.cache/fleet-ops-copilot/models`. Each is checked against its sha256 in
+[`config/airgap/model-SHA256SUMS`](config/airgap/model-SHA256SUMS), the files of the v6 record runs. It
+also pulls the pinned llama.cpp server image, the one the record used. Later runs check the cached
+files and reuse them; nothing is downloaded inside the cluster. The last line `make demo` prints is
+the total time, followed by what to run next.
+
+**Cloud, with a Claude API key.** Instead of the command above, put the key in a file only you can
+read; `make demo` creates the Secret from it, and the key never appears on a command line. Copy the
+key from the Claude Console, then run:
 
 ```bash
 (umask 077; pbpaste > ~/fleetops-key.txt)
 ```
 
-Start the demo with that file. On a Mac mini it took 2m47s (above); the last line it prints is the
-total time, followed by what to run next:
+Check the file right away. The check says whether it holds a key alone (one line, starting with
+`sk-ant-`, no spaces) and never prints it. If it says `not a Claude API key`, the clipboard held
+something else: copy the key again and repeat both commands.
 
 ```bash
-DEMO_ANTHROPIC_KEY_FILE=~/fleetops-key.txt make demo
+hack/check-key-file.sh ~/fleetops-key.txt
+```
+
+Start the demo with the cloud model. It runs the same check first and starts nothing if the file
+fails it. On a Mac mini it took 2m47s (above):
+
+```bash
+make demo DEMO_MODEL=cloud DEMO_ANTHROPIC_KEY_FILE=$HOME/fleetops-key.txt
 ```
 
 Once it has finished, the key is in the Secret; delete the file:
@@ -314,16 +356,19 @@ rm ~/fleetops-key.txt
 `go.mod` pins, turns on Swarmada's admission webhooks, keeps the simulated fleet's three robots
 live (one sim adapter per robot, in the background; `make demo-down` stops them), builds the image
 and installs the chart into `fleetops-system`, and creates three fictional people with test-only
-tokens: **sam**, **dana** and **eve**. Everything it keeps is in
+tokens: **sam**, **dana** and **eve**. In the air-gapped profile it then loads the llama.cpp image
+and the model files into the cluster's node and applies llama-server and the egress NetworkPolicies
+from [`config/airgap/`](config/airgap/): the copilot's pods may reach only the Kubernetes API, cluster
+DNS, llama-server and fleetops-mcp, and llama-server reaches nothing. The machine itself is not
+air-gapped: Swarmada's quickstart builds and pulls its own images. Everything `make demo` keeps is in
 `~/.local/state/fleet-ops-copilot/demo` (`$DEMO_DIR`), outside the repository, including its own
-kubeconfig: it never reads or writes `~/.kube/config`. Without a key file, plain `make demo` starts
-everything except fleetops-agent; to add the key to a stack that is already running, see RUNBOOK
-section 2.
+kubeconfig: it never reads or writes `~/.kube/config`. To change the profile, run `make demo-down`
+first; `make demo` does not switch a cluster that is running.
 
 Because of that, `kubectl` finds the demo cluster only after you point `KUBECONFIG` at the demo's
 kubeconfig. Do it in this terminal, and again in every new terminal you open for the demo. Then
-check that the three workloads, fleetops-agent, fleetops-approvals and fleetops-mcp, are each
-`1/1 Running`:
+check that the workloads, fleetops-agent, fleetops-approvals, fleetops-mcp and, in the air-gapped
+profile, llama-server, are each `1/1 Running`:
 
 ```bash
 export KUBECONFIG=$HOME/.local/state/fleet-ops-copilot/demo/kubeconfig
@@ -433,9 +478,11 @@ could not run now:
 KUBECONFIG=$P/dana.kubeconfig bin/fleetops activate <activation-request> -n warehouse-a --context dana@fleetops-demo
 ```
 
-Each question is a call to the Claude API. On the v6 record, 100 requests cost 1.5449 USD with
-Claude Sonnet 5.5 ([`comparison-v6.md`](evals/results/comparison-v6.md)). For the air-gapped
-profile, which needs no API key, see RUNBOOK section 3.
+With the air-gapped model nothing leaves the cluster, and answers take longer and are more often
+wrong: on the v6 record its latency was 10.23 s at p50 and 124.78 s at p95, against 4.22 s and
+7.44 s for Claude Sonnet 5.5 ([`comparison-v6.md`](evals/results/comparison-v6.md)). With the cloud
+model each question is a call to the Claude API; on the v6 record, 100 requests cost 1.5449 USD with
+Claude Sonnet 5.5.
 
 ### 3. Finish
 
@@ -492,11 +539,24 @@ helm --kube-context $CTX install fleetops charts/fleet-ops-copilot \
 kubectl --context $CTX -n fleetops-system rollout status deploy/fleetops-mcp deploy/fleetops-approvals --timeout=180s
 ```
 
+The chart's default is the cloud profile (Claude through the Claude API). For the air-gapped model
+instead, add `--set llm.profile=airgap` to the `helm` command above: fleetops-agent then runs against
+llama-server in the cluster and reads no key. llama-server, its model files and the egress
+NetworkPolicies are not in the chart; install them beside it with `hack/fetch-model.sh` and the
+`make load-llama-image`, `load-llama-model` and `deploy-airgap` targets (RUNBOOK section 3), and skip
+the API key in step 4.
+
 **4. Add the API key and the people.** Create the key Secret from a file (RUNBOOK section 2), then
 let people decide requests by binding `fleetops:approver` to them in each Swarmada namespace:
 
 ```bash
 (umask 077; pbpaste > ~/fleetops-key.txt)
+hack/check-key-file.sh ~/fleetops-key.txt
+```
+
+Go on only if the check says `looks like a Claude API key`:
+
+```bash
 kubectl --context $CTX -n fleetops-system create secret generic fleet-ops-copilot-claude \
   --from-file=ANTHROPIC_API_KEY=$HOME/fleetops-key.txt --dry-run=client -o yaml | kubectl --context $CTX apply -f -
 rm ~/fleetops-key.txt
@@ -522,7 +582,8 @@ The audit files are lost with the pods, so copy them first (RUNBOOK section 4).
 | Command | What it does |
 |---|---|
 | `DEMO_DRY_RUN=1 make demo` | Prints every command that would change anything; runs none. |
-| `DEMO_TRACING=1 make demo` | Also installs the development trace backend (RUNBOOK section 8). |
+| `DEMO_TRACING=1 make demo` | Also installs the development trace backend (RUNBOOK section 8). Its images are pulled by the node, so it is not part of the air-gapped profile. |
+| `make verify-egress KIND_CLUSTER=fleetops-demo` | Air-gapped profile: a probe Job in `fleetops-system` that passes only if no external target is reachable (RUNBOOK section 3). |
 | `make test-live` | Live approval paths on the demo stack, requests filed with sam's own token. |
 | `make ci` | Without a cluster: build, vet, lint, ShellCheck 0.11.0, unit tests, envtest, fixture evals held to `evals/baseline.json`. |
 | `make chart-check` | Without a cluster: helm lint, kubeconform, chart parity with `config/`. |
@@ -553,7 +614,7 @@ go run -tags envtest ./evals/cmd/fleetops-eval -backend claude -model claude-son
 | `config/` | CRDs, RBAC, ValidatingAdmissionPolicies, Deployments (`config/deploy`), air-gapped profile (`config/airgap`) |
 | `charts/fleet-ops-copilot` | Helm chart: the objects in `config/` plus an optional NetworkPolicy and trace backend; `make chart-check` |
 | `scripts/` | `demo-preflight.sh` (cluster and Swarmada webhook checks), `chart-parity` (chart vs `config/`), `baseline-lowered` (CI warning when `evals/baseline.json` is lowered) |
-| `hack/` | `demo-up.sh`, `demo-down.sh`, `kind-people.sh` (test-only person tokens), `kind/` (kind configuration), `airgap.mk`, `shellcheck.sh` (pinned ShellCheck), live-test scripts |
+| `hack/` | `demo-up.sh`, `demo-down.sh`, `kind-people.sh` (test-only person tokens), `kind/` (kind configuration), `airgap.mk`, `fetch-model.sh` (model files into a host cache, sha256 checked), `check-key-file.sh` (a Claude API key file's shape, never printed), `shellcheck.sh` (pinned ShellCheck), live-test scripts |
 | `docs/` | `DESIGN.md` (design and decision log), `KNOWN-LIMITS.md`, `BACKLOG.md`, `RUNBOOK.md` (operations; which sections have been run is stated at its top), `architecture/` (D2 source and SVG), `evidence/` (cluster logs) |
 | `evals/` | Evaluation harness, scenarios, fixtures (hand-written and captured live), results |
 | `test/envtest`, `test/live`, `test/image` | API-server tests; approval paths against a live Swarmada control plane; the image's binaries run, and its mounted files are readable, as the non-root user |

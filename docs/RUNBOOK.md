@@ -9,7 +9,8 @@ the Jaeger export of section 8, `make test-live` and `make demo-down`. The secon
 section 9 end to end: a guided request, `fleetops approve` by dana, an activation request, its
 approval, `fleetops activate` by dana, and the FleetTask Succeeded. Section 4's audit file was read
 and verified (`fleetops audit verify`) in both. The other sections have not been run as a
-sequence. Items that depend on parts not built yet (the air-gapped profile in the chart) say so.
+sequence. Those runs were of the cloud profile; `make demo` has run the air-gapped profile by
+default since D103. Items that depend on parts not built yet say so.
 
 Conventions: every `kubectl` and `helm` command names its context explicitly. The examples use a
 kind cluster `fleetops-<name>`, context `kind-fleetops-<name>`, a kubeconfig file that holds only that
@@ -29,20 +30,30 @@ One command from an empty machine state to a running stack. Needs Docker (runnin
 kubectl, helm 3.8+, jq, openssl, curl, make, Go and python3 (Swarmada's live quickstart runs a
 simulated adapter with the first `python3` on `PATH`, which must import `grpc` and
 `google.protobuf`; `make demo` checks this before it creates anything and stops with the fix,
-D82). Everything it keeps (kubeconfig, the people's tokens and kubeconfigs, the
+D82). The model profile is air-gapped unless `DEMO_MODEL=cloud` is given (D103); the air-gapped
+profile needs a Docker VM with at least 12 GiB of memory. Everything it keeps (kubeconfig, the people's tokens and kubeconfigs, the
 Swarmada copy, logs) is in `$DEMO_DIR`, by default `~/.local/state/fleet-ops-copilot/demo`,
 **outside the repository**; the scripts refuse a directory inside it. It never reads or writes
 `~/.kube/config`.
 
 | Command | What it does |
 |---|---|
-| `make demo` | Prints the plan's stages and, at the end, the elapsed time and what to run next: the `export KUBECONFIG=` line for its kubeconfig, the verified way to ask (`fleetops chat` as sam), the web chat, `make demo-down`. |
+| `make demo` | Air-gapped profile: Qwen2.5-7B-Instruct on llama-server in the cluster, the egress NetworkPolicies of `config/airgap`, no API key. Prints the plan's stages and, at the end, the elapsed time and what to run next: the `export KUBECONFIG=` line for its kubeconfig, the model it runs, the verified way to ask (`fleetops chat` as sam), the web chat, `make demo-down`. |
+| `make demo DEMO_MODEL=cloud DEMO_ANTHROPIC_KEY_FILE=<file>` | Cloud profile: Claude Sonnet 5.5 through the Claude API, with the key from the file as Secret `fleet-ops-copilot-claude`. The file is checked first (`hack/check-key-file.sh`: one line, starts with `sk-ant-`, no spaces); a file that fails, a key file without `DEMO_MODEL=cloud`, or `DEMO_MODEL=cloud` without a key file is refused before anything starts. |
 | `DEMO_DRY_RUN=1 make demo` | Prints every command that would change anything; runs none. |
 | `DEMO_TRACING=1 make demo` | Also installs the optional trace backend (section 8). |
 | `make demo-down` | Removes cluster fleetops-demo, its kubeconfig and the people's tokens, and the conversations `fleetops chat` kept for the demo's contexts (section 7). |
 
 What it does, in order (each stage prints its elapsed time; the total is the last line):
 
+0. Checks the tools, Python and Docker; in the air-gapped profile, that Docker's VM has at least
+   12 GiB of memory (llama-server's memory limit is 7 GiB). Then, still before any cluster exists,
+   `hack/fetch-model.sh` fetches the model files into `~/.cache/fleet-ops-copilot/models`
+   (`DEMO_MODEL_CACHE`): Qwen2.5-7B-Instruct GGUF Q4_K_M, two files, 4,683,073,632 bytes, from the
+   official Qwen repository on Hugging Face at a fixed revision, each checked against
+   `config/airgap/model-SHA256SUMS` (the v6 record's files). A cached file that matches is reused; one
+   that does not is downloaded again. The pinned llama.cpp server image is pulled by digest if Docker
+   does not have it.
 1. Creates the people's token file (section 7) and the kind cluster `fleetops-demo` with that file wired
    into the API server. Node image `kindest/node:v1.37.0`, pinned by digest.
 2. Checks that sam's, dana's and eve's tokens authenticate as sam, dana and eve. If the cluster
@@ -65,11 +76,18 @@ What it does, in order (each stage prints its elapsed time; the total is the las
    Robot is `Idle` or `InProgress`; otherwise it fails and names the robot. If the Robots go `Offline` later, run
    `CLUSTER=fleetops-demo KUBECONFIG=$DEMO_DIR/kubeconfig hack/demo-sim-fleet.sh start` again.
 5. Builds the copilot image, loads it into the cluster, applies the CRDs and installs the chart
-   into `fleetops-system`; binds the people's roles in `warehouse-a`.
-6. Checks health: fleetops-mcp and fleetops-approvals rollouts, fleetops-mcp's `/healthz`, and, if the Secret
-   `fleet-ops-copilot-claude` exists, fleetops-agent. Without the Secret fleetops-agent does not start and
-   the script says so. To create it from a key file you hold (nothing calls the model):
-   `DEMO_ANTHROPIC_KEY_FILE=key.txt make demo`, or section 2.
+   into `fleetops-system` with `llm.profile` set to the profile (cloud: after creating the Secret from
+   the key file, with any trailing line break removed). In the air-gapped profile it then runs
+   `make load-llama-image`, `make load-llama-model` (sha256 checked again on the host and in the node)
+   and `make deploy-airgap` (section 3), which restarts the copilot's pods under the policy. Binds the
+   people's roles in `warehouse-a`.
+6. Checks health: fleetops-mcp, fleetops-approvals and fleetops-agent rollouts, fleetops-mcp's
+   `/healthz`; in the air-gapped profile also llama-server and the six NetworkPolicies of
+   `config/airgap/networkpolicy.yaml`. `make demo` does not run `make verify-egress`; its summary
+   prints the command.
+
+A cluster made with one profile is not switched to the other in place: `make demo` refuses and asks
+for `make demo-down` first.
 
 Then `make test-live` runs the live approval paths with requests filed by sam's and dana's own
 tokens (verified requesters, section 7). It needs `bin/fleetops` (built by the target).
@@ -219,7 +237,13 @@ environment variable and does not start without it. The model evaluations read
 
 Create or replace the Secret without putting the key on a command line or in shell history. Put
 the key in a file readable only by you, `key.txt`, for example from the clipboard with
-`(umask 077; pbpaste > key.txt)`, then:
+`(umask 077; pbpaste > key.txt)`, and check that it holds a key alone (it never prints the key):
+
+```bash
+hack/check-key-file.sh key.txt
+```
+
+Then, if it says `looks like a Claude API key`:
 
 ```bash
 kubectl --context $CTX -n fleetops-system create secret generic fleet-ops-copilot-claude \
@@ -247,10 +271,12 @@ anyway, revoke it.
 | Profile | Model | Status on main |
 |---|---|---|
 | `cloud` | Claude via the Claude API | Chart value `llm.profile: cloud` (default). The chart runs fleetops-agent with `-backend=claude` (`internal/llm/claude.go`); it starts once the API key Secret exists (section 2). fleetops-agent has run against Sonnet 5.5 on the demo stack, end to end up to a Succeeded FleetTask, twice (`docs/evidence/live-2026-11-08/`; docs/KNOWN-LIMITS.md); Sonnet 5.5 and Opus 5.5 were measured through `fleetops-eval` on eval surface v6, the record (`evals/results/comparison-v6.md`, 2026-11-08); no model has run on v7. |
-| `airgap` | Qwen2.5-7B-Instruct served by `llama-server` in the cluster | Plain manifests and make targets (`config/airgap/`, `hack/airgap.mk`) and the `llamacpp` backend (`internal/llm/llamacpp.go`); not templated in the chart. Run on single-node kind clusters with kindnet (`docs/evidence/airgap-2026-11-12/`); the `llamacpp` backend's record runs on eval surface v6 are against Qwen2.5-7B-Instruct (`evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-08-v6/`) and Qwen2.5-14B-Instruct (`evals/results/airgap-llamacpp-qwen2.5-14b-instruct-2026-11-08-v6/`, with this manifest's model files, alias and memory changed: its `model.md`). fleetops-agent does not run with it yet (docs/KNOWN-LIMITS.md). `llm.profile: airgap` makes the chart render fail on purpose. |
+| `airgap` | Qwen2.5-7B-Instruct served by `llama-server` in the cluster | `make demo`'s default (D103). Chart value `llm.profile: airgap` runs fleetops-agent with `-backend=llamacpp` against `llm.airgap.url` (default `http://llama-server:8080`) with the v6 record's sampling (`llm.airgap.sampling`, D49) and reads no key. llama-server, its model storage and the egress policies are plain manifests and make targets beside the chart (`config/airgap/`, `hack/airgap.mk`). Run on single-node kind clusters with kindnet (`docs/evidence/airgap-2026-11-12/`); the `llamacpp` backend's record runs on eval surface v6 are against Qwen2.5-7B-Instruct (`evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-08-v6/`) and Qwen2.5-14B-Instruct (`evals/results/airgap-llamacpp-qwen2.5-14b-instruct-2026-11-08-v6/`, with this manifest's model files, alias and memory changed: its `model.md`), through `fleetops-eval`, not through the deployed fleetops-agent (docs/KNOWN-LIMITS.md). |
 
-Until the air-gapped profile is in the chart, it is installed beside the chart with these targets,
-in this order:
+`make demo` does all of this for its kind cluster (section 0). On another `fleetops-*` kind cluster,
+install the chart with `--set llm.profile=airgap`, fetch the model files once with
+`hack/fetch-model.sh <cache directory>`, then run these targets in this order
+(`MODEL_SUMS=config/airgap/model-SHA256SUMS`):
 
 ```bash
 make load-llama-image KIND_CLUSTER=fleetops-<name>
@@ -275,7 +301,9 @@ reading both: NetworkPolicies are additive, so the cloud policy's Claude API rul
 egress path the air-gapped profile is meant to close.
 
 Switching back to cloud: remove the air-gapped objects (`config/airgap`), set `llm.profile: cloud`,
-and make sure the API key Secret exists (section 2).
+and make sure the API key Secret exists (section 2). The chart refuses `llm.profile: airgap` together
+with `networkPolicy.claudeApiEgress.cidrs`. On the demo cluster, run `make demo-down`, then `make demo`
+with the other profile.
 
 ## 4. Read the audit log
 

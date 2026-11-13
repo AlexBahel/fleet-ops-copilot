@@ -5,7 +5,9 @@ Manifests for running the copilot's language model inside the cluster
 Q4_K_M, two shards) served by `llama-server`. The agent calls it through
 `internal/llm/llamacpp.go`, which uses the OpenAI-compatible
 `/v1/chat/completions` endpoint; the base URL comes from `FLEETOPS_LLAMACPP_URL`.
-No credential is involved.
+No credential is involved. The chart's `llm.profile: airgap` runs fleetops-agent that way
+(`-backend=llamacpp`, `llm.airgap.url`, default `http://llama-server:8080`), and `make demo` installs
+this profile with it by default (`docs/DESIGN.md` D103).
 
 **Status:** the manifests are checked against the Kubernetes schemas with
 kubeconform (`make validate-airgap`) and have been applied on single-node kind
@@ -21,6 +23,17 @@ they have not run on any other CNI.
 | `networkpolicy.yaml` | Egress policies for the namespace, ingress policy for `llama-server` |
 | `networkpolicy-tracing.yaml` | With the chart's trace backend only: `fleetops-mcp`, `fleetops-agent` → the Collector's OTLP port (D69) |
 | `egress-probe.yaml` | Job that must be unable to reach hosts outside the cluster |
+| `model-SHA256SUMS` | sha256 of the two model files (those of the v6 record runs); `hack/fetch-model.sh` and `make load-llama-model` check against it |
+
+## Model files
+
+Qwen2.5-7B-Instruct, GGUF Q4_K_M, from the official Qwen repository
+`https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF` at revision
+`bb5d59e06d9551d752d08b292a50eb208b07ab1f`: `qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf`
+(3,993,201,344 bytes) and `-00002-of-00002.gguf` (689,872,288 bytes). `hack/fetch-model.sh <dir>`
+downloads them on the host once, keeps each file only if its sha256 matches `model-SHA256SUMS`, and
+reuses a cached file while it matches; `make demo` caches them in
+`~/.cache/fleet-ops-copilot/models/qwen2.5-7b-instruct-q4_k_m`.
 
 ## Image
 
@@ -78,11 +91,12 @@ it enforces policy before the pod's containers start, and check it with
 
 ## Make targets (kind clusters named `fleetops-*` only)
 
-The first loads the llama-server image into the node:
+`make demo` runs the first three for its cluster. The first loads the llama-server image into the node:
 
 ```sh
+hack/fetch-model.sh <dir>
 make load-llama-image KIND_CLUSTER=fleetops-airgap
-make load-llama-model KIND_CLUSTER=fleetops-airgap MODEL_DIR=<dir> MODEL_SUMS=<sha256sum file>
+make load-llama-model KIND_CLUSTER=fleetops-airgap MODEL_DIR=<dir> MODEL_SUMS=config/airgap/model-SHA256SUMS
 make deploy-airgap    KIND_CLUSTER=fleetops-airgap
 make verify-egress-baseline KIND_CLUSTER=fleetops-airgap
 make verify-egress    KIND_CLUSTER=fleetops-airgap
