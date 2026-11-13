@@ -17,8 +17,19 @@
 #      that adapter starts, every robot registered and ready for work (D59);
 #   5. the image built on the host and loaded into the cluster;
 #   6. the Helm chart installed into fleetops-system;
+#   6b. air-gapped profile (the default, D103): llama-server, its model files and
+#      the egress NetworkPolicy from config/airgap (make load-llama-image,
+#      load-llama-model, deploy-airgap);
 #   7. the people's RoleBindings and token kubeconfigs;
 #   8. health checks.
+#
+# Model profile (D103): DEMO_MODEL=airgap (the default) runs fleetops-agent with
+# Qwen2.5-7B-Instruct on llama-server in the cluster, egress denied, no API key.
+# Its model files are fetched once into a cache on this machine (sha256 checked,
+# hack/fetch-model.sh) before the cluster is created, and the Docker VM must have
+# at least 12 GiB of memory. DEMO_MODEL=cloud runs it with Claude through the
+# Claude API and needs DEMO_ANTHROPIC_KEY_FILE, whose shape is checked
+# (hack/check-key-file.sh) before anything starts.
 #
 #   CLUSTER=fleetops-demo KUBECONFIG=<dedicated file> hack/demo-up.sh        (make demo sets both)
 #
@@ -34,9 +45,12 @@
 #   DEMO_SCENARIO          Swarmada quickstart scenario (default healthy-fleet)
 #   DEMO_NODE_IMAGE        kind node image (default: kind v0.33.0's own default, pinned by digest)
 #   DEMO_IMAGE             copilot image (default fleet-ops-copilot:dev)
-#   DEMO_TRACING=1         install the chart's optional Collector + Jaeger and export traces to it
-#   DEMO_ANTHROPIC_KEY_FILE  file holding the Claude API key: becomes Secret fleet-ops-copilot-claude (not read otherwise;
-#                            without it fleetops-agent does not start, and this script says so; nothing calls the API)
+#   DEMO_TRACING=1         install the chart's optional Collector + Jaeger and export traces to it (their images are
+#                            pulled by the node: not part of the air-gapped profile)
+#   DEMO_MODEL             airgap (default) or cloud
+#   DEMO_MODEL_CACHE       airgap: directory for the model files (default ${XDG_CACHE_HOME:-~/.cache}/fleet-ops-copilot/models/qwen2.5-7b-instruct-q4_k_m)
+#   DEMO_ANTHROPIC_KEY_FILE  cloud only, required: file holding the Claude API key alone; becomes Secret
+#                            fleet-ops-copilot-claude. Refused with DEMO_MODEL=airgap. Nothing here calls the API.
 #   DEMO_DRY_RUN=1         print every command that would change anything, run none of them. Reads nothing
 #                            from a cluster. Still creates DEMO_DIR with the tokens and the rendered kind
 #                            configuration, and reports missing tools instead of stopping.
@@ -59,6 +73,35 @@ img="${DEMO_IMAGE:-fleet-ops-copilot:dev}"
 ctx="kind-$CLUSTER"
 ns=fleetops-system
 swarm_ns="${SWARMADA_NAMESPACE:-warehouse-a}"
+
+# ---- model profile (D103), before anything is created -----------------------------
+profile="${DEMO_MODEL:-airgap}"
+key_file="${DEMO_ANTHROPIC_KEY_FILE:-}"
+# make demo DEMO_ANTHROPIC_KEY_FILE=~/key.txt passes the ~ unexpanded from zsh.
+# shellcheck disable=SC2088 # the literal ~/ is what is matched here
+if [[ "$key_file" == "~/"* ]]; then key_file="$HOME/${key_file#\~/}"; fi
+refuse() { echo "demo: $* Nothing was started." >&2; exit 1; }
+case "$profile" in
+  airgap)
+    [[ -z "$key_file" ]] || refuse "DEMO_ANTHROPIC_KEY_FILE is set, but the model profile is airgap (the default), which uses no API key.
+For the cloud model, run: make demo DEMO_MODEL=cloud DEMO_ANTHROPIC_KEY_FILE=$key_file
+For the air-gapped model, unset DEMO_ANTHROPIC_KEY_FILE."
+    ;;
+  cloud)
+    [[ -n "$key_file" ]] || refuse "DEMO_MODEL=cloud needs DEMO_ANTHROPIC_KEY_FILE=<file holding the Claude API key alone>."
+    "$repo/hack/check-key-file.sh" "$key_file" || refuse "DEMO_ANTHROPIC_KEY_FILE=$key_file is not a key file (above)."
+    ;;
+  *) refuse "DEMO_MODEL=$profile: use airgap or cloud (airgap is the default)." ;;
+esac
+model_cache="${DEMO_MODEL_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/fleet-ops-copilot/models/qwen2.5-7b-instruct-q4_k_m}"
+model_sums="$repo/config/airgap/model-SHA256SUMS"
+# config/airgap/llama-server.yaml's image, pulled on this machine by digest (hack/airgap.mk).
+llama_ref="ghcr.io/ggml-org/llama.cpp@sha256:b32890309c1a33a534a01b0b461e953dc2c5a6bac20213abcf48e22847a19c85"
+# Docker VM memory the air-gapped profile needs (D103), and the slack for the VM
+# reporting a little less than its setting.
+airgap_mem_gib=12
+mem_slack=$((256 * 1024 * 1024))
+
 guard_outside_repo demo-up.sh "$dir" "$repo"
 mkdir -p "$dir/logs"
 chmod 700 "$dir"
@@ -125,10 +168,40 @@ elif [[ -n "$py" ]]; then
 fi
 if [[ "$DRY" != 1 ]]; then
   docker info >/dev/null 2>&1 || fail "the Docker daemon is not reachable"
+  if [[ "$profile" == airgap ]]; then
+    mem="$(docker info --format '{{.MemTotal}}' 2>/dev/null || true)"
+    [[ "$mem" =~ ^[0-9]+$ ]] || fail "could not read the Docker VM's memory (docker info --format '{{.MemTotal}}')"
+    if ((mem < airgap_mem_gib * 1024 * 1024 * 1024 - mem_slack)); then
+      fail "Docker's VM has $(awk -v b="$mem" 'BEGIN { printf "%.1f", b / 1073741824 }') GiB of memory; the air-gapped profile needs at least $airgap_mem_gib GiB (llama-server alone may use 7 GiB). In Docker Desktop: Settings, Resources, Memory: $airgap_mem_gib GB or more, then Apply & restart. Or use the cloud model: make demo DEMO_MODEL=cloud DEMO_ANTHROPIC_KEY_FILE=<key file>. Nothing was started"
+    fi
+    echo "  Docker VM memory: $(awk -v b="$mem" 'BEGIN { printf "%.1f", b / 1073741824 }') GiB (the air-gapped profile needs $airgap_mem_gib GiB)"
+  fi
   gowork="$(go env GOWORK)"
   [[ -z "$gowork" || "$gowork" == off ]] || fail "go env GOWORK is '$gowork': a go.work file would replace the Swarmada commit go.mod pins; unset GOWORK or remove the file"
 fi
+if [[ "$DRY" == 1 && "$profile" == airgap ]]; then
+  echo "  [dry-run] Docker VM memory check (a real run stops here below $airgap_mem_gib GiB)"
+fi
 echo "  cluster $CLUSTER (context $ctx), kubeconfig $KUBECONFIG, scenario $scenario"
+if [[ "$profile" == airgap ]]; then
+  echo "  model profile: airgap (Qwen2.5-7B-Instruct on llama-server in the cluster, egress denied, no API key)"
+else
+  echo "  model profile: cloud (Claude Sonnet 5.5 through the Claude API, key from $key_file)"
+fi
+
+# ---- 0b. air-gapped: model files and llama.cpp image on this machine ---------------
+if [[ "$profile" == airgap ]]; then
+  stage "model files, llama.cpp image"
+  echo "  Qwen2.5-7B-Instruct GGUF Q4_K_M, 2 files, 4,683,073,632 bytes (4.4 GiB). The first run downloads them"
+  echo "  into $model_cache and checks each sha256 (config/airgap/model-SHA256SUMS); later runs reuse them."
+  x "$repo/hack/fetch-model.sh" "$model_cache"
+  if [[ "$DRY" == 1 ]] || ! docker image inspect "$llama_ref" >/dev/null 2>&1; then
+    if [[ "$DRY" == 1 ]]; then arch="<go env GOARCH>"; else arch="$(go env GOARCH)"; fi
+    x docker pull --platform "linux/$arch" "$llama_ref"
+  else
+    echo "  llama.cpp server image already here: $llama_ref"
+  fi
+fi
 
 # ---- 1. people tokens, kind cluster ------------------------------------------
 stage "people tokens (D60, test only)"
@@ -140,12 +213,15 @@ echo "  kind configuration: $dir/kind-config.yaml"
 exists=0
 if [[ "$DRY" != 1 ]] && kind get clusters 2>/dev/null | grep -qx "$CLUSTER"; then exists=1; fi
 if ((exists)); then
+  # A cluster made with the other profile has its Secret or its egress policy; it is not switched in place.
+  before="$(cat "$dir/profile" 2>/dev/null || echo cloud)"
+  [[ "$before" == "$profile" ]] || fail "kind cluster $CLUSTER exists with the $before model profile; run make demo-down first, then make demo again"
   echo "  kind cluster $CLUSTER exists; reusing it (make demo-down first for a clean start)"
   [[ -f "$KUBECONFIG" ]] || kind export kubeconfig --name "$CLUSTER" --kubeconfig "$KUBECONFIG"
 else
   x kind create cluster --name "$CLUSTER" --image "$node_image" --config "$dir/kind-config.yaml" --kubeconfig "$KUBECONFIG" --wait 180s
 fi
-[[ "$DRY" == 1 ]] || chmod 600 "$KUBECONFIG"
+[[ "$DRY" == 1 ]] || { chmod 600 "$KUBECONFIG"; echo "$profile" >"$dir/profile"; }
 
 stage "people: tokens accepted by the API server"
 mkdir -p "$dir/persons"
@@ -227,14 +303,15 @@ x make -C "$repo" image IMG="$img"
 x kind load docker-image "$img" --name "$CLUSTER"
 
 stage "Helm chart"
-if [[ -n "${DEMO_ANTHROPIC_KEY_FILE:-}" ]]; then
-  [[ "$DRY" == 1 || -s "$DEMO_ANTHROPIC_KEY_FILE" ]] || fail "DEMO_ANTHROPIC_KEY_FILE=$DEMO_ANTHROPIC_KEY_FILE is not a file"
+if [[ "$profile" == cloud ]]; then
   if [[ "$DRY" == 1 ]]; then
-    echo "  [dry-run] kubectl create secret generic fleet-ops-copilot-claude --from-file=ANTHROPIC_API_KEY=<file> -n $ns (applied)"
+    echo "  [dry-run] kubectl create secret generic fleet-ops-copilot-claude --from-file=ANTHROPIC_API_KEY=<key file, line break removed> -n $ns (applied)"
   else
     k create namespace "$ns" --dry-run=client -o yaml | k apply -f - >/dev/null
-    k -n "$ns" create secret generic fleet-ops-copilot-claude --from-file=ANTHROPIC_API_KEY="$DEMO_ANTHROPIC_KEY_FILE" \
+    # The key goes through a pipe, never a command line; a trailing line break would end up in the header.
+    k -n "$ns" create secret generic fleet-ops-copilot-claude --from-file=ANTHROPIC_API_KEY=<(tr -d '\n' <"$key_file") \
       --dry-run=client -o yaml | k apply -f - >/dev/null
+    echo "  Secret fleet-ops-copilot-claude created from $key_file"
   fi
 fi
 tracing_args=()
@@ -242,7 +319,15 @@ if [[ "${DEMO_TRACING:-0}" == 1 ]]; then tracing_args=(--set tracing.backend.ena
 # CRDs first: Helm does not upgrade them, and a re-run should.
 x k apply --server-side --force-conflicts -f "$repo/charts/fleet-ops-copilot/crds/"
 x h upgrade --install fleetops "$repo/charts/fleet-ops-copilot" --namespace "$ns" --create-namespace \
-  --set "swarmadaNamespaces={$swarm_ns}" ${tracing_args[@]+"${tracing_args[@]}"}
+  --set "swarmadaNamespaces={$swarm_ns}" --set "llm.profile=$profile" ${tracing_args[@]+"${tracing_args[@]}"}
+
+# ---- 4b. air-gapped profile: llama-server, model files, egress policy -------------
+if [[ "$profile" == airgap ]]; then
+  stage "llama-server, egress policy"
+  x make -C "$repo" load-llama-image KIND_CLUSTER="$CLUSTER"
+  x make -C "$repo" load-llama-model KIND_CLUSTER="$CLUSTER" MODEL_DIR="$model_cache" MODEL_SUMS="$model_sums"
+  x make -C "$repo" deploy-airgap KIND_CLUSTER="$CLUSTER"
+fi
 
 # ---- 5. people -------------------------------------------------------------------
 stage "people: RoleBindings"
@@ -252,17 +337,19 @@ x "$repo/hack/kind-people.sh" bind "$ctx" "$swarm_ns"
 stage "health checks"
 x k -n "$ns" rollout status deploy/fleetops-mcp deploy/fleetops-approvals --timeout=180s
 if [[ "$DRY" == 1 ]]; then
-  echo "  [dry-run] fleetops-mcp /healthz through the Service proxy; fleetops-agent rollout if Secret fleet-ops-copilot-claude exists;"
-  echo "  [dry-run] tracing backend rollouts if DEMO_TRACING=1"
+  echo "  [dry-run] fleetops-mcp /healthz through the Service proxy; fleetops-agent rollout;"
+  echo "  [dry-run] air-gapped: llama-server rollout and its NetworkPolicies present; tracing backend rollouts if DEMO_TRACING=1"
 else
   k get --raw "/api/v1/namespaces/$ns/services/fleetops-mcp:mcp/proxy/healthz" >/dev/null \
     || fail "fleetops-mcp /healthz did not answer through the Service proxy"
   echo "  fleetops-mcp /healthz ok"
-  if k -n "$ns" get secret fleet-ops-copilot-claude >/dev/null 2>&1; then
-    k -n "$ns" rollout status deploy/fleetops-agent --timeout=180s
-  else
-    echo "  fleetops-agent not waited for: Secret fleet-ops-copilot-claude (key ANTHROPIC_API_KEY) does not exist in $ns,"
-    echo "  so the pod stays in CreateContainerConfigError. Create it (docs/RUNBOOK.md section 2) or rerun with DEMO_ANTHROPIC_KEY_FILE."
+  k -n "$ns" rollout status deploy/fleetops-agent --timeout=180s
+  if [[ "$profile" == airgap ]]; then
+    k -n "$ns" rollout status deploy/llama-server --timeout=60s
+    k -n "$ns" get networkpolicy fleetops-airgap-egress fleetops-airgap-egress-apiserver fleetops-airgap-egress-model \
+      fleetops-airgap-egress-agent-mcp llama-server-no-egress llama-server-ingress -o name >/dev/null \
+      || fail "the air-gapped NetworkPolicies are not all in $ns"
+    echo "  air-gapped NetworkPolicies present in $ns (config/airgap/networkpolicy.yaml)"
   fi
   if [[ "${DEMO_TRACING:-0}" == 1 ]]; then
     k -n "$ns" rollout status deploy/fleetops-otel-collector deploy/fleetops-jaeger --timeout=180s
@@ -273,7 +360,7 @@ fi
 stage_done
 total=$((SECONDS - started))
 {
-  echo "demo: $(date -u +%Y-%m-%dT%H:%M:%SZ) cluster $CLUSTER total $(fmt $total) (${total}s) dry-run=$DRY"
+  echo "demo: $(date -u +%Y-%m-%dT%H:%M:%SZ) cluster $CLUSTER profile $profile total $(fmt $total) (${total}s) dry-run=$DRY"
   printf '%s' "$timings"
 } >"$dir/last-run.txt"
 echo
@@ -292,8 +379,21 @@ cat <<EOT
       export KUBECONFIG=$KUBECONFIG
   Run the line above first in every new terminal you use for this demo.
 EOT
-if [[ "$DRY" != 1 ]] && ! k -n "$ns" get secret fleet-ops-copilot-claude >/dev/null 2>&1; then
-  echo "  fleetops-agent is not running (no API key Secret), so nothing below can answer yet: docs/RUNBOOK.md section 2."
+if [[ "$profile" == airgap ]]; then
+  cat <<EOT
+
+  Model: Qwen2.5-7B-Instruct (Q4_K_M) on llama-server in this cluster; fleetops-system's egress is denied
+  by NetworkPolicy and no API key is used. On the v6 record this model passed 26/150 and Claude Sonnet 5.5
+  120/150 (evals/results/comparison-v6.md); its answers are slower (p50 10.23 s, p95 124.78 s there) and more
+  often wrong, and a wrong answer still cannot change the fleet: every change waits for a person's approval.
+  For the cloud model instead: make demo-down, then make demo DEMO_MODEL=cloud DEMO_ANTHROPIC_KEY_FILE=<key file>
+EOT
+else
+  cat <<EOT
+
+  Model: Claude Sonnet 5.5 (claude-sonnet-5-5) through the Claude API, key in Secret fleet-ops-copilot-claude.
+  Every question is a paid API call (v6 record: 1.5449 USD per 100 requests, evals/results/comparison-v6.md).
+EOT
 fi
 cat <<EOT
 
@@ -312,6 +412,9 @@ cat <<EOT
   Approval paths against this stack: make test-live.
   Sim fleet (3 adapters, background): PIDs in $dir/sim-fleet/pids, logs in $dir/logs/sim-adapter-*.log.
 EOT
+if [[ "$profile" == airgap ]]; then
+  echo "  Egress check (a probe Job that must reach nothing outside the cluster): make verify-egress KIND_CLUSTER=$CLUSTER"
+fi
 if [[ "${DEMO_TRACING:-0}" == 1 ]]; then
   echo "  Traces: in another terminal, after the export line, run this and open http://127.0.0.1:16686/"
   echo "      kubectl --context $ctx -n $ns port-forward svc/fleetops-jaeger 16686:16686"

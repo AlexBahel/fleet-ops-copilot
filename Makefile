@@ -92,7 +92,8 @@ test-live-go: build ## Go live tests of the approval paths (hack/live-approval-p
 # quickstart). Every command names the dedicated kubeconfig below and the
 # context kind-$(FLEETOPS_CLUSTER); ~/.kube/config is never read or written
 # (hack/lib/guard.sh). DEMO_* variables (hack/demo-up.sh header) pass through
-# from the environment: DEMO_DRY_RUN=1, DEMO_TRACING=1, DEMO_ANTHROPIC_KEY_FILE.
+# from the environment or the command line: DEMO_DRY_RUN=1, DEMO_TRACING=1,
+# DEMO_MODEL=airgap (default) or cloud, DEMO_MODEL_CACHE, DEMO_ANTHROPIC_KEY_FILE (cloud only).
 FLEETOPS_CLUSTER ?= fleetops-demo
 # Outside the repository on purpose: it holds the people's bearer tokens (the scripts refuse a directory inside it).
 DEMO_DIR ?= $(HOME)/.local/state/fleet-ops-copilot/demo
@@ -100,7 +101,7 @@ FLEETOPS_KUBECONFIG ?= $(DEMO_DIR)/kubeconfig
 # Compared with the base revision: BASE=<revision> (default: merge base with origin/main).
 BASE ?=
 
-demo: ## kind cluster fleetops-demo with person tokens, Swarmada quickstart at the go.mod pin, its webhooks, the chart, health checks; prints the elapsed time (DEMO_DRY_RUN=1 prints the plan)
+demo: ## kind cluster fleetops-demo: person tokens, Swarmada quickstart at the go.mod pin, its webhooks, the chart, health checks. Air-gapped model by default; DEMO_MODEL=cloud DEMO_ANTHROPIC_KEY_FILE=<file> for Claude (DEMO_DRY_RUN=1 prints the plan)
 	CLUSTER=$(FLEETOPS_CLUSTER) KUBECONFIG=$(FLEETOPS_KUBECONFIG) DEMO_DIR=$(DEMO_DIR) hack/demo-up.sh
 
 demo-down: ## Remove the demo cluster, its kubeconfig, the people's tokens and fleetops chat's kept conversations for the demo's contexts

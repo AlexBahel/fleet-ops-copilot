@@ -19,6 +19,8 @@ LLAMA_IMG    ?= $(LLAMA_REPO):$(LLAMA_TAG)
 # Directory with the GGUF shards, and a sha256sum-format file naming them.
 MODEL_DIR    ?=
 MODEL_SUMS   ?=
+# The model files make demo fetches (hack/fetch-model.sh) and checks against
+# config/airgap/model-SHA256SUMS: the files of the v6 record runs.
 MODEL_FILES  ?= qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf qwen2.5-7b-instruct-q4_k_m-00002-of-00002.gguf
 
 KIND_NODE     = $(KIND_CLUSTER)-control-plane
@@ -52,7 +54,7 @@ load-llama-model: ## Copy the GGUF shards from MODEL_DIR into /models on the kin
 	docker exec $(KIND_NODE) chmod -R a+rX /models
 	docker exec -i $(KIND_NODE) sh -c 'cd /models && sha256sum -c -' < "$(MODEL_SUMS)"
 
-deploy-airgap: ## Apply llama-server and the egress NetworkPolicies to kind cluster KIND_CLUSTER (fleetops-*), plus the OTLP rule if the chart's trace backend is installed; restarts fleetops-mcp/fleetops-approvals
+deploy-airgap: ## Apply llama-server and the egress NetworkPolicies to kind cluster KIND_CLUSTER (fleetops-*), plus the OTLP rule if the chart's trace backend is installed; restarts fleetops-mcp/fleetops-approvals, and fleetops-agent if deployed
 	$(require_fleetops_cluster)
 	@mkdir -p $(BIN)/airgap
 	$(KCTL) apply -f config/airgap/llama-storage-hostpath.yaml -f config/airgap/llama-server.yaml
@@ -73,6 +75,10 @@ deploy-airgap: ## Apply llama-server and the egress NetworkPolicies to kind clus
 		$(KCTL) -n $(AIRGAP_NS) rollout restart deploy/fleetops-mcp deploy/fleetops-approvals && \
 		$(KCTL) -n $(AIRGAP_NS) rollout status deploy/fleetops-mcp deploy/fleetops-approvals --timeout=180s; \
 	else echo "fleetops-mcp/fleetops-approvals not deployed (install the chart first): API access under the policy not exercised"; fi
+	@if $(KCTL) -n $(AIRGAP_NS) get deploy/fleetops-agent >/dev/null 2>&1; then \
+		$(KCTL) -n $(AIRGAP_NS) rollout restart deploy/fleetops-agent && \
+		$(KCTL) -n $(AIRGAP_NS) rollout status deploy/fleetops-agent --timeout=180s; \
+	else echo "fleetops-agent not deployed"; fi
 
 verify-egress: ## Egress probe Job in fleetops-system: records egress at pod start, waits until the policy is in force, then passes only if every external target is blocked and the in-namespace control works
 	$(require_fleetops_cluster)
