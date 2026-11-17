@@ -215,6 +215,22 @@ document.addEventListener("DOMContentLoaded", async () => {
     $("operator").classList.remove("invalid");
     $("operator").removeAttribute("aria-invalid");
   });
+  // The field keeps the last name used; typing must replace it, not add to it.
+  // Its whole text is selected when it gets focus, by Tab or by a click. A click
+  // places the caret on mouseup, which would clear that selection, so the mouseup
+  // of the click that gave the field focus is cancelled; later clicks place the
+  // caret as usual.
+  const name = $("operator");
+  let focusingClick = false;
+  name.addEventListener("mousedown", () => {
+    focusingClick = document.activeElement !== name;
+  });
+  name.addEventListener("focus", () => {
+    name.select();
+  });
+  name.addEventListener("mouseup", (e) => {
+    if (focusingClick) { e.preventDefault(); focusingClick = false; }
+  });
   $("message").addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("ask").requestSubmit(); }
   });
