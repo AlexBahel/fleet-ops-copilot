@@ -61,7 +61,9 @@ layer or a hand-made object does not break it.
 | Air-gapped: nothing leaves the cluster | — | — | — | NetworkPolicy, checked by `make verify-egress` (D50, D63) |
 
 RBAC per ServiceAccount, the five admission policies and the NetworkPolicy rules:
-[`design/rbac-and-admission.md`](design/rbac-and-admission.md). Each enforcement point has a
+[`design/rbac-and-admission.md`](design/rbac-and-admission.md). The RBAC and admission manifests:
+[`config/rbac/roles.yaml`](../config/rbac/roles.yaml),
+[`config/admission/policies.yaml`](../config/admission/policies.yaml). Each enforcement point has a
 test (`TestRBACMatrix`, `TestFleetopsAgentCannotWrite`, `test/live`).
 
 ## Life of a request

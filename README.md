@@ -443,13 +443,6 @@ sources: [`docs/architecture/`](docs/architecture/).
 - [`docs/design/components.md`](docs/design/components.md#6-repository-layout): what is in the
   repository.
 
-## How it was built
-
-Built with [Claude Code](https://claude.com/claude-code) under Alex Bahel's design: the design and
-the decisions in [`docs/design/decisions.md`](docs/design/decisions.md) are Alex Bahel's; code, tests and documents were written
-with Claude Code. Two of the four models
-measured above (Claude Sonnet 5.5 and Opus 5.5) are from Anthropic, the maker of Claude Code.
-
 ## Contributing and security
 
 Contributions are signed off under the Developer Certificate of Origin:

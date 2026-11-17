@@ -1,9 +1,8 @@
 # Fleet Ops Copilot — Measured results
 
 Every number links to the committed file or CI run it comes from. How the runs are defined and
-judged: [`design/evaluation.md`](design/evaluation.md). The code, tests and documents were written
-with Claude Code; two of the four models measured (Claude Sonnet 5.5 and Opus 5.5) are from
-Anthropic, the maker of Claude Code.
+judged: [`design/evaluation.md`](design/evaluation.md). Two of the four models measured (Claude
+Sonnet 5.5 and Opus 5.5) are from Anthropic.
 
 ## The record: eval surface v6
 
