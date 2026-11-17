@@ -249,7 +249,7 @@ fleetops-mcp holds no create permission of any kind (D25 unchanged).
 - TTL 30 minutes from the last message; at most 5 conversations per owner and 1000 in total,
   oldest dropped first. A restart loses them. The chart refuses `agent.replicas` > 1.
 - Nothing secret is stored: no token, no tool result, text passed through the redaction of [§3.8](components.md#38-observability-and-secrets).
-- `fleetops chat` keeps the id per kubeconfig context in a file under the user's state directory
+- `fleetops chat` keeps the id per kubeconfig context and fleetops-agent address in a file under the user's state directory
   (mode 600) and continues it until `fleetops chat --new`; the web page keeps it in the page's memory.
 
 ### 3.10.8 Failure handling and follow-up (D78)
