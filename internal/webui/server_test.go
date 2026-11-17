@@ -185,6 +185,31 @@ func TestPageNameFieldAndFocus(t *testing.T) {
 	}
 }
 
+// The name field keeps the last name used (localStorage). Typing into it must
+// replace that name, not add to it: on 2026-11-13 "sam" typed into a field
+// that already held "sam" filed a request for unverified:samsam. The field
+// selects its whole text when it gets focus, by Tab or by a click; for a
+// click, the mouseup that would put the caret where the pointer landed (and
+// so clear the selection) is cancelled once, so a later click still places
+// the caret.
+func TestNameFieldSelectsItsTextOnFocus(t *testing.T) {
+	ts := newServer(t, &stubRunner{}, nil)
+	_, js := get(t, ts.URL+"/app.js")
+	block := regexp.MustCompile(`(?s)const name = \$\("operator"\);.*?\n  }\);\n  name\.addEventListener\("mouseup".*?\n  }\);`).FindString(js)
+	if block == "" {
+		t.Fatalf("app.js has no focus and mouseup handlers on the name field (#operator)")
+	}
+	for _, s := range []string{
+		`name.addEventListener("focus"`, `name.select()`,
+		`name.addEventListener("mousedown"`, `document.activeElement !== name`,
+		`name.addEventListener("mouseup"`, `e.preventDefault()`,
+	} {
+		if !strings.Contains(block, s) {
+			t.Errorf("name field handlers lack %q:\n%s", s, block)
+		}
+	}
+}
+
 func TestChatAnswersAndReportsPolicy(t *testing.T) {
 	r := &stubRunner{trace: agent.Trace{Final: "Requested.", Turns: 2, LatencyMs: 12, Calls: []agent.ToolEvent{
 		{Name: "get_zone", Result: json.RawMessage(`{"name":"aisle-b"}`)},
