@@ -126,6 +126,10 @@ export KUBECONFIG=$HOME/.local/state/fleet-ops-copilot/demo/kubeconfig
 kubectl --context kind-fleetops-demo -n fleetops-system get pods
 ```
 
+In the air-gapped profile the last step of `make demo` restarts the copilot's pods, so right after it
+an old pod can still be listed for a few seconds as `Completed` or `Terminating`; run the `kubectl`
+line again.
+
 ### Ask
 
 Both ways of asking reach fleetops-agent through a port-forward. Open a second terminal (in
@@ -284,7 +288,8 @@ kubectl --context kind-fleetops-demo get areq -A
 ```
 
 A pod that is not `1/1 Running`, or restarts: describe it and read the log of its last run, with the
-pod name `get pods` printed in place of `POD_NAME`, then the namespace's recent events:
+pod name `get pods` printed in place of `POD_NAME`, then the namespace's recent events. For a pod that
+has not restarted, `--previous` answers that the previous container was not found:
 
 ```bash
 kubectl --context kind-fleetops-demo -n fleetops-system describe pod POD_NAME
