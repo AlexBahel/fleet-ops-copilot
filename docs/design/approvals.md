@@ -59,7 +59,9 @@ Every tool call, policy decision, request, approval, rejection, execution, and f
 written twice:
 
 - **JSONL** append-only file (one JSON object per line, with the SHA-256 of the previous line so
-  `fleetops audit verify` can detect edits or gaps), on a PVC.
+  `fleetops audit verify` can detect edits or gaps), one file per process on an `emptyDir` volume
+  (`config/deploy`, the chart). It is lost when the pod is replaced, by a rollout, an upgrade or an
+  eviction (KNOWN-LIMITS, "Audit storage"); a persistent volume is P5 in `docs/BACKLOG.md`.
 - **Kubernetes Events** on the `ApprovalRequest` (reasons `RequestCreated`, `PolicyDenied`,
   `Approved`, `Rejected`, `Executed`, `ExecutionFailed`, `DecisionRefused`, `Expired`).
 
