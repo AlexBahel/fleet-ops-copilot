@@ -1,0 +1,37 @@
+# Fleet Ops Copilot: overview. Source for overview.svg; render with
+# `d2 --layout dagre overview.d2 overview.svg` (see README.md in this directory).
+# One line per box, edge labels of a few words. Permissions, webhooks, admission
+# policies and ConfigMaps are in docs/DESIGN.md and docs/design/rbac-and-admission.md.
+
+direction: down
+
+classes: {
+  person: {shape: person; width: 90; height: 90; style: {font-size: 18}}
+  nowrite: {style: {fill: "#e8f3ea"; stroke: "#3a7d44"; stroke-width: 2; border-radius: 6; font-size: 18}}
+  requests: {style: {fill: "#fff4dc"; stroke: "#a87412"; stroke-width: 2; border-radius: 6; font-size: 18}}
+  writer: {style: {fill: "#fbe7e4"; stroke: "#a8382b"; stroke-width: 2; border-radius: 6; font-size: 18}}
+  k8s: {style: {fill: "#eef1f6"; stroke: "#4a5d7e"; stroke-width: 2; border-radius: 6; font-size: 18}}
+}
+
+operator: "Operator\nasks in fleetops chat or web chat" {class: person}
+approver: "Approver\na second, named person" {class: person}
+agent: "fleetops-agent\nmodel loop, questions, preview" {class: nowrite}
+model: "Model\nClaude API or in-cluster llama-server" {class: nowrite}
+mcp: "fleetops-mcp\nread tools, policy engine" {class: requests}
+api: "Kubernetes API server\nRBAC, admission policies" {class: k8s}
+approvals: "fleetops-approvals\nchecks, then the one write" {class: writer}
+swarmada: "Swarmada v0.4\ncontrollers, webhooks" {class: k8s}
+
+operator -> agent: "asks, confirms"
+agent <-> model: "chat"
+agent -> mcp: "MCP, person's token"
+mcp -> api: "reads; files request"
+approver -> api: "approves, activates"
+api -> approvals: "approved request"
+approvals -> swarmada: "draft, maintenance, stop"
+
+legend: "green: no write\namber: files requests only\nred: the only writer" {
+  near: bottom-center
+  shape: text
+  style: {font-size: 16}
+}
