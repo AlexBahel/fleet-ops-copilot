@@ -415,7 +415,7 @@ func (e *eval) dependencies(t *swarmv1.FleetTask) {
 		}
 		deps[m.Name] = m.DependsOn
 	}
-	// Cycle check (Swarmada checks only after activation, inventory C7).
+	// Cycle check (Swarmada checks only after activation: C7 in docs/BACKLOG.md).
 	state := map[string]int{}
 	var visit func(string) bool
 	visit = func(n string) bool {

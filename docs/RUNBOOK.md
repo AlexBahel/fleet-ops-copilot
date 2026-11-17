@@ -103,7 +103,7 @@ tokens (verified requesters, section 7). It needs `bin/fleetops` (built by the t
   Without Swarmada's `FleetTask` webhook the copilot refuses every draft with
   `DENY_DRAFT_GATE_ABSENT` (docs/DESIGN.md §3.2, D22).
 - The image `fleet-ops-copilot:<tag>` available to the nodes. It is
-  built from binaries compiled on the host (`make image`, docs/DESIGN.md D2).
+  built from binaries compiled on the host (`make image`, [`docs/design/components.md`](design/components.md#5-packaging) §5).
 - Helm 3.8 or newer.
 
 ### Check the cluster first

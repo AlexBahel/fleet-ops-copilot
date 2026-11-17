@@ -113,7 +113,7 @@ allow-list of MCP tools; the policy engine applies regardless of role. Not built
 ## 5. Packaging
 
 - `Dockerfile`: one runtime image for fleetops-mcp, fleetops-approvals and fleetops-agent, from
-  binaries built on the host (D2).
+  binaries built on the host.
   Plain manifests in `config/` (`crd`, `rbac`, `admission`, `deploy`); `make chart-parity` checks
   that the Helm chart renders the same objects.
 - Helm chart `charts/fleet-ops-copilot` (`values.yaml`, `llm.profile: cloud` by default;
