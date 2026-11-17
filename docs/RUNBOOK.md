@@ -1,8 +1,8 @@
 # Fleet Ops Copilot — Runbook
 
 **What has been run.** Each command below follows the chart and the code on main. `make demo`
-(section 0, with the trace backend of section 8) has run three times on one kind cluster with the
-API key Secret (2026-11-08 and 2026-11-09 UTC,
+(section 0, with the trace backend of section 8) has run three times, each on a new kind cluster, with
+the API key Secret (2026-11-08 and 2026-11-09 UTC,
 [`docs/evidence/live-2026-11-08/`](evidence/live-2026-11-08/README.md)). The first run had one
 `fleetops chat` conversation as sam against Sonnet 5.5 (sections 7 and 9) that filed a request,
 the Jaeger export of section 8, `make test-live` and `make demo-down`. The second and third ran
@@ -126,7 +126,8 @@ helm --kube-context $CTX install fleetops charts/fleet-ops-copilot \
 kubectl --context $CTX -n fleetops-system rollout status deploy/fleetops-mcp deploy/fleetops-approvals --timeout=180s
 ```
 
-fleetops-agent starts once the API key Secret exists (section 2):
+In the cloud profile (the chart's default) fleetops-agent starts once the API key Secret exists
+(section 2); with `llm.profile=airgap` it starts without a key and answers once llama-server runs (section 3):
 
 ```bash
 kubectl --context $CTX -n fleetops-system rollout status deploy/fleetops-agent --timeout=180s
@@ -142,6 +143,8 @@ Values worth setting (see `charts/fleet-ops-copilot/values.yaml`):
 | `swarmadaNamespaces` | `[warehouse-a]` | Namespaces where fleetops-mcp and fleetops-approvals get RoleBindings. Every namespace in the policy file must be listed. |
 | `policy.content` | chart copy of `policies/default.yaml` | Site policy file (`--set-file policy.content=<file>`) |
 | `image.repository`, `image.tag` | `fleet-ops-copilot`, `dev` | Image |
+| `llm.profile` | `cloud` | `cloud`: Claude through the Claude API with the key Secret; `airgap`: llama-server in the cluster, no key (section 3) |
+| `llm.airgap.url` | `http://llama-server:8080` | llama-server's Service, for `llm.profile=airgap` |
 | `llm.cloud.apiKeySecretRef` | `fleet-ops-copilot-claude` / `ANTHROPIC_API_KEY` | Existing Secret holding the Claude API key (section 2) |
 | `agent.enabled` | `true` | fleetops-agent Deployment and Service (model loop and web UI) |
 | `tracing.otlpEndpoint` | empty (off) | OTLP/gRPC collector for fleetops-agent and fleetops-mcp traces |
@@ -204,8 +207,10 @@ Approving also requires the Swarmada permission for the underlying change (for e
 `swarmada:fleet-manager`); fleetops-approvals checks it with a SubjectAccessReview and refuses the
 decision otherwise. Approvers must be people: a ServiceAccount's decision is refused at admission.
 
-Activating an approved draft needs Swarmada's `activate` verb on `fleettasks` (and `patch`); any
-person who holds it may run `fleetops activate`, not only the approver (D79). Reading the fleet for its
+Activating an approved draft needs Swarmada's `activate` verb on `fleettasks` (and `patch`), and
+`create` on `approvaldecisions` for the Activation record, which `fleetops:approver` grants (a
+narrower role is P3 in `docs/BACKLOG.md`). Any person who holds both may run `fleetops activate`, not
+only the approver (D79). Reading the fleet for its
 checks needs `get`/`list` on the Swarmada kinds; a read the person lacks is reported as not checked.
 
 ### Upgrade and policy changes
@@ -263,7 +268,7 @@ Rotation order:
    `kubectl --context $CTX -n fleetops-system rollout restart deploy/fleetops-agent`.
 4. Confirm a request succeeds, then revoke the old key in the Console.
 
-fleetops-mcp and fleetops-approvals pass audit lines through `internal/redact`, which masks the values of
+fleetops-mcp, fleetops-approvals and fleetops-agent pass audit lines through `internal/redact`, which masks the values of
 known secret environment variables and token patterns such as Anthropic API keys and bearer tokens
 (docs/DESIGN.md §3.8). If a key appears in a log, audit line or Event
 anyway, revoke it.

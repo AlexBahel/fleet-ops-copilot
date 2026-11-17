@@ -72,7 +72,7 @@ remove it.
   execution over MCP on loopback against envtest (`latency.scope` in each results.json). The
   latency of a request through the deployed fleetops-agent is not measured. The latency in the fixture
   results covers tool execution against a test API server only.
-- The `llamacpp` backend (`internal/llm/llamacpp.go`) has run against a model only through
+- The `llamacpp` backend (`internal/llm/llamacpp.go`) has been evaluated only through
   `fleetops-eval -backend llamacpp` against llama-server in the air-gapped kind profile (the v6
   records `evals/results/airgap-llamacpp-qwen2.5-7b-instruct-2026-11-08-v6/` and
   `evals/results/airgap-llamacpp-qwen2.5-14b-instruct-2026-11-08-v6/`). `config/airgap/llama-server.yaml` names
@@ -89,13 +89,17 @@ remove it.
   Collector and Jaeger, D61) has been installed by `make demo` on single-node kind clusters
   (2026-11-08 and 2026-11-09, `docs/evidence/live-2026-11-08/`; 2026-11-12,
   `docs/evidence/airgap-2026-11-12/`): both backend pods became ready with the pod security
-  settings and probes as rendered, and the Collector received OTLP and exported it to Jaeger. Its
+  settings and probes as rendered, and the Collector received OTLP and exported it to Jaeger. Without
+  the backend, with `llm.profile=airgap`, `make demo` installed it twice on 2026-11-13
+  (`docs/evidence/demo-airgap-2026-11-13/`). Its
   cloud-profile NetworkPolicy (off by default) has never been applied to a cluster, and
   `docs/RUNBOOK.md` has not been run as a sequence beyond section 0.
 - `make demo`, `make demo-down` and `make test-live` (D59, D60) have run on one machine only
   (Mac mini, Docker Desktop, kind v0.33.0; 2026-11-08 and 2026-11-09 UTC,
-  `docs/evidence/live-2026-11-08/`). `make demo` took 2m29s, 2m19s and 2m47s, each creating its kind
-  cluster; a cold machine (no Docker images or build cache) has not been timed.
+  `docs/evidence/live-2026-11-08/`; the air-gapped profile on 2026-11-13,
+  `docs/evidence/demo-airgap-2026-11-13/`). `make demo` took 2m29s, 2m19s and 2m47s (cloud
+  profile), and 6m45s with an empty model cache and 3m18s with it cached (air-gapped profile), each
+  creating its kind cluster; a cold machine (no Docker images or build cache) has not been timed.
   `make test-live` passed every subtest of phase `webhooks`, and Swarmada's audit of the approved
   zone stop showed all three simulated robots stopped (`stopped:3 unconfirmed:0`). The full run
   logs are not committed.
@@ -105,8 +109,9 @@ remove it.
   adapter that stays starts, and `make demo` fails, naming the robot, if one is not registered and
   ready for work within the timeout. Restarting a sim adapter by hand while it holds
   work did not bring that work back on 2026-11-08 (`docs/evidence/live-2026-11-08/`, "Chain 1").
-- The deployed `fleetops-agent` has run against a model on a cluster on two days (UTC), each time on the
-  demo stack with Sonnet 5.5 through `fleetops chat`. The 2026-11-08 runs are in `docs/evidence/live-2026-11-08/`
+- The deployed `fleetops-agent` has run against Sonnet 5.5 on a cluster on two days (UTC), each time on
+  the demo stack through `fleetops chat`, and against Qwen2.5-7B-Instruct on 2026-11-13 (one question
+  through `fleetops chat`, one in the web chat; `docs/evidence/demo-airgap-2026-11-13/`). The 2026-11-08 runs are in `docs/evidence/live-2026-11-08/`
   with transcripts, requests, decisions, Jaeger exports and costs. At 21:35 one move request was filed
   and stayed Pending (0.0280 USD). At 23:32–23:58 it ran end to end: a move to staging-shelf-a for
   sim-robot-001, approved by dana, an activation request from the same conversation approved by
@@ -115,8 +120,9 @@ remove it.
   example, "Send a robot to staging-shelf-a.", ran the same way and Succeeded on the robot Swarmada
   picked, sim-robot-002 (0.0390 USD). There, the spans of
   fleetops-agent and fleetops-mcp reached the chart's Collector and Jaeger. One conversation is not a
-  pass rate: the measured results are the fixture-mode runs above. The web UI has not been used on a
-  cluster: the page was checked once in a browser against a local test server. Otherwise the agent
+  pass rate: the measured results are the fixture-mode runs above. The web UI has been used on a
+  cluster for one question (2026-11-13, `web-question-run1.txt` in that folder); before that the page
+  was checked in a browser against a local test server. Otherwise the agent
   is tested with the scripted backend, envtest and an in-process OTLP receiver.
 - **A message the engine answers without the model has no fleetops-agent trace.** fleetops-agent
   starts its `fleetops.request` span only in the model loop (`internal/agent/agent.go`). The
@@ -294,7 +300,7 @@ remove it.
   connection from the same pod timed out (`docs/evidence/airgap-2026-11-12/conn-check.log`). So a connection opened in
   a new pod's start-up window, or by any pod before the policy is applied, can outlive the policy:
   apply the policy before the workloads start, or restart every pod in `fleetops-system` after applying
-  it (`make deploy-airgap` restarts fleetops-mcp and fleetops-approvals only). Other CNIs were not tested. Which CNIs enforce a policy from pod
+  it (`make deploy-airgap` restarts fleetops-mcp, fleetops-approvals and, when it is deployed, fleetops-agent). Other CNIs were not tested. Which CNIs enforce a policy from pod
   start has not been checked here; for a site that needs it, choose a CNI whose own documentation
   says so and run `make verify-egress` there. Cluster DNS answered
   queries for external names in kind (CoreDNS forwards to the host; `example.com` resolved and
