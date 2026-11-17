@@ -101,7 +101,7 @@ tokens (verified requesters, section 7). It needs `bin/fleetops` (built by the t
 - Kubernetes 1.30 or newer (ValidatingAdmissionPolicy v1).
 - Swarmada v0.4 running in the cluster, **with its admission webhooks served** (section 6).
   Without Swarmada's `FleetTask` webhook the copilot refuses every draft with
-  `DENY_DRAFT_GATE_ABSENT` (docs/DESIGN.md §3.2, D22).
+  `DENY_DRAFT_GATE_ABSENT` ([`docs/design/tools-and-policy.md`](design/tools-and-policy.md#32-policy-engine-go-yaml-policy-files) §3.2, D22).
 - The image `fleet-ops-copilot:<tag>` available to the nodes. It is
   built from binaries compiled on the host (`make image`, [`docs/design/components.md`](design/components.md#5-packaging) §5).
 - Helm 3.8 or newer.
@@ -270,7 +270,7 @@ Rotation order:
 
 fleetops-mcp, fleetops-approvals and fleetops-agent pass audit lines through `internal/redact`, which masks the values of
 known secret environment variables and token patterns such as Anthropic API keys and bearer tokens
-(docs/DESIGN.md §3.8). If a key appears in a log, audit line or Event
+([`docs/design/components.md`](design/components.md#38-observability-and-secrets) §3.8). If a key appears in a log, audit line or Event
 anyway, revoke it.
 
 ## 3. Switch between cloud and air-gapped
@@ -495,7 +495,7 @@ sim-robot-002; [`docs/evidence/live-2026-11-08/`](evidence/live-2026-11-08/READM
 and "End to end, run 2"). Other kinds, blocked previews, failed execution checks and follow-ups are
 tested only with the scripted backend, envtest and the fixture evaluations (D70–D81).
 
-Work is asked for in a conversation (docs/DESIGN.md §3.10). The copilot asks at most two short
+Work is asked for in a conversation ([`docs/design/guided-requests.md`](design/guided-requests.md#310-guided-task-requests-d70d81) §3.10). The copilot asks at most two short
 questions, shows a preview, and files an `ApprovalRequest` only after the person replies `1`
 (confirm) or `2` (confirm, and prepare a follow-up request if the task fails). `3 <change>` changes
 the request and shows a new preview; `4` cancels. Nothing is filed without that reply: fleetops-mcp

@@ -54,7 +54,7 @@ remove it.
   to one `x`,`y`. An adapter that patrols a whole route in one action would need a catalogue kind
   with one member and the route in its payload.
 - What a robot found is not reported: an inspection, a patrol's observations and a survey's map
-  are class (b) (`docs/DESIGN.md` §3.10.1). The preview says so; a person reviews the
+  are class (b) ([`docs/design/guided-requests.md`](design/guided-requests.md#3101-site-catalogue-cataloguesiteyaml-d70) §3.10.1). The preview says so; a person reviews the
   result on the robot's side. Needs a Swarmada result field for robot actions, proposed for a later Swarmada version (C1 in `docs/BACKLOG.md`).
 
 ## Not measured yet

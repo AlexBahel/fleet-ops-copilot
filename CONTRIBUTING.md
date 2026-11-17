@@ -33,7 +33,7 @@ The fixture evals (`make eval-fixtures`) hold the run to `evals/baseline.json` (
 scenarios, runs, passing runs). They fail when a category passes fewer runs than recorded or when
 the scenario count or a category's counts change (D58). A change that adds, removes or moves a
 scenario runs `make eval-baseline` and commits the rewritten `evals/baseline.json` in the same
-commit; the scenario count is 51 on eval surface v7 (`docs/DESIGN.md` §4.2, D101). CI also prints a
+commit; the scenario count is 51 on eval surface v7 ([`docs/design/evaluation.md`](docs/design/evaluation.md#42-scenarios) §4.2, D101). CI also prints a
 warning annotation for every category a change lowers in that file against its base commit (D62); `make baseline-lowered
 BASE=<revision>` shows the same locally. Lowering a category is allowed, and the warning asks the
 reviewer to look at it.
@@ -44,7 +44,7 @@ reviewer to look at it.
   decision log, with the reason.
 - The copilot is a client of Swarmada's public API. Do not copy, vendor, or modify
   Swarmada source; import `github.com/swarmada/swarmada/api/v1` as a module.
-- The forbidden operations in `docs/DESIGN.md` §3.1 (clear a stop, release a robot,
+- The forbidden operations in [`docs/design/tools-and-policy.md`](docs/design/tools-and-policy.md#31-mcp-server-fleetops-mcp-go) §3.1 (clear a stop, release a robot,
   delete, approve, edit existing work) must stay refused in code, in RBAC, and in the
   admission policies. A change that weakens any of the three needs a test showing the
   other two still refuse.
