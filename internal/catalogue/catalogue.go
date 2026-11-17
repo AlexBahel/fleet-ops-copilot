@@ -66,7 +66,7 @@ var fieldsFor = map[string][]string{
 }
 
 // actionTypes are Swarmada api/v1 FleetAction spec.type values a robot
-// member may use (External is not a robot action, inventory §1.4).
+// member may use (External is not a robot action: C3 in docs/BACKLOG.md).
 var actionTypes = []string{"Navigate", "PickUp", "DropOff", "Patrol", "Charge", "Clean", "Custom"}
 
 // Sources a question's choices can come from.

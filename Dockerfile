@@ -2,7 +2,7 @@
 # Licensed under the Apache License, Version 2.0 (see LICENSE).
 #
 # Runtime image for fleetops-mcp, fleetops-approvals and fleetops-agent. The binaries are
-# built on the host (make image, docs/DESIGN.md D2). The :debug-nonroot base adds a busybox shell
+# built on the host (make image, docs/DESIGN.md §5). The :debug-nonroot base adds a busybox shell
 # so the audit file can be read with `kubectl exec`.
 FROM gcr.io/distroless/static:debug-nonroot
 ARG TARGETARCH
