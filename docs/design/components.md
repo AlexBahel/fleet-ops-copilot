@@ -164,3 +164,27 @@ charts/            Helm chart
 config/            CRDs, RBAC, ValidatingAdmissionPolicy manifests, Deployments (deploy/), air-gapped profile (airgap/)
 policies/          default policy files
 ```
+
+By top-level path:
+
+| Path | Contents |
+|---|---|
+| `cmd/fleetops-mcp` | MCP server: read tools, `check_task`, and policy-gated request tools that file only a confirmed preview |
+| `cmd/fleetops-approvals` | Approval controller and executor |
+| `cmd/fleetops-agent` | Agent process: model loop over MCP, web chat and approval-requests panel (shows `fleetops approve`/`fleetops reject` commands; cannot approve), OpenTelemetry traces |
+| `cmd/fleetops` | CLI: `chat` (sends your bearer token so fleetops-mcp can verify you as the requester; keeps the conversation), `requests`, `approve`, `reject`, `activate`, `audit verify` |
+| `catalogue/` | The site catalogue: kinds of work, their Swarmada mapping, the questions that lead to each |
+| `internal/catalogue`, `internal/dialogue`, `internal/conversation`, `internal/feasibility` | Catalogue loader; question and preview engine; per-person conversation store; `check_task`'s evaluation |
+| `api/v1alpha1` | `ApprovalRequest`, `ApprovalDecision` (`fleetops.alexbahel.github.io`) |
+| `internal/policy` | Policy engine; default policy in `policies/default.yaml` |
+| `internal/llm` | Model backends: `claude` (Claude API), `llamacpp` (llama-server) and `scripted` |
+| `internal/webui`, `internal/requestview` | fleetops-agent's web UI; an ApprovalRequest shown with the exact write it leads to |
+| `internal/authn` | Requester authentication: TokenReview of the caller's bearer token; `unverified:<name>` otherwise |
+| `internal/tracing` | OpenTelemetry setup (OTLP/gRPC), redacting exporter, trace context over MCP `_meta` |
+| `config/` | CRDs, RBAC, ValidatingAdmissionPolicies, Deployments (`config/deploy`), air-gapped profile (`config/airgap`) |
+| `charts/fleet-ops-copilot` | Helm chart: the objects in `config/` plus an optional NetworkPolicy and trace backend; `make chart-check` |
+| `scripts/` | `demo-preflight.sh` (cluster and Swarmada webhook checks), `chart-parity` (chart vs `config/`), `baseline-lowered` (CI warning when `evals/baseline.json` is lowered) |
+| `hack/` | `demo-up.sh`, `demo-down.sh`, `kind-people.sh` (test-only person tokens), `kind/` (kind configuration), `airgap.mk`, `fetch-model.sh` (model files into a host cache, sha256 checked), `check-key-file.sh` (a Claude API key file's shape, never printed), `shellcheck.sh` (pinned ShellCheck), live-test scripts |
+| `docs/` | `DESIGN.md` (the design in brief and an index of decisions), `design/` (the detail and the full decision log), `RESULTS.md` (measured results), `KNOWN-LIMITS.md`, `BACKLOG.md`, `RUNBOOK.md` (operations; which sections have been run is stated at its top), `architecture/` (d2 sources and SVGs), `evidence/` (cluster logs) |
+| `evals/` | Evaluation harness, scenarios, fixtures (hand-written and captured live), results |
+| `test/envtest`, `test/live`, `test/image` | API-server tests; approval paths against a live Swarmada control plane; the image's binaries run, and its mounted files are readable, as the non-root user |

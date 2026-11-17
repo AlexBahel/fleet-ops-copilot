@@ -43,7 +43,7 @@ Swarmada copy, logs) is in `$DEMO_DIR`, by default `~/.local/state/fleet-ops-cop
 | `make demo` | Air-gapped profile: Qwen2.5-7B-Instruct on llama-server in the cluster, the egress NetworkPolicies of `config/airgap`, no API key. Prints the plan's stages and, at the end, the elapsed time and what to run next: the `export KUBECONFIG=` line for its kubeconfig, the model it runs, the verified way to ask (`fleetops chat` as sam), the web chat, `make demo-down`. |
 | `make demo DEMO_MODEL=cloud DEMO_ANTHROPIC_KEY_FILE=<file>` | Cloud profile: Claude Sonnet 5.5 through the Claude API, with the key from the file as Secret `fleet-ops-copilot-claude`. The file is checked first (`hack/check-key-file.sh`: one line, starts with `sk-ant-`, no spaces); a file that fails, a key file without `DEMO_MODEL=cloud`, or `DEMO_MODEL=cloud` without a key file is refused before anything starts. |
 | `DEMO_DRY_RUN=1 make demo` | Prints every command that would change anything; runs none. |
-| `DEMO_TRACING=1 make demo` | Also installs the optional trace backend (section 8). |
+| `DEMO_TRACING=1 make demo` | Also installs the optional trace backend (section 8). Its images are pulled by the node, so it is not part of the air-gapped profile. |
 | `make demo-down` | Removes cluster fleetops-demo, its kubeconfig and the people's tokens, and the conversations `fleetops chat` kept for the demo's contexts (section 7). |
 
 What it does, in order (each stage prints its elapsed time; the total is the last line):
@@ -93,6 +93,22 @@ for `make demo-down` first.
 
 Then `make test-live` runs the live approval paths with requests filed by sam's and dana's own
 tokens (verified requesters, section 7). It needs `bin/fleetops` (built by the target).
+
+### Other commands
+
+| Command | What it does |
+|---|---|
+| `make verify-egress KIND_CLUSTER=fleetops-demo` | Air-gapped profile: a probe Job in `fleetops-system` that passes only if no external target is reachable (section 3). |
+| `make test-live` | Live approval paths on the demo stack, requests filed with sam's own token. |
+| `make ci` | Without a cluster: build, vet, lint, ShellCheck 0.11.0, unit tests, envtest, fixture evals held to `evals/baseline.json`. |
+| `make chart-check` | Without a cluster: helm lint, kubeconform, chart parity with `config/`. |
+
+Model evaluations call the Claude API and read `ANTHROPIC_API_KEY` from the environment:
+
+```bash
+go run -tags envtest ./evals/cmd/fleetops-eval -backend claude -model claude-sonnet-5-5 -runs 3 \
+  -out evals/results/<date>-cloud-claude-sonnet-5-5/results.json
+```
 
 ## 1. Install
 
