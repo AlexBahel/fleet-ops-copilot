@@ -65,12 +65,15 @@ Two layers:
    requester is unverified (`unverified:<name>`, [§3.3](approvals.md#33-approval-flow)) is never approved (D56); a request is filed
    only with a confirmed preview whose id equals the hash of its parameters (`DENY_NOT_CONFIRMED`,
    `DENY_PREVIEW_MISMATCH`, D74).
-2. **YAML policy files** (`policies/*.yaml`, mounted from a ConfigMap) for site rules. Examples:
-   allowed namespaces; allowed `FleetAction.spec.priority` values in a drafted task; allowed
-   `ZoneMaintenance.spec.mode`; `autoResumeAfterMinutes` must be `0` (a non-zero value would
-   resume robots without a person, i.e. a scheduled release); `requireEstopClearBeforeResume`
-   may not be set to `false`; approver groups and `minApprovers` per request type; request TTL;
-   a per-session limit on drafts created.
+2. **YAML policy files** (`policies/*.yaml`, mounted from a ConfigMap) for site rules: allowed
+   namespaces; for a drafted task the allowed `FleetAction.spec.type` and `spec.priority` values,
+   the most actions per task and a per-session limit on drafts created; allowed
+   `ZoneMaintenance.spec.mode` and whether namespace-scope maintenance is allowed; whether zone stop
+   requests are enabled; the request TTL; self-approval on a dev cluster (`approval.allowSelfApproval`).
+   Two maintenance rules are compiled in and cannot be set here: `autoResumeAfterMinutes` must be `0`
+   (a non-zero value would resume robots without a person, i.e. a scheduled release, D10) and
+   `requireEstopClearBeforeResume` may not be `false`. Not built: approver groups and `minApprovers`
+   per request type; one accepted decision approves (KNOWN-LIMITS; P4 in `docs/BACKLOG.md`).
 
 The engine runs twice for approval requests: in `fleetops-mcp` when the request is created, and in
 `fleetops-approvals` immediately before execution, against fresh cluster state. A request that would

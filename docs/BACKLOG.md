@@ -9,6 +9,8 @@ decisions are in `docs/DESIGN.md` §7.
 |---|---|---|---|
 | P2 | Conversations are kept in fleetops-agent's memory: lost on restart, one replica only | D75 | Durable, owner-bound conversation state shared by replicas (for example a copilot-owned resource holding only the dialogue state, with the same bounds and TTL), so fleetops-agent can run more than one replica |
 | P3 | `fleetops activate` needs `fleetops:approver` to create its Activation record, which also grants deciding requests | D79 | A narrow `fleetops:activator` ClusterRole: `create` on `approvaldecisions` limited by admission to `type: Activation` (the `fleetops-decisions` policy checking the caller's role, or a separate `approvaldecisions/activation` subresource-style verb via `authorizer` in CEL), `get` on `approvalrequests`; no Verdict decisions |
+| P4 | One accepted decision approves any request; no approver groups and no `minApprovers` per request type | DESIGN §3.2 listed both as policy-file rules; neither is built | Policy fields `approval.approverGroups` and `approval.minApprovers` per request type; fleetops-approvals counts distinct accepted decisions before `Approved` |
+| P5 | The audit files are on `emptyDir` volumes, lost when a pod is replaced | D16; `config/deploy`, the chart | A PersistentVolumeClaim per process (or one shared volume with per-process files), with retention and rotation; the hash chain continues across restarts |
 
 ## Proposed after the v6 record runs
 

@@ -40,7 +40,11 @@ remove it.
   so its export beside `config/airgap` is verified by template only. On kindnet a NetworkPolicy applies
   to new connections only (see "Egress in the air-gapped profile"): a pod started before the
   rule existed keeps its old connections, so restart fleetops-mcp and fleetops-agent after applying it.
-- More than one approver per request (`minApprovers`): one accepted decision approves.
+- More than one approver per request (`minApprovers`) and approver groups per request type: one
+  accepted decision from anyone bound to `fleetops:approver` who passes the SubjectAccessReview
+  approves (P4 in `docs/BACKLOG.md`).
+- Durable audit storage: each process's audit file is on an `emptyDir` volume, so the audit trail
+  is lost when a pod is replaced (see "Audit storage" below; P5 in `docs/BACKLOG.md`).
 - Locations reach the robot only through the action's payload, in this site's convention
   (`{"waypoint", "x", "y"}`, D77): Swarmada v0.4 delivers no waypoint to an adapter (C4 in `docs/BACKLOG.md`),
   so an adapter that does not read `x` and `y` does not know where to go. The quickstart's adapter
@@ -269,8 +273,10 @@ remove it.
 - **fleetops-agent readiness** depends on fleetops-mcp and on the API server; either being down removes the
   web UI from its Service.
 - **Audit storage.** Each process writes its own JSONL file; there is no shared store, rotation
-  or retention yet. In `config/deploy` the files are on `emptyDir` volumes and are lost when a
-  pod is replaced. A failed Event write is recorded in the JSONL file only.
+  or retention yet. In `config/deploy` and in the chart the files are on `emptyDir` volumes: the
+  audit trail is lost when a pod is replaced (a rollout, an upgrade, an eviction, a node failure);
+  a container restart inside the same pod keeps it. Copy the files out first (`docs/RUNBOOK.md`
+  section 4). A failed Event write is recorded in the JSONL file only.
 
 - **Egress in the air-gapped profile** (`config/airgap/networkpolicy.yaml`, D50, D63) is denied,
   except the Kubernetes API and cluster DNS for the copilot components and nothing for the model
