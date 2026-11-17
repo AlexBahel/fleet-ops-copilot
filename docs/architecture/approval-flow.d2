@@ -1,53 +1,38 @@
-# Fleet Ops Copilot: approval flow for a draft FleetTask and its activation
-# (docs/DESIGN.md §3.3, §3.10, D25, D28, D74, D76, D79). Source for approval-flow.svg;
+# Fleet Ops Copilot: the life of a request, main steps. Source for approval-flow.svg;
 # render with `d2 approval-flow.d2 approval-flow.svg` (see README.md in this directory).
-# Zone maintenance and zone stop follow steps 1-13 with a different write in
-# step 12 and no step 11. fleetops-mcp records as requestedFor the username of the
-# caller's bearer token, verified with a TokenReview (D57); without a verified token
-# it records unverified:<name>, which is refused at step 10 (D56). The web UI sends
-# no token, so its requests stop there; fleetops chat sends the person's token.
+# The full step list, with every check and refusal code: docs/design/approvals.md.
+# Shown for a draft FleetTask. A zone maintenance window or a zone stop follows steps
+# 1-8 with a different write in step 8 and has no activation. Step 10 is run by any
+# person Swarmada allows to activate, with their own credentials (D79).
 
 shape: sequence_diagram
 
 operator: Operator {shape: person}
-agent: "fleetops chat -> fleetops-agent\n(SA fleetops-agent: no write;\nforwards the person's token)"
-mcp: "fleetops-mcp\n(SA fleetops-mcp)"
-api: "Kubernetes API server\n+ copilot admission policies"
-webhooks: "Swarmada webhooks\n(vfleettask)"
-approvals: "fleetops-approvals\n(SA fleetops-approvals)"
-approver: "Approver\n(named person)" {shape: person}
+agent: fleetops-agent
+mcp: fleetops-mcp
+api: "Kubernetes API server"
+approvals: fleetops-approvals
+approver: "Approver" {shape: person}
 
-request: "Request (guided, preview confirmed)" {
-  operator -> agent: "1. 'inspect the receiving dock'"
-  agent -> mcp: "2. read tools; check_task on the proposed draft\n(Authorization: Bearer <person's token>)"
-  agent -> operator: "3. at most two numbered questions, then a preview\nwith the checks (the model is offered no request tool)"
-  operator -> agent: "4. '1' (confirm)"
-  agent -> mcp: "5. request_draft_task with the stored parameters\nand the preview id (confirmedPreview in _meta)"
-  mcp -> api: "6. TokenReview: requester = authenticated username"
-  mcp -> mcp: "7. preview id recomputed (DENY_NOT_CONFIRMED, DENY_PREVIEW_MISMATCH);\npolicy engine; draft gate: a fail-closed webhook covers UPDATE fleettasks?"
-  mcp -> api: "8. create ApprovalRequest: requestedFor = reviewed username\n(fleetops-requests: requestedBy = caller)"
-  approvals -> api: "8a. status.state: Pending"
+request: "Request" {
+  operator -> agent: "1. asks for work"
+  agent -> operator: "2. at most two questions, then a preview"
+  operator -> agent: "3. confirms the preview"
+  agent -> mcp: "4. files the confirmed preview"
+  mcp -> api: "5. policy check; creates ApprovalRequest"
 }
 
-decide: "Decision (person)" {
-  approver -> api: "9. fleetops approve <id>: create ApprovalDecision with own credentials\n(fleetops-decisions: not a ServiceAccount, decidedBy = caller)"
-  approvals -> api: "10. checks: requester not unverified (D56: a request without a verified token, e.g. from the web UI, is refused here);\ndecider != requester; SubjectAccessReview (decider may create fleettasks);\nnot expired; policy re-run on fresh state; status Approved, approvedBy"
+decide: "Decision" {
+  approver -> api: "6. fleetops approve, own credentials"
+  approvals -> api: "7. checks the decision, re-runs the policy"
 }
 
-execute: "Execution (draft)" {
-  approvals -> api: "11. check_task again on fresh state; dry runs of the FleetTask and each member\n(DENY_CHECK_FAILED, DENY_SWARMADA_REFUSED: nothing written)"
-  approvals -> api: "12. create FleetTask spec.draft: true, deterministic name\n(fleetops-approvals-drafts-only)"
-  api -> webhooks: "12a. vfleettask ValidateCreate"
-  approvals -> api: "13. status Executed; Event; audit line"
+execute: "Execution" {
+  approvals -> api: "8. re-checks, dry run, creates held draft"
 }
 
-activate: "Activation (a person activates)" {
-  operator -> agent: "14. 'activate it': the same questions, preview and confirmation"
-  agent -> mcp: "15. request_activate_task (confirmed preview)"
-  mcp -> api: "16. create ApprovalRequest (ActivateTask)"
-  approver -> api: "17. fleetops approve <id>"
-  approvals -> api: "18. checks (SubjectAccessReview: activate on that FleetTask);\nstatus.instruction = fleetops activate <request> -n <ns>"
-  approver -> api: "19. fleetops activate <request> with own credentials (any person Swarmada lets activate):\nrefuses a ServiceAccount; check_task with the caller's reads; records an ApprovalDecision\nof type Activation; sends the merge patch {\"spec\":{\"draft\":false}}"
-  api -> webhooks: "19a. vfleettask: requires the activate verb,\nrefused to every ServiceAccount"
-  approvals -> api: "20. watch: task left Draft -> links the Activation record (activatedBy),\nstatus Executed, ActivationObserved Event, activation_observed audit line;\nthen watches to a terminal phase and records the outcome"
+activate: "Activation" {
+  operator -> agent: "9. asks to activate: steps 1-7 again"
+  approver -> api: "10. fleetops activate, own credentials"
+  approvals -> api: "11. records who activated, then the outcome"
 }
