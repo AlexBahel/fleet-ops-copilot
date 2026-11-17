@@ -1,7 +1,7 @@
 # Backlog
 
 Open items. What is not built, not measured or not enforced today is in `docs/KNOWN-LIMITS.md`;
-decisions are in `docs/DESIGN.md` §7.
+decisions are in [`docs/design/decisions.md`](design/decisions.md).
 
 ## Product
 
@@ -25,7 +25,7 @@ Not started; none changes the eval surface until it is made.
 
 ## Proposed for a later Swarmada version
 
-Class (c) kinds of work (`docs/DESIGN.md` §3.10.1): each needs a Swarmada change. They are proposals
+Class (c) kinds of work ([`docs/design/guided-requests.md`](design/guided-requests.md#3101-site-catalogue-cataloguesiteyaml-d70) §3.10.1): each needs a Swarmada change. They are proposals
 to Swarmada, not copilot work; the copilot lists them in its catalogue as `notYetPossible` and files
 nothing that needs one.
 

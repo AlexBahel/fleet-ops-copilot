@@ -25,7 +25,7 @@ There are no releases yet. Only the latest commit on `main` is supported.
 ## Scope
 
 In scope: the code, chart and manifests in this repository, and the guarantees in
-[`docs/DESIGN.md`](docs/DESIGN.md) §3 (the model holds no write permission, every change needs a named
+[`docs/DESIGN.md`](docs/DESIGN.md#guarantees-and-where-each-is-enforced) (the model holds no write permission, every change needs a named
 person's approval, the forbidden operations stay refused).
 
 Not vulnerabilities in this repository:
