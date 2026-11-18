@@ -127,6 +127,9 @@ In the air-gapped profile the last step of `make demo` restarts the copilot's po
 an old pod can still be listed for a few seconds as `Completed` or `Terminating`; run the `kubectl`
 line again.
 
+With `DEMO_TRACING=1` the list also has `fleetops-jaeger` and `fleetops-otel-collector`, the trace
+backend.
+
 ### Ask
 
 Both ways of asking reach fleetops-agent through a port-forward. Open a second terminal (in
