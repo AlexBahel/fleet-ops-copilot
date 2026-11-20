@@ -61,10 +61,6 @@ installed on a cluster yet. See [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
 Examples, fixtures, and evaluations use a fictional customer, "Example Distribution
 Co.", described and labelled in `docs/DESIGN.md` §2. It is not a real organisation.
 
-## How it was built
-
-Built with [Claude Code](https://claude.com/claude-code) under Al Bahel's design.
-
 ## License
 
 Apache-2.0. Copyright 2026 Alex Bahel. See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
