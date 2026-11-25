@@ -58,11 +58,11 @@ func TestRedactingExporterMasksEverySecretString(t *testing.T) {
 	s := spans[0]
 	all := s.Name + " " + s.Status.Description
 	for _, kv := range s.Attributes {
-		all += " " + kv.Value.Emit()
+		all += " " + kv.Value.String()
 	}
 	for _, ev := range s.Events {
 		for _, kv := range ev.Attributes {
-			all += " " + kv.Value.Emit()
+			all += " " + kv.Value.String()
 		}
 	}
 	for _, leak := range []string{plantedValue, "custom-secret-value", "abc.def.ghi"} {
