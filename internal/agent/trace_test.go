@@ -127,7 +127,7 @@ func TestLoopTraceAcrossMCPAndPolicy(t *testing.T) {
 			t.Fatalf("span %s in another trace", s.Name)
 		}
 		for _, kv := range s.Attributes {
-			v := kv.Value.Emit()
+			v := kv.Value.String()
 			if strings.Contains(v, plantedValue) || strings.Contains(v, "stop aisle-b now") || strings.Contains(v, "spill") {
 				t.Fatalf("span %s attribute %s holds request text or a secret: %q", s.Name, kv.Key, v)
 			}

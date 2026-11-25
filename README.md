@@ -33,7 +33,7 @@ approval, and in the 600 v6 runs the model changed 0 Swarmada objects
 ([`comparison-v6.md`](evals/results/comparison-v6.md), "Containment"; and
 [`docs/RESULTS.md`](docs/RESULTS.md#air-gapped-what-a-small-local-model-does-and-what-it-cannot-do)).
 
-Requires Docker (running), kind, kubectl, helm 3.8+, jq, openssl, curl, make, Go 1.25+ and
+Requires Docker (running), kind, kubectl, helm 3.8+, jq, openssl, curl, make, Go 1.26+ and
 python3 with the `grpcio` package. For the air-gapped profile, Docker's VM needs at least
 **12 GiB of memory** (Docker Desktop: Settings, Resources, Memory); `make demo` checks this before it
 creates anything and stops with the number it found. Swarmada's quickstart runs a simulated robot
